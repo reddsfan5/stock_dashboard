@@ -1,0 +1,33 @@
+# 数据缓存
+*.parquet
+
+# CSV 输出
+*.csv
+
+# HTML 输出
+dashboard*.html
+intersection*.html
+
+# 仪表盘
+dashboard.html
+dashboard_m.html
+intersection.html
+
+# 图片
+*.png
+
+# 日志
+*.log
+
+# Python
+__pycache__/
+*.pyc
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+.claude/
+mac_recommend/
+*.xlsx
+dashboard.py
