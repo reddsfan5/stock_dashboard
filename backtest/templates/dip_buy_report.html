@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>回撤买入模拟 — $now</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root{--bg:#f5f5f5;--card:#fff;--blue:#1a73e8;--red:#ea4335;--green:#34a853;--text:#333}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,"PingFang SC","Helvetica Neue",sans-serif;background:var(--bg);color:var(--text);font-size:13px}
+.header{background:linear-gradient(135deg,#1a1a2e,#16213e);color:#fff;padding:20px 32px}
+.header h1{font-size:20px}.header .sub{color:#8892b0;font-size:12px;margin-top:4px}
+.summary{display:flex;gap:20px;padding:16px 32px;background:var(--card);border-bottom:1px solid #e0e0e0;flex-wrap:wrap}
+.card{text-align:center;min-width:70px}
+.card .big{font-size:24px;font-weight:700;display:block}
+.big.green{color:var(--green)}.big.red{color:var(--red)}.big.blue{color:var(--blue)}
+.card .label{font-size:11px;color:#999}
+.charts{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:16px 32px}
+.chart-box{background:var(--card);border-radius:8px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,.06);height:380px}
+.params{padding:12px 32px;background:#e8f0fe;font-size:12px;color:var(--blue);line-height:1.6}
+.month-group{margin:8px 32px;background:var(--card);border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.06);overflow:hidden}
+.month-hd{display:flex;align-items:center;gap:12px;padding:12px 16px;background:#f8f9fa;cursor:pointer;user-select:none;border-bottom:1px solid #e0e0e0}
+.month-hd:hover{background:#e8f0fe}
+.month-label{font-size:16px;font-weight:700;color:var(--blue)}
+.month-stats{font-size:12px;color:#999;flex:1}
+.month-toggle{font-size:14px;color:#999;transition:transform .2s}
+.month-group.collapsed .month-body{display:none}
+.month-group.collapsed .month-toggle{transform:rotate(-90deg)}
+.month-body table{width:100%}
+th{background:#f8f9fa;font-weight:600;color:#555;padding:8px 10px;text-align:left;white-space:nowrap}
+td{padding:6px 10px;border-bottom:1px solid #eee;white-space:nowrap}
+tr.win td{background:#f6fff6}tr.loss td{background:#fff6f6}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.positive{color:var(--green);font-weight:600}.negative{color:var(--red);font-weight:600}
+.code-clickable{cursor:pointer;color:var(--blue);font-family:"SF Mono",monospace}
+.code-clickable:hover{background:#e8f0fe!important}
+.kline-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.25);z-index:999}
+.kline-overlay.active{display:block}
+.kline-panel{display:none;position:fixed;right:0;top:0;width:560px;height:100vh;background:rgba(255,255,255,0.92);box-shadow:-4px 0 20px rgba(0,0,0,.15);z-index:1000;overflow-y:auto;backdrop-filter:blur(4px)}
+.kline-panel.active{display:block}
+.kline-panel .close-btn{position:sticky;top:0;background:#1a73e8;color:#fff;border:none;width:100%;padding:12px;font-size:14px;cursor:pointer;z-index:1}
+.kline-panel .chart{width:100%;height:600px}
+</style>
+</head>
+<body>
+<div class="header"><h1>$board_label Overlap + 回撤买入 组合模拟</h1>
+<div class="sub">$now · 回看$lookback天最大跌幅限价 · 止盈+$target_pct% · 佣金$commission_bp‱ · 印花税$stamp_tax_bp‱</div></div>
+<div class="params">
+  💡 <b>板块：</b>$board_label（$board_note）<br>
+  💡 <b>选股：</b>连续(3-10)天重叠>$overlap_pct% + 区间涨幅<$max_gain% + 前5日无跌停 + 近20日区间振幅<$max_range_20d%<br>
+  💡 <b>买入逻辑：</b>触发日往前回看$lookback天找最大单日跌幅 → 限价门槛 = 前收×(1-最大跌幅%) → 当日最低触及限价则以最低价成交<br>
+  💡 <b>卖出逻辑：</b>次日目标 = 上一日最低价×$target_pct% → 触及止盈 ✅，否则尾盘强平 ❌<br>
+  💡 <b>资金分配：</b>当日信号随机打乱，逐只满仓买入，现金用掉 90%+ 停止<br>
+  💡 <b>起止：</b>¥$capital_fmt | $start_date ~ 至今 | 重叠>$overlap_pct% 连续3-10天 | 短期涨幅<$max_gain%
+</div>
+<div class="summary">
+  <div class="card"><span class="big blue">$total_trades</span><span class="label">总交易</span></div>
+  <div class="card"><span class="big blue">$win_rate%</span><span class="label">胜率</span></div>
+  <div class="card"><span class="big blue">$hit_rate%</span><span class="label">止盈率</span></div>
+  <div class="card"><span class="big $pnl_class">¥$total_pnl_fmt</span><span class="label">总盈亏</span></div>
+  <div class="card"><span class="big $ret_class">¥$final_equity_fmt</span><span class="label">期末</span></div>
+  <div class="card"><span class="big $ret_class">$total_return%</span><span class="label">收益率</span></div>
+</div>
+<div class="charts">
+  <div class="chart-box"><canvas id="eq"></canvas></div>
+  <div class="chart-box"><canvas id="pos"></canvas></div>
+</div>
+<div class="kline-overlay" id="klineOverlay" onclick="closeKline()"></div>
+<div class="kline-panel" id="klinePanel">
+  <button class="close-btn" onclick="closeKline()">
+    ✕ <span id="klineTitle"></span>
+    <span style="float:right;opacity:.6;font-size:11px" id="klineNav"></span>
+  </button>
+  <div class="chart" id="klineChart"></div>
+</div>
+$monthly_html
+<script>
+function toggleMonth(el){el.parentElement.classList.toggle('collapsed')}
+
+// 权益曲线 & 持仓图
+new Chart(document.getElementById("eq").getContext("2d"),{type:"line",data:{labels:$eq_dates,datasets:[{label:"权益",data:$eq_values,borderColor:"#1a73e8",backgroundColor:"rgba(26,115,232,0.1)",fill:true,tension:0.3,pointRadius:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{title:{display:true,text:"权益曲线"},legend:{display:false}}}});
+new Chart(document.getElementById("pos").getContext("2d"),{type:"bar",data:{labels:$eq_dates,datasets:[{label:"持仓",data:$daily_pos,backgroundColor:"#34a853"}]},options:{responsive:true,maintainAspectRatio:false,plugins:{title:{display:true,text:"每日持仓数"},legend:{display:false}}}});
+
+// K线弹窗
+var KLINES=$kline_json;
+var klineChart=null;
+var CODE_LIST=$code_list_json.length?$code_list_json:Object.keys(KLINES).sort();
+var currentKlineCode=null;
+
+function navKline(dir){
+  if(!currentKlineCode)return;
+  var idx=CODE_LIST.indexOf(currentKlineCode);
+  if(idx<0)return;
+  var next=idx+dir;
+  if(next<0)next=CODE_LIST.length-1;
+  if(next>=CODE_LIST.length)next=0;
+  showKline(CODE_LIST[next]);
+}
+
+document.addEventListener('keydown',function(e){
+  if(!currentKlineCode)return;
+  if(e.key=='ArrowLeft'){e.preventDefault();navKline(-1);}
+  if(e.key=='ArrowRight'){e.preventDefault();navKline(1);}
+  if(e.key=='Escape'){e.preventDefault();closeKline();}
+});
+
+function showKline(key){
+  var d=KLINES[key];if(!d){
+    // 兼容旧格式：纯代码
+    d=KLINES[key.split('|')[0]];
+  }
+  if(!d)return;
+  currentKlineCode=key;
+  var code=key.includes('|')?key.split('|')[0]:key;
+  var idx=CODE_LIST.indexOf(key);
+  if(idx<0) idx=CODE_LIST.indexOf(code);
+  document.getElementById("klineNav").textContent=(idx>=0?idx+1:'?')+"/"+CODE_LIST.length;
+  document.getElementById("klineOverlay").classList.add("active");
+  document.getElementById("klinePanel").classList.add("active");
+  document.getElementById("klineTitle").textContent=code+" "+(d.name||"");
+  setTimeout(function(){
+    if(klineChart){klineChart.dispose();klineChart=null;}
+    klineChart=echarts.init(document.getElementById("klineChart"));
+    var dates=d.dates,ohlc=d.data,changes=d.changes||[],prevs=d.prevs||[],vols=d.volumes||[],buys=d.buys||[],ma5=[],ma10=[];
+    for(var i=0;i<ohlc.length;i++){
+      ma5.push(i>=4?(ohlc.slice(i-4,i+1).reduce(function(s,x){return s+x[1]},0)/5).toFixed(2):"-");
+      ma10.push(i>=9?(ohlc.slice(i-9,i+1).reduce(function(s,x){return s+x[1]},0)/10).toFixed(2):"-");
+    }
+    var buyPts=[];var buySet={};buys.forEach(function(bd){buySet[bd]=true});
+    for(var i=0;i<dates.length;i++){if(buySet[dates[i]])buyPts.push({name:"买入",coord:[dates[i],ohlc[i][3]],value:"B",symbol:"pin",symbolSize:36,itemStyle:{color:"#ff6d00"}});}
+    klineChart.setOption({
+      tooltip:{trigger:"axis",axisPointer:{type:"cross"},confine:true,
+        formatter:function(ps){
+          var r=ps[0].axisValue,chg=null,hh=0,ll=0,idx=-1,vol=0;
+          for(var i=0;i<ps.length;i++){
+            var p=ps[i];
+            if(p.seriesName=="K线"&&p.dataIndex!=null){
+              var raw=ohlc[p.dataIndex];
+              var o=raw[0],c=raw[1],l=raw[2],h=raw[3];
+              hh=h; ll=l; idx=p.dataIndex;
+              r+="<br/>开: "+o+"  收: "+c+"  高: "+h+"  低: "+l;
+            }
+            if(p.seriesName=="成交量") vol=p.value;
+            if(p.seriesName=="涨跌%") chg=p.value;
+          }
+          if(vol>0) r+="<br/>成交额: "+(vol/1e8).toFixed(2)+"亿";
+          var prev=prevs[idx]||0,ampUp=0,ampDown=0;
+          if(prev>0){ampUp=((hh-prev)/prev*100);ampDown=((ll-prev)/prev*100);}
+          if(chg!=null) r+="<br/>涨跌幅: "+(chg>0?"+":"")+chg.toFixed(2)+"%  振幅: "+((ampUp-ampDown)).toFixed(2)+"% (↑"+ampUp.toFixed(1)+"% ↓"+ampDown.toFixed(1)+"%)";
+          return r;
+        }
+      },
+      axisPointer:{link:[{xAxisIndex:"all"}]},
+      grid:[
+        {left:"8%",right:"2%",top:"5%",height:"46%"},
+        {left:"8%",right:"2%",top:"57%",height:"13%"},
+        {left:"8%",right:"2%",top:"76%",height:"12%"}
+      ],
+      xAxis:[
+        {data:dates,axisLabel:{rotate:30,fontSize:10},gridIndex:0},
+        {data:dates,axisLabel:{show:false},gridIndex:1},
+        {data:dates,axisLabel:{show:false},gridIndex:2}
+      ],
+      yAxis:[
+        {scale:true,gridIndex:0,splitArea:{show:true}},
+        {gridIndex:1,splitNumber:2,axisLabel:{formatter:function(v){return (v/1e8).toFixed(1)+"亿"}}},
+        {gridIndex:2,splitNumber:3,axisLabel:{formatter:"{value}%"}}
+      ],
+      series:[
+        {name:"K线",type:"candlestick",data:ohlc,xAxisIndex:0,yAxisIndex:0,
+          dimensions:["open","close","lowest","highest"],
+          itemStyle:{color:"#d32f2f",color0:"#34a853",borderColor:"#d32f2f",borderColor0:"#34a853"},barWidth:"60%",
+          markPoint:{data:buyPts,label:{show:true,formatter:"B",color:"#fff",fontWeight:"bold",fontSize:12}}},
+        {name:"MA5",type:"line",data:ma5,xAxisIndex:0,yAxisIndex:0,smooth:true,lineStyle:{width:1,color:"#ff9800"},symbol:"none"},
+        {name:"MA10",type:"line",data:ma10,xAxisIndex:0,yAxisIndex:0,smooth:true,lineStyle:{width:1,color:"#2196f3"},symbol:"none"},
+        {name:"成交量",type:"bar",data:vols,xAxisIndex:1,yAxisIndex:1,
+          itemStyle:{color:function(p){
+            var i=p.dataIndex,o=ohlc[i][0],c=ohlc[i][1];
+            return c>=o?"#d32f2f":"#34a853";
+          }}},
+        {name:"涨跌%",type:"bar",data:changes,xAxisIndex:2,yAxisIndex:2,
+          itemStyle:{color:function(p){return p.value>=0?"#d32f2f":"#34a853"}}}
+      ]
+    });
+    klineChart.resize();
+  },100);
+}
+function closeKline(){
+  currentKlineCode=null;
+  document.getElementById("klineOverlay").classList.remove("active");
+  document.getElementById("klinePanel").classList.remove("active");
+}
+</script>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+</body>
+</html>

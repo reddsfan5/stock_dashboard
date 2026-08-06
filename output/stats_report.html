@@ -1,0 +1,259 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>策略回测报告 — 2026-08-02 16:07</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root{--blue:#1a73e8;--green:#34a853;--red:#ea4335;--bg:#f0f2f5;--card:#fff;--text:#333;--muted:#8892b0}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,"PingFang SC","Helvetica Neue",sans-serif;background:var(--bg);color:var(--text)}
+.header{background:linear-gradient(135deg,#1a1a2e,#16213e);color:#fff;padding:18px 24px}
+.header h1{font-size:20px}.header .date{color:var(--muted);font-size:12px;margin-top:2px}
+.summary{display:flex;gap:16px;padding:12px 24px;background:var(--card);border-bottom:1px solid #e0e0e0}
+.card{text-align:center;min-width:80px;font-size:11px;color:var(--muted)}
+.card .big{font-size:22px;font-weight:700;color:var(--blue);display:block}
+.tabs{display:flex;flex-wrap:wrap;gap:2px;padding:8px 24px;background:var(--card);border-bottom:2px solid #e0e0e0;position:sticky;top:0;z-index:10}
+.tab-btn{padding:8px 14px;border:none;background:none;cursor:pointer;font-size:12px;color:#666;border-radius:6px 6px 0 0;white-space:nowrap;transition:all .15s}
+.tab-btn:hover{background:#e8f0fe;color:var(--blue)}
+.tab-btn.active{background:var(--blue);color:#fff}
+.content{padding:20px 24px;max-width:1400px}
+.tab-panel{display:none}
+.tab-panel.active{display:block}
+.charts{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
+.chart-box{background:var(--card);border-radius:8px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,.06);height:320px;position:relative}
+.chart-box canvas{max-height:280px}
+.chart-box.hm{grid-column:1/-1;height:260px}
+.chart-box.hm canvas{max-height:220px}
+table{width:100%;font-size:12px;border-collapse:collapse;background:var(--card);border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06);table-layout:fixed}
+th,td{padding:7px 6px;text-align:center;border-bottom:1px solid #eee;white-space:nowrap;overflow:hidden}
+th{background:#f8f9fa;font-weight:600;color:#555}
+tr:hover{background:#f0f7ff}
+@media(max-width:768px){.charts{grid-template-columns:1fr}.chart-box.hm{grid-column:1}}
+</style></head><body>
+<div class="header"><h1>策略回测报告</h1><div class="date">2026-08-02 16:07 · 全A股历史回测</div></div>
+<div class="summary">
+  <div class="card"><span class="big">5</span>策略</div>
+  <div class="card"><span class="big">5,705,933</span>总样本</div>
+</div>
+<div class="tabs"><button class="tab-btn active" onclick="switchTab('overview')">📊 策略对比</button><button class="tab-btn active" onclick="switchTab('baseline')">基准: 任意天低买次日高卖</button><button class="tab-btn " onclick="switchTab('overlap')">重叠>3%低买高卖</button><button class="tab-btn " onclick="switchTab('overlap_close')">重叠>3%收盘买入高卖</button><button class="tab-btn " onclick="switchTab('rising')">连续上涨后次日涨跌</button><button class="tab-btn " onclick="switchTab('newhigh')">连涨后5日创新高</button></div>
+<div class="content">
+  <div class="tab-panel active" id="panel-overview">
+    <div class="charts">
+      <div class="chart-box"><canvas id="scatter"></canvas></div>
+      <div class="chart-box"><canvas id="rank"></canvas></div>
+    </div>
+  </div>
+  
+        <div class="tab-panel active" id="panel-baseline">
+          <div class="charts">
+            <div class="chart-box"><canvas id="chart-rate-baseline"></canvas></div>
+            <div class="chart-box"><canvas id="chart-combo-baseline"></canvas></div>
+            
+          </div>
+          <table><thead><tr><th>N</th><th>样本</th><th>成功率</th><th>>1.0%</th><th>>2.0%</th><th>>3.0%</th><th>>5.0%</th><th>>10.0%</th><th>均值</th><th>中位</th></tr></thead>
+          <tbody><tr><td>任意一天低买次日高卖（基准）</td><td>2,636,784</td><td>68.1%</td><td>88.4%</td><td>68.1%</td><td>49.9%</td><td>26.8%</td><td>7.8%</td><td>+4.1%</td><td>+3.0%</td></tr></tbody></table>
+          <script>
+          (function(){
+            var labels=["\u4efb\u610f\u4e00\u5929\u4f4e\u4e70\u6b21\u65e5\u9ad8\u5356\uff08\u57fa\u51c6\uff09"],rates=[68.1],means=[4.14],medians=[2.99],samples=[2636784];
+            new Chart(document.getElementById("chart-rate-baseline").getContext("2d"),{
+              type:"bar",data:{labels:labels,datasets:[{label:"成功率%",data:rates,
+                backgroundColor:rates.map(function(v){return v>70?"#34a853":v>45?"#1a73e8":"#ea4335"})}]},
+              options:{responsive:true,plugins:{title:{display:true,text:"成功率(%)(绿>70/蓝>45/红≤45)"},legend:{display:false}}}
+            });
+            new Chart(document.getElementById("chart-combo-baseline").getContext("2d"),{
+              type:"bar",data:{labels:labels,datasets:[
+                {label:"样本量(右轴)",data:samples,backgroundColor:"#e8eaed",order:2,yAxisID:"y1"},
+                {label:"均值%",data:means,backgroundColor:"#1a73e8",order:1},
+                {label:"中位%",data:medians,backgroundColor:"#34a853",order:1}
+              ]},
+              options:{responsive:true,
+                plugins:{title:{display:true,text:"收益 vs 样本量"}},
+                scales:{y:{title:{display:true,text:"收益%"}},y1:{position:"right",grid:{display:false},title:{display:true,text:"样本量"}}}
+              }
+            });
+          })();
+          </script>
+        </div>
+        <div class="tab-panel " id="panel-overlap">
+          <div class="charts">
+            <div class="chart-box"><canvas id="chart-rate-overlap"></canvas></div>
+            <div class="chart-box"><canvas id="chart-combo-overlap"></canvas></div>
+            
+            <div class="chart-box hm"><canvas id="heatmap-overlap"></canvas></div>
+            <script>
+            (function(){
+              var hmData=[[93.4, 86.1, 77.2, 59.0, 28.6], [93.3, 86.3, 77.4, 59.2, 28.4], [93.1, 86.1, 77.3, 59.5, 28.8], [92.9, 86.3, 77.7, 60.2, 29.7], [92.8, 86.1, 77.6, 59.9, 29.8], [92.9, 86.1, 77.9, 60.1, 30.2]],hmLabels=["5", "6", "7", "8", "9", "10"],hmKeys=["1.0", "2.0", "3.0", "5.0", "10.0"];
+              var datasets=hmKeys.map(function(k,ki){return{label:">"+k+"%",data:hmData.map(function(r){return r[ki]}),
+                backgroundColor:"hsl("+(210-ki*18)+",70%,"+(60-ki*8)+"%)",borderWidth:1}});
+              new Chart(document.getElementById("heatmap-overlap").getContext("2d"),{
+                type:"bar",data:{labels:hmLabels,datasets:datasets},
+                options:{responsive:true,indexAxis:"y",scales:{x:{max:100,title:{display:true,text:"概率%"}}},
+                  plugins:{title:{display:true,text:"目标收益vs成功率"},legend:{position:"top"}}}
+              });
+            })();
+            </script>
+          </div>
+          <table><thead><tr><th>N</th><th>样本</th><th>成功率</th><th>>1.0%</th><th>>2.0%</th><th>>3.0%</th><th>>5.0%</th><th>>10.0%</th><th>均值</th><th>中位</th></tr></thead>
+          <tbody><tr><td>5</td><td>43,053</td><td>86.1%</td><td>93.4%</td><td>86.1%</td><td>77.2%</td><td>59.0%</td><td>28.6%</td><td>+7.9%</td><td>+6.2%</td></tr><tr><td>6</td><td>25,766</td><td>86.3%</td><td>93.3%</td><td>86.3%</td><td>77.4%</td><td>59.2%</td><td>28.4%</td><td>+7.8%</td><td>+6.2%</td></tr><tr><td>7</td><td>15,971</td><td>86.1%</td><td>93.1%</td><td>86.1%</td><td>77.3%</td><td>59.5%</td><td>28.8%</td><td>+7.8%</td><td>+6.2%</td></tr><tr><td>8</td><td>10,064</td><td>86.3%</td><td>92.9%</td><td>86.3%</td><td>77.7%</td><td>60.2%</td><td>29.7%</td><td>+8.0%</td><td>+6.3%</td></tr><tr><td>9</td><td>6,433</td><td>86.1%</td><td>92.8%</td><td>86.1%</td><td>77.6%</td><td>59.9%</td><td>29.8%</td><td>+8.0%</td><td>+6.4%</td></tr><tr><td>10</td><td>4,173</td><td>86.1%</td><td>92.9%</td><td>86.1%</td><td>77.9%</td><td>60.1%</td><td>30.2%</td><td>+8.1%</td><td>+6.4%</td></tr></tbody></table>
+          <script>
+          (function(){
+            var labels=["5", "6", "7", "8", "9", "10"],rates=[86.1, 86.3, 86.1, 86.3, 86.1, 86.1],means=[7.86, 7.81, 7.85, 7.95, 7.98, 8.07],medians=[6.16, 6.16, 6.24, 6.35, 6.36, 6.42],samples=[43053, 25766, 15971, 10064, 6433, 4173];
+            new Chart(document.getElementById("chart-rate-overlap").getContext("2d"),{
+              type:"bar",data:{labels:labels,datasets:[{label:"成功率%",data:rates,
+                backgroundColor:rates.map(function(v){return v>70?"#34a853":v>45?"#1a73e8":"#ea4335"})}]},
+              options:{responsive:true,plugins:{title:{display:true,text:"成功率(%)(绿>70/蓝>45/红≤45)"},legend:{display:false}}}
+            });
+            new Chart(document.getElementById("chart-combo-overlap").getContext("2d"),{
+              type:"bar",data:{labels:labels,datasets:[
+                {label:"样本量(右轴)",data:samples,backgroundColor:"#e8eaed",order:2,yAxisID:"y1"},
+                {label:"均值%",data:means,backgroundColor:"#1a73e8",order:1},
+                {label:"中位%",data:medians,backgroundColor:"#34a853",order:1}
+              ]},
+              options:{responsive:true,
+                plugins:{title:{display:true,text:"收益 vs 样本量"}},
+                scales:{y:{title:{display:true,text:"收益%"}},y1:{position:"right",grid:{display:false},title:{display:true,text:"样本量"}}}
+              }
+            });
+          })();
+          </script>
+        </div>
+        <div class="tab-panel " id="panel-overlap_close">
+          <div class="charts">
+            <div class="chart-box"><canvas id="chart-rate-overlap_close"></canvas></div>
+            <div class="chart-box"><canvas id="chart-combo-overlap_close"></canvas></div>
+            
+            <div class="chart-box hm"><canvas id="heatmap-overlap_close"></canvas></div>
+            <script>
+            (function(){
+              var hmData=[[70.6, 56.8, 45.2, 28.2, 7.4], [70.3, 56.7, 45.0, 28.0, 7.6], [70.3, 56.8, 45.4, 28.5, 8.0], [70.1, 57.0, 45.8, 28.7, 8.2], [70.2, 57.1, 46.2, 28.8, 8.3], [70.5, 58.1, 47.0, 29.7, 8.5]],hmLabels=["5", "6", "7", "8", "9", "10"],hmKeys=["1.0", "2.0", "3.0", "5.0", "10.0"];
+              var datasets=hmKeys.map(function(k,ki){return{label:">"+k+"%",data:hmData.map(function(r){return r[ki]}),
+                backgroundColor:"hsl("+(210-ki*18)+",70%,"+(60-ki*8)+"%)",borderWidth:1}});
+              new Chart(document.getElementById("heatmap-overlap_close").getContext("2d"),{
+                type:"bar",data:{labels:hmLabels,datasets:datasets},
+                options:{responsive:true,indexAxis:"y",scales:{x:{max:100,title:{display:true,text:"概率%"}}},
+                  plugins:{title:{display:true,text:"目标收益vs成功率"},legend:{position:"top"}}}
+              });
+            })();
+            </script>
+          </div>
+          <table><thead><tr><th>N</th><th>样本</th><th>成功率</th><th>>1.0%</th><th>>2.0%</th><th>>3.0%</th><th>>5.0%</th><th>>10.0%</th><th>均值</th><th>中位</th></tr></thead>
+          <tbody><tr><td>5</td><td>43,053</td><td>56.8%</td><td>70.6%</td><td>56.8%</td><td>45.2%</td><td>28.2%</td><td>7.4%</td><td>+3.5%</td><td>+2.6%</td></tr><tr><td>6</td><td>25,766</td><td>56.7%</td><td>70.3%</td><td>56.7%</td><td>45.0%</td><td>28.0%</td><td>7.6%</td><td>+3.5%</td><td>+2.6%</td></tr><tr><td>7</td><td>15,971</td><td>56.8%</td><td>70.3%</td><td>56.8%</td><td>45.4%</td><td>28.5%</td><td>8.0%</td><td>+3.6%</td><td>+2.6%</td></tr><tr><td>8</td><td>10,064</td><td>57.0%</td><td>70.1%</td><td>57.0%</td><td>45.8%</td><td>28.7%</td><td>8.2%</td><td>+3.6%</td><td>+2.6%</td></tr><tr><td>9</td><td>6,433</td><td>57.1%</td><td>70.2%</td><td>57.1%</td><td>46.2%</td><td>28.8%</td><td>8.3%</td><td>+3.6%</td><td>+2.6%</td></tr><tr><td>10</td><td>4,173</td><td>58.1%</td><td>70.5%</td><td>58.1%</td><td>47.0%</td><td>29.7%</td><td>8.5%</td><td>+3.7%</td><td>+2.7%</td></tr></tbody></table>
+          <script>
+          (function(){
+            var labels=["5", "6", "7", "8", "9", "10"],rates=[56.8, 56.7, 56.8, 57.0, 57.1, 58.1],means=[3.53, 3.52, 3.58, 3.59, 3.62, 3.7],medians=[2.58, 2.56, 2.59, 2.61, 2.64, 2.71],samples=[43053, 25766, 15971, 10064, 6433, 4173];
+            new Chart(document.getElementById("chart-rate-overlap_close").getContext("2d"),{
+              type:"bar",data:{labels:labels,datasets:[{label:"成功率%",data:rates,
+                backgroundColor:rates.map(function(v){return v>70?"#34a853":v>45?"#1a73e8":"#ea4335"})}]},
+              options:{responsive:true,plugins:{title:{display:true,text:"成功率(%)(绿>70/蓝>45/红≤45)"},legend:{display:false}}}
+            });
+            new Chart(document.getElementById("chart-combo-overlap_close").getContext("2d"),{
+              type:"bar",data:{labels:labels,datasets:[
+                {label:"样本量(右轴)",data:samples,backgroundColor:"#e8eaed",order:2,yAxisID:"y1"},
+                {label:"均值%",data:means,backgroundColor:"#1a73e8",order:1},
+                {label:"中位%",data:medians,backgroundColor:"#34a853",order:1}
+              ]},
+              options:{responsive:true,
+                plugins:{title:{display:true,text:"收益 vs 样本量"}},
+                scales:{y:{title:{display:true,text:"收益%"}},y1:{position:"right",grid:{display:false},title:{display:true,text:"样本量"}}}
+              }
+            });
+          })();
+          </script>
+        </div>
+        <div class="tab-panel " id="panel-rising">
+          <div class="charts">
+            <div class="chart-box"><canvas id="chart-rate-rising"></canvas></div>
+            <div class="chart-box"><canvas id="chart-combo-rising"></canvas></div>
+            
+            <div class="chart-box hm"><canvas id="heatmap-rising"></canvas></div>
+            <script>
+            (function(){
+              var hmData=[[37.5, 28.9, 22.6, 14.2, 4.9], [37.8, 29.6, 23.2, 14.3, 5.0], [37.5, 30.1, 24.3, 15.5, 5.4], [34.3, 28.5, 24.2, 17.8, 6.6], [38.9, 32.7, 28.0, 20.6, 6.9], [38.6, 33.4, 30.0, 23.0, 7.6]],hmLabels=["5", "6", "7", "8", "9", "10"],hmKeys=["1.0", "2.0", "3.0", "5.0", "10.0"];
+              var datasets=hmKeys.map(function(k,ki){return{label:">"+k+"%",data:hmData.map(function(r){return r[ki]}),
+                backgroundColor:"hsl("+(210-ki*18)+",70%,"+(60-ki*8)+"%)",borderWidth:1}});
+              new Chart(document.getElementById("heatmap-rising").getContext("2d"),{
+                type:"bar",data:{labels:hmLabels,datasets:datasets},
+                options:{responsive:true,indexAxis:"y",scales:{x:{max:100,title:{display:true,text:"概率%"}}},
+                  plugins:{title:{display:true,text:"目标收益vs成功率"},legend:{position:"top"}}}
+              });
+            })();
+            </script>
+          </div>
+          <table><thead><tr><th>N</th><th>样本</th><th>成功率</th><th>>1.0%</th><th>>2.0%</th><th>>3.0%</th><th>>5.0%</th><th>>10.0%</th><th>均值</th><th>中位</th></tr></thead>
+          <tbody><tr><td>5</td><td>65,762</td><td>28.9%</td><td>37.5%</td><td>28.9%</td><td>22.6%</td><td>14.2%</td><td>4.9%</td><td>+0.2%</td><td>+0.0%</td></tr><tr><td>6</td><td>31,923</td><td>29.6%</td><td>37.8%</td><td>29.6%</td><td>23.2%</td><td>14.3%</td><td>5.0%</td><td>-0.3%</td><td>-0.2%</td></tr><tr><td>7</td><td>15,069</td><td>30.1%</td><td>37.5%</td><td>30.1%</td><td>24.3%</td><td>15.5%</td><td>5.4%</td><td>-0.7%</td><td>-0.3%</td></tr><tr><td>8</td><td>6,920</td><td>28.5%</td><td>34.3%</td><td>28.5%</td><td>24.2%</td><td>17.8%</td><td>6.6%</td><td>-1.1%</td><td>-0.9%</td></tr><tr><td>9</td><td>2,893</td><td>32.7%</td><td>38.9%</td><td>32.7%</td><td>28.0%</td><td>20.6%</td><td>6.9%</td><td>-0.5%</td><td>-0.4%</td></tr><tr><td>10</td><td>1,350</td><td>33.4%</td><td>38.6%</td><td>33.4%</td><td>30.0%</td><td>23.0%</td><td>7.6%</td><td>-0.4%</td><td>-0.6%</td></tr></tbody></table>
+          <script>
+          (function(){
+            var labels=["5", "6", "7", "8", "9", "10"],rates=[28.9, 29.6, 30.1, 28.5, 32.7, 33.4],means=[0.24, -0.3, -0.66, -1.15, -0.5, -0.42],medians=[0.0, -0.17, -0.34, -0.95, -0.36, -0.64],samples=[65762, 31923, 15069, 6920, 2893, 1350];
+            new Chart(document.getElementById("chart-rate-rising").getContext("2d"),{
+              type:"bar",data:{labels:labels,datasets:[{label:"成功率%",data:rates,
+                backgroundColor:rates.map(function(v){return v>70?"#34a853":v>45?"#1a73e8":"#ea4335"})}]},
+              options:{responsive:true,plugins:{title:{display:true,text:"成功率(%)(绿>70/蓝>45/红≤45)"},legend:{display:false}}}
+            });
+            new Chart(document.getElementById("chart-combo-rising").getContext("2d"),{
+              type:"bar",data:{labels:labels,datasets:[
+                {label:"样本量(右轴)",data:samples,backgroundColor:"#e8eaed",order:2,yAxisID:"y1"},
+                {label:"均值%",data:means,backgroundColor:"#1a73e8",order:1},
+                {label:"中位%",data:medians,backgroundColor:"#34a853",order:1}
+              ]},
+              options:{responsive:true,
+                plugins:{title:{display:true,text:"收益 vs 样本量"}},
+                scales:{y:{title:{display:true,text:"收益%"}},y1:{position:"right",grid:{display:false},title:{display:true,text:"样本量"}}}
+              }
+            });
+          })();
+          </script>
+        </div>
+        <div class="tab-panel " id="panel-newhigh">
+          <div class="charts">
+            <div class="chart-box"><canvas id="chart-rate-newhigh"></canvas></div>
+            <div class="chart-box"><canvas id="chart-combo-newhigh"></canvas></div>
+            
+          </div>
+          <table><thead><tr><th>N</th><th>样本</th><th>成功率</th><th>>1.0%</th><th>>2.0%</th><th>>3.0%</th><th>>5.0%</th><th>>10.0%</th><th>均值</th><th>中位</th></tr></thead>
+          <tbody><tr><td>RisingNewHighStrategy</td><td>2,734,312</td><td>40.1%</td><td>51.5%</td><td>40.2%</td><td>31.6%</td><td>20.2%</td><td>7.9%</td><td>+3.3%</td><td>+1.3%</td></tr></tbody></table>
+          <script>
+          (function(){
+            var labels=["RisingNewHighStrategy"],rates=[40.1],means=[3.28],medians=[1.27],samples=[2734312];
+            new Chart(document.getElementById("chart-rate-newhigh").getContext("2d"),{
+              type:"bar",data:{labels:labels,datasets:[{label:"成功率%",data:rates,
+                backgroundColor:rates.map(function(v){return v>70?"#34a853":v>45?"#1a73e8":"#ea4335"})}]},
+              options:{responsive:true,plugins:{title:{display:true,text:"成功率(%)(绿>70/蓝>45/红≤45)"},legend:{display:false}}}
+            });
+            new Chart(document.getElementById("chart-combo-newhigh").getContext("2d"),{
+              type:"bar",data:{labels:labels,datasets:[
+                {label:"样本量(右轴)",data:samples,backgroundColor:"#e8eaed",order:2,yAxisID:"y1"},
+                {label:"均值%",data:means,backgroundColor:"#1a73e8",order:1},
+                {label:"中位%",data:medians,backgroundColor:"#34a853",order:1}
+              ]},
+              options:{responsive:true,
+                plugins:{title:{display:true,text:"收益 vs 样本量"}},
+                scales:{y:{title:{display:true,text:"收益%"}},y1:{position:"right",grid:{display:false},title:{display:true,text:"样本量"}}}
+              }
+            });
+          })();
+          </script>
+        </div>
+</div>
+<script>
+function switchTab(id){
+  document.querySelectorAll(".tab-btn").forEach(b=>b.classList.remove("active"));
+  document.querySelectorAll(".tab-panel").forEach(p=>p.classList.remove("active"));
+  event.target.classList.add("active");document.getElementById("panel-"+id).classList.add("active");
+}
+(function(){
+  var scData=[{"label": "基准: 任意天低买次日高", "samples": 2636784, "rate": 68.1, "gain": 4.14}, {"label": "重叠>3%低买高卖", "samples": 43053, "rate": 86.1, "gain": 7.86}, {"label": "重叠>3%收盘买入高卖", "samples": 43053, "rate": 56.8, "gain": 3.53}, {"label": "连续上涨后次日涨跌", "samples": 65762, "rate": 28.9, "gain": 0.24}, {"label": "连涨后5日创新高", "samples": 2734312, "rate": 40.1, "gain": 3.28}];
+  new Chart(document.getElementById("scatter").getContext("2d"),{
+    type:"bubble",data:{datasets:[{label:"策略对比",data:scData.map(function(d){return{x:d.samples,y:d.rate,r:d.gain*3}}),
+      backgroundColor:scData.map(function(_,i){return"hsl("+(i*30)+",70%,60%,0.7)"})}]},
+    options:{responsive:true,
+      plugins:{title:{display:true,text:"策略对比(气泡=收益, X=样本量, Y=成功率)"},tooltip:{callbacks:{label:function(c){var d=scData[c.dataIndex];return d.label+": 样本"+d.samples.toLocaleString()+" 成功率"+d.rate+"% 收益"+d.gain+"%";}}}},
+      scales:{x:{title:{display:true,text:"样本量"},type:"logarithmic"},y:{title:{display:true,text:"成功率%"}}}
+    }
+  });
+  var sorted=scData.slice().sort(function(a,b){return b.rate-a.rate});
+  new Chart(document.getElementById("rank").getContext("2d"),{
+    type:"bar",data:{labels:sorted.map(function(d){return d.label}),datasets:[{label:"成功率%",data:sorted.map(function(d){return d.rate}),
+      backgroundColor:sorted.map(function(d){return d.rate>50?"#34a853":"#ea4335"})}]},
+    options:{indexAxis:"y",responsive:true,plugins:{title:{display:true,text:"策略成功率排名"},legend:{display:false}}}
+  });
+})();
+</script>
+</body></html>
