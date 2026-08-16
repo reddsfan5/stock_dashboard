@@ -31,6 +31,9 @@ class Position:
     buy_date: str               # "2026-07-15"
     buy_day_low: float          # 买入当日最低价（用于计算卖出目标）
     streak_days: int = 0        # 买入时的连续天数（用于 debug）
+    stop_price: float = 0.0     # 止损价（0=不止损）
+    holding_days: int = 0       # 已持有天数
+    max_hold_days: int = 5      # 最大持有天数（0=不限）
 
 
 @dataclass

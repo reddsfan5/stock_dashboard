@@ -107,8 +107,12 @@ def render_dip_buy_report(
     equity_curve: List[EquityPoint],
     final_equity: float,
     kline_map: dict,
+    # 策略自定义描述（None=使用默认值）
+    title: str = None,
+    subtitle: str = None,
+    params_html: str = None,
 ) -> str:
-    """渲染回撤买入模拟报告 HTML"""
+    """渲染模拟报告 HTML。传 title/subtitle/params_html 可覆盖默认描述。"""
     tpl = _load_template("dip_buy_report.html")
 
     total = len(trades)
@@ -128,7 +132,14 @@ def render_dip_buy_report(
     # 注意：模板里的 $ 需要转义为 $$，但我们直接用 str.replace 更简单
     subs = {
         "$now": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M"),
-        "$board_label": board_label,
+        "$board_label": title or f"{board_label} Overlap + 回撤买入 组合模拟",
+        "$subtitle_line": subtitle or f"{now} · 回看{lookback}天最大跌幅限价 · 止盈+{target_pct}% · 佣金{commission_rate*10000:.0f}‱ · 印花税{stamp_tax*10000:.0f}‱",
+        "$params_block": params_html or f"""💡 <b>板块：</b>{board_label}（{'仅主板' if board == 'main' else '全市场'}）<br>
+  💡 <b>选股：</b>连续(3-10)天重叠>{overlap_pct}% + 区间涨幅<{max_gain}% + 前5日无跌停 + 近20日区间振幅<{max_range_20d}%<br>
+  💡 <b>买入逻辑：</b>触发日往前回看{lookback}天找最大单日跌幅 → 限价门槛 = 前收×(1-最大跌幅%) → 当日最低触及限价则以最低价成交<br>
+  💡 <b>卖出逻辑：</b>次日目标 = 上一日最低价×{target_pct}% → 触及止盈 ✅，否则尾盘强平 ❌<br>
+  💡 <b>资金分配：</b>当日信号随机打乱，逐只满仓买入，现金用掉 90%+ 停止<br>
+  💡 <b>起止：</b>¥{capital:,.0f} | {start_date} ~ 至今 | 重叠>{overlap_pct}% 连续3-10天 | 短期涨幅<{max_gain}%""",
         "$board_note": "仅主板" if board == "main" else "全市场",
         "$lookback": str(lookback),
         "$target_pct": str(target_pct),
@@ -161,8 +172,8 @@ def render_dip_buy_report(
 
     # 自动刷新导航页
     try:
-        from scripts.gen_index import generate
-        generate()
+        from scripts.gen_index import generate; generate()
+        from scripts.gen_mobile import generate as gen_m; gen_m()
     except Exception:
         pass
 

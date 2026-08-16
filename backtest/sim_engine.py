@@ -33,7 +33,7 @@ class SimEngine:
     def run(self, capital: float = 50000, start_date: str = "2024-01-01",
             target_pct: float = 1.0, commission_rate: float = 0.0001,
             stamp_tax: float = 0.0005, output_html: str = None,
-            **strategy_kwargs) -> str:
+            data=None, **strategy_kwargs) -> str:
         """
         执行完整回测。
 
@@ -50,7 +50,8 @@ class SimEngine:
             HTML 文件路径（如果 output_html 指定）
         """
         strat = self.strategy
-        data = StockData()
+        if data is None:
+            data = StockData()
         info = StockInfo()
         code_to_name = dict(zip(info.df["代码"], info.df["名称"]))
 
@@ -79,7 +80,7 @@ class SimEngine:
         equity_curve: List[EquityPoint] = []
 
         for date in tqdm(all_dates, desc="模拟"):
-            # a. 平仓（通用逻辑）
+            # a. 平仓（通用逻辑 — 含止损 + 策略自定义卖出）
             survivors = []
             for pos in positions:
                 key = (pos.code, date)
@@ -87,8 +88,29 @@ class SimEngine:
                     survivors.append(pos)
                     continue
                 high, low, close, open_ = kline_idx[key]
-                filled = high >= pos.target_price
-                sp = pos.target_price if filled else close
+
+                # 策略自定义卖出判断
+                custom_sp = strat.should_sell(pos, date, kline_idx)
+                # 持仓到期强制平仓
+                force_close = (pos.max_hold_days > 0 and
+                               pos.holding_days >= pos.max_hold_days)
+                if custom_sp is not None:
+                    sp = custom_sp
+                    filled = (sp >= pos.target_price)
+                elif force_close:
+                    sp = close
+                    filled = False
+                elif pos.stop_price > 0 and low <= pos.stop_price:
+                    sp = pos.stop_price
+                    filled = False
+                elif high >= pos.target_price:
+                    sp = pos.target_price
+                    filled = True
+                else:
+                    # 不卖，继续持有
+                    pos.holding_days += 1
+                    survivors.append(pos)
+                    continue
                 proceeds = pos.shares * sp
                 fee = proceeds * commission_rate + proceeds * stamp_tax
                 net = proceeds - fee
@@ -138,7 +160,15 @@ class SimEngine:
 
         # 7. K线 + HTML
         if output_html and closed_trades:
-            kline_map = collect_kline_for_trades(data, closed_trades, code_to_name)
+            # 尝试加载缓存指标以加速K线采集
+            pivots = None
+            try:
+                from backtest.indicators import _load_cache
+                pivots = _load_cache()
+            except Exception:
+                pass
+            kline_map = collect_kline_for_trades(data, closed_trades, code_to_name, pivots=pivots)
+            meta = strat.get_report_meta()
             html = render_dip_buy_report(
                 capital=capital, target_pct=target_pct, overlap_pct=0,
                 commission_rate=commission_rate, stamp_tax=stamp_tax,
@@ -146,6 +176,9 @@ class SimEngine:
                 max_gain=99, limit_down=99, max_range_20d=99,
                 trades=closed_trades, equity_curve=equity_curve,
                 final_equity=cash, kline_map=kline_map,
+                title=meta.get("title"),
+                subtitle=meta.get("subtitle"),
+                params_html=meta.get("params_html"),
             )
             os.makedirs(os.path.dirname(output_html), exist_ok=True)
             with open(output_html, "w", encoding="utf-8") as f:

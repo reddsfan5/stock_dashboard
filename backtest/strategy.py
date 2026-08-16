@@ -83,3 +83,18 @@ class SimStrategy(ABC):
                          target_pct: float) -> float:
         """计算止盈目标价，默认 = 买入价 × (1 + target_pct%)"""
         return round(buy_price * (1 + target_pct / 100), 2)
+
+    def should_sell(self, pos: Position, date, kline_idx: dict):  # -> Optional[float]
+        """
+        策略自定义卖出判断。引擎逐日对每个持仓调用此方法。
+
+        Returns:
+            卖出价 → 以此价格卖出
+            None   → 继续持有（不卖）
+        默认行为：不做额外判断，交给引擎的 target/stop/close 逻辑。
+        """
+        return None  # 默认不干预
+
+    def get_report_meta(self) -> dict:
+        """返回 HTML 报告的自定义标题/副标题/参数说明。子类可覆写。"""
+        return {}  # 默认空，使用模板默认值
