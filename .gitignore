@@ -30,3 +30,4 @@ __pycache__/
 mac_recommend/
 *.xlsx
 dashboard.py
+cache/*.parquet
