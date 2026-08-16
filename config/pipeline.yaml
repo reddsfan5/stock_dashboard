@@ -6,14 +6,14 @@
 continuity:
   # K线连续性选股 —— 每天均线接续不中断
   # 条件：今日最高 > 昨日最低 + 昨日收盘 × min_gap_pct%
-  min_gap_pct: 3         # 最小接续区%，越大越严格（默认1.5）
+  min_gap_pct: 2         # 最小接续区%，越大越严格（默认1.5）
   strict:     true       # true=K线必须重叠不允许跳空，false=允许跳空上涨
   min_amount:  5000      # 日均成交额下限（万元）
-  lookback:    12         # 回看天数
+  lookback:    30         # 回看天数
 
 sideways:
   # 横盘震荡选股 —— 趋势平坦、K线重叠、振幅小
-  days:        10         # 回看天数
+  days:        15         # 回看天数
   max_amp:     15         # 最大振幅%（越小越严格）
   min_amount:  5000       # 日均成交额下限（万元）
   max_slope:   0.5        # 趋势斜率上限（%/天，越小越平）
@@ -42,7 +42,7 @@ upward_gap:
 long_shadow:
   # 长下影线频现 —— 近N日半数以上收长下影线
   days: 10                # 回看天数
-  min_ratio: 0.4          # 下影线/总振幅 最低比例
+  min_ratio: 0.6          # 下影线/总振幅 最低比例
   min_count: 5            # 至少满足天数
   min_amount: 5000        # 日均成交额下限（万元）
 
@@ -50,5 +50,6 @@ hammer:
   # 金针探底 —— 近N日出现长下影线探底形态
   min_shadow_ratio: 3     # 下影线/实体最小倍数（越大越严格）
   max_bottom_pos:  20     # 金针最低价必须处于近期区间底部N%以内
-  hammer_days:    3       # 近N天内出现即可
+  max_price_pos:   30     # 当前股价必须在近30日区间的下N%以内
+  hammer_days:    2       # 近N天内出现即可
   min_amount:     5000    # 日均成交额下限（万元）

@@ -32,7 +32,8 @@ from data.kline import StockData
 MIN_SHADOW_RATIO = 3.0   # 下影线/实体 最小倍数（越大形态越标准）
 MAX_BODY_RATIO = 0.20    # 实体/总振幅 最大比例（越小实体越小）
 MAX_BOTTOM_POS = 20      # 金针最低价必须在近期区间的底部 N% 以内（越小越严格）
-LOOKBACK = 10             # 回看天数（判断探底位置）
+MAX_PRICE_POS = 30        # 当前股价必须在近30日区间的下 N% 以内
+LOOKBACK = 30             # 回看天数（判断探底位置）
 HAMMER_DAYS = 3           # 近 N 天内出现即可
 MIN_AMOUNT = 5000         # 日均成交额下限（万元）
 THREADS = 12
@@ -159,10 +160,11 @@ def analyze_hammer(code: str, data: StockData) -> Optional[Dict[str, Any]]:
 
 def find_all(data: StockData, **kwargs) -> pd.DataFrame:
     """统一接口。kwargs: min_shadow_ratio, hammer_days, max_bottom_pos, min_amount"""
-    global MIN_SHADOW_RATIO, HAMMER_DAYS, MAX_BOTTOM_POS, MIN_AMOUNT
+    global MIN_SHADOW_RATIO, HAMMER_DAYS, MAX_BOTTOM_POS, MAX_PRICE_POS, MIN_AMOUNT
     MIN_SHADOW_RATIO = kwargs.pop("min_shadow_ratio", MIN_SHADOW_RATIO)
     HAMMER_DAYS = kwargs.pop("hammer_days", HAMMER_DAYS)
     MAX_BOTTOM_POS = kwargs.pop("max_bottom_pos", MAX_BOTTOM_POS)
+    MAX_PRICE_POS = kwargs.pop("max_price_pos", MAX_PRICE_POS)
     MIN_AMOUNT = kwargs.pop("min_amount", MIN_AMOUNT)
     tqdm_kwargs = kwargs.pop("_tqdm_kwargs", {})
 
@@ -247,6 +249,14 @@ def find_all(data: StockData, **kwargs) -> pd.DataFrame:
             continue
         if best["日均成交额(万)"] < MIN_AMOUNT:
             continue
+        # 当前股价必须在近30日区间的下MAX_PRICE_POS%以内
+        range_30h = highs[-min(30, len(highs)):].max()
+        range_30l = lows[-min(30, len(lows)):].min()
+        cur_price = closes[-1]
+        if range_30h > range_30l:
+            price_pos = (cur_price - range_30l) / (range_30h - range_30l) * 100
+            if price_pos > MAX_PRICE_POS:
+                continue
         results.append(best)
 
     if not results:
