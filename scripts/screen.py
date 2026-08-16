@@ -41,7 +41,7 @@ sys.path.insert(0, PROJECT_DIR)
 from data.kline import StockData
 from pipeline.runner import discover_modules, run_all
 from pipeline.config import load_config, apply_config
-from pipeline.reporter import build_screening_html
+from pipeline.reporter import build_screening_html, build_screening_mobile
 
 
 MAIN_BOARD = (
@@ -167,7 +167,14 @@ def main():
     with open(args.out, "w", encoding="utf-8") as f:
         f.write(html)
     kb = os.path.getsize(args.out) / 1024
-    print(f"\n✓ 仪表盘: {args.out} ({kb:.0f}KB)")
+    print(f"\n✓ 桌面版: {args.out} ({kb:.0f}KB)")
+
+    # 手机版
+    mobile_path = os.path.join(os.path.dirname(args.out), "dashboard_mobile.html")
+    mobile_html = build_screening_mobile(modules, results, data=combined)
+    with open(mobile_path, "w", encoding="utf-8") as f:
+        f.write(mobile_html)
+    print(f"✓ 手机版: {mobile_path}")
 
 
 if __name__ == "__main__":

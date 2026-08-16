@@ -8,6 +8,7 @@
 
 import sys
 import os
+import time
 import logging
 from datetime import datetime, timedelta
 
@@ -39,7 +40,18 @@ def main():
 
     try:
         data = StockData()
-        stocks = data.get_stock_list(board="all")
+        # 腾讯行情接口偶尔 SSL 抖动，列表拉取重试 3 次
+        stocks = None
+        for attempt in range(3):
+            try:
+                stocks = data.get_stock_list(board="all")
+                break
+            except Exception:
+                if attempt < 2:
+                    logger.warning("股票列表拉取失败, 30 秒后重试 (%d/3)", attempt + 1)
+                    time.sleep(30)
+        if stocks is None:
+            raise RuntimeError("股票列表连续 3 次拉取失败")
         data.update(stocks, progress=False)  # launchd 环境不需要 tqdm
 
         elapsed = (datetime.now() - start).total_seconds()
