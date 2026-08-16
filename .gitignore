@@ -3,7 +3,8 @@
 # CSV 输出
 *.csv
 
-# HTML 输出
+# HTML 输出（报告均可由脚本重新生成）
+output/*.html
 dashboard*.html
 intersection*.html
 
