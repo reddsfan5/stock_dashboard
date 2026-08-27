@@ -39,7 +39,8 @@ def run(capital=50000, start_date="2022-01-01", hold_days=20, top_n=10):
         if len(prev)==0: continue
         scores = {}
         for c, g in prev.groupby("代码"):
-            if len(g)<20: continue; g=g.sort_values("日期")
+            if len(g)<20: continue
+            g=g.sort_values("日期")
             cl=g["收盘"].values; hi=g["最高"].values; lo=g["最低"].values; vo=g["成交额"].values
             if cl[-1]<=0: continue
             h20,l20=np.max(hi[-20:]),np.min(lo[-20:])
@@ -61,7 +62,8 @@ def run(capital=50000, start_date="2022-01-01", hold_days=20, top_n=10):
             row=cache[(cache["代码"]==c)&(cache["日期"]==date)]
             if len(row)==0: continue
             bp=float(row["收盘"].iloc[0]); lots=int(per/(bp*100*1.0003))
-            if lots<=0: continue; cost=lots*100*bp*1.0003
+            if lots<=0: continue
+            cost=lots*100*bp*1.0003
             if cost>cash: continue
             cash-=cost; pos[c]={"shares":lots*100,"cost":cost,"bp":bp,"date":date}
         pv=sum(p["shares"]*p["bp"] for p in pos.values())

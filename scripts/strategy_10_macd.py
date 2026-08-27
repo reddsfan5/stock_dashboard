@@ -17,17 +17,21 @@ def run(capital=50000,start_date="2022-01-01",hold_days=20,top_n=5):
         rets={}
         for c,g in prev.groupby('代码'):
             g=g.sort_values('日期');n=len(g)
-            if n<35:continue;cl=g['收盘'].values;vo=g['成交额'].values
+            if n<35:continue
+            cl=g['收盘'].values; vo=g['成交额'].values
             ema12=pd.Series(cl).ewm(span=12).mean().values;ema26=pd.Series(cl).ewm(span=26).mean().values;dif=ema12-ema26;dea=pd.Series(dif).ewm(span=9).mean().values
             if not(dif[-2]<=dea[-2] and dif[-1]>dea[-1]):continue
             if vo[-1]<=np.mean(vo[-6:-1])*1.2:continue
             rets[c]=(cl[-1]-cl[-20])/cl[-20]*100 if n>=20 else 0
         top=sorted(rets,key=rets.get,reverse=True)[:top_n]
-        if not top:continue;per=cash/len(top)
+        if not top:continue
+        per=cash/len(top)
         for c in top:
             r=cache[(cache['代码']==c)&(cache['日期']==date)]
-            if len(r)==0:continue;bp=float(r['收盘'].iloc[0]);lots=int(per/(bp*100*1.0003))
-            if lots<=0:continue;cost=lots*100*bp*1.0003
+            if len(r)==0:continue
+            bp=float(r['收盘'].iloc[0]); lots=int(per/(bp*100*1.0003))
+            if lots<=0:continue
+            cost=lots*100*bp*1.0003
             if cost>cash:continue
             cash-=cost;pos[c]={'shares':lots*100,'cost':cost,'bp':bp,'date':date}
         pv=sum(p['shares']*p['bp'] for p in pos.values());eq.append(EquityPoint(date=str(date)[:10],equity=cash+pv,cash=cash,positions=len(pos)))

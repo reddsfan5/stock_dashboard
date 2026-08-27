@@ -65,7 +65,8 @@ def run(capital=50000, start_date="2022-01-01", hold_days=20, top_n=5):
             r=cache[(cache['代码']==c)&(cache['日期']==date)]
             if len(r)==0: continue
             bp=float(r['收盘'].iloc[0]); lots=int(per/(bp*100*1.0003))
-            if lots<=0: continue; cost=lots*100*bp*1.0003
+            if lots<=0: continue
+            cost=lots*100*bp*1.0003
             if cost>cash: continue
             cash-=cost; pos[c]={'shares':lots*100,'cost':cost,'bp':bp,'date':date}
         pv=sum(p['shares']*p['bp'] for p in pos.values())

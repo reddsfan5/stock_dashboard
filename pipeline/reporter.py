@@ -164,7 +164,8 @@ body{{font-family:-apple-system,"PingFang SC",sans-serif;background:#f0f2f5;colo
 </div>
 {panels_html}
 <div class="footer">点击股票代码查看K线 · 电脑端打开 dashboard.html 查看完整版</div>
-<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<script src="vendor/echarts.min.js"></script>
+<script>window.echarts || document.write(`<script src='https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js'><\/script>`);</script>
 <script>
 function switchTab(id){{
   document.querySelectorAll(".tab").forEach(b=>b.classList.remove("active"));
@@ -350,7 +351,7 @@ def build_screening_html(
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{title} — {now}</title>
-<link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+<link rel="stylesheet" href="vendor/jquery.dataTables.min.css">
 <style>
 * {{ margin:0; padding:0; box-sizing:border-box; }}
 body {{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:#f5f5f5; color:#333; }}
@@ -401,8 +402,10 @@ footer {{ text-align:center; color:#999; font-size:11px; padding:20px; }}
 <div class="content">{tables_html}</div>
 <footer>数据每日 18:30 自动更新 · 点击股票代码查看K线图</footer>
 
-<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="vendor/jquery.min.js"></script>
+<script>window.jQuery || document.write(`<script src='https://code.jquery.com/jquery-3.7.0.min.js'><\/script>`);</script>
+<script src="vendor/jquery.dataTables.min.js"></script>
+<script>window.jQuery && jQuery.fn.dataTable || document.write(`<script src='https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js'><\/script>`);</script>
 <script>
 function switchTab(id){{
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
@@ -416,13 +419,14 @@ $(document).ready(function(){{
   ids.forEach(function(id){{
     $('#tbl-'+id).DataTable({{
       pageLength:25,
-      language:{{ url:'https://cdn.datatables.net/plug-ins/1.13.6/i18n/zh.json' }},
+      language:{{ url:'vendor/datatables-zh.json' }},
       order:[], layout:{{ topStart:'search', topEnd:'pageLength' }},
     }});
   }});
 }});
 </script>
-<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<script src="vendor/echarts.min.js"></script>
+<script>window.echarts || document.write(`<script src='https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js'><\/script>`);</script>
 <script>
 var KLINES={kline_json};
 var TAB_CODES={tab_codes_json};
@@ -628,7 +632,8 @@ def build_backtest_html(results: List[dict], title: str = "策略回测报告") 
 
     return f'''<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>{title} — {now}</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="vendor/chart.umd.min.js"></script>
+<script>window.Chart || document.write(`<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"><\/script>`);</script>
 <style>
 :root{{--blue:#1a73e8;--green:#34a853;--red:#ea4335;--bg:#f0f2f5;--card:#fff;--text:#333;--muted:#8892b0}}
 *{{margin:0;padding:0;box-sizing:border-box}}

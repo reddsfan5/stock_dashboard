@@ -11,8 +11,18 @@ INDEX_FILE = os.path.join(OUTPUT_DIR, "index.html")
 # 层次分组：(组标题, [(文件名, 标题, 描述), ...])
 GROUPS = [
     ("📊 选股与回测（系统工具）", [
+        ("market_overview.html", "整体行情统计", "每日资金量·大盘走势·板块强度轮动（申万1/2级）"),
+        ("market_heatmap.html", "板块轮动热力图", "申万1/2级 × 20~120日窗口，大图完整显示板块名"),
+        ("weekday_stats.html", "星期效应统计", "2010至今逐年×星期几涨跌概率——验证黑色星期四：周四唯一低于50%"),
+        ("minute_view.html", "分时图查看器", "单标的单日1分钟线：分时+均价VWAP+前收基准（缓存近两个月）"),
+
+        ("best_worst_windows.html", "极端行情区段", "连续30交易日最好/最差各3段（段间不重叠）——全集中在2014-2016"),
+        ("best_worst_charts.html", "极端行情K线图", "沪深300 · 6段极端区间的日K线（区间高亮+MA20+缩放）"),
+
         ("dashboard.html",     "选股仪表盘", "7大技术形态并行扫描全市场，含K线弹窗、行业分类、键盘切换"),
         ("stats_report.html",  "回测统计报告", "12种策略全市场历史回测，成功率热力图+策略对比散点图"),
+        ("backtest_break_resume.html", "连续性中断恢复回测", "连续K日接续→中断→次日恢复概率（对照任意中断基线，随K单调上升）"),
+        ("quant_report.html",  "绩效分析报告", "quantstats机构级指标：Sharpe/回撤/月度热力图（策略8权益CSV）"),
     ]),
     ("🔬 单标的调试（交易流验证）", [
         ("overlap_debug.html", "Overlap逐笔调试", "终端逐条打印每次信号重叠区详情，HTML含收益分布图"),

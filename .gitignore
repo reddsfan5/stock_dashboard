@@ -32,3 +32,12 @@ mac_recommend/
 *.xlsx
 dashboard.py
 cache/*.parquet
+
+# vectorbt 专属虚拟环境
+.venv/
+
+# 前端库本地缓存（页面在局域网离线可用）
+output/vendor/
+
+# API 密钥配置
+config/openai.yaml

@@ -51,6 +51,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import akshare as ak
 from tqdm import tqdm
 
+from data.sources import ak_fetch_kline, MAIN_BOARD_PREFIX
+
 
 # ====================================================================
 # 配置
@@ -63,17 +65,7 @@ CACHE_DAYS = 60               # 缓存保留的自然日跨度（约40个交易�
 THREADS = 12                  # 并发请求数
 DELAY = 0.02                  # 请求间隔（秒）
 
-# 沪深主板代码前缀
-MAIN_BOARD_PREFIX = (
-    "000", "001", "002", "003",     # 深市主板
-    "600", "601", "603", "605",     # 沪市主板
-)
-
-# 需要排除的板块前缀
-EXCLUDE_PREFIX = (
-    "300", "301",     # 创业板
-    "688",            # 科创板
-)
+# 沪深主板代码前缀见 data/sources.py（多数据源共用）
 
 
 # ====================================================================
@@ -92,6 +84,7 @@ class StockData:
         self.cache_file = cache_file
         self._cache: Optional[pd.DataFrame] = None
         self._stock_list: Optional[pd.DataFrame] = None
+        self.last_failed: List[str] = []  # 最近一次 update/_fetch_range 拉取失败的代码
 
     # ========== 缓存读写 ==========
 
@@ -203,8 +196,10 @@ class StockData:
         self._fetch_range(stocks, fetch_start, fetch_end, desc="回填")
         return self
 
-    def _fetch_range(self, stocks: pd.DataFrame, start: str, end: str, desc: str = ""):
+    def _fetch_range(self, stocks: pd.DataFrame, start: str, end: str, desc: str = "",
+                     fetch_fn=ak_fetch_kline, threads: int = THREADS):
         BATCH_SIZE = 100  # 每攒够 N 只股票就写一次磁盘
+        self.last_failed = []
 
         # 确保缓存已初始化
         if self._cache is None:
@@ -228,33 +223,20 @@ class StockData:
             pending.clear()
 
         def _fetch(code):
-            try:
-                time.sleep(DELAY)
-                df = ak.stock_zh_a_hist_tx(
-                    symbol=code, start_date=start, end_date=end,
-                    adjust="", timeout=30,
-                )
-                if len(df) == 0:
-                    return None
-                df = df[["date", "open", "high", "low", "close", "amount"]]
-                df.columns = ["日期", "开盘", "最高", "最低", "收盘", "成交额"]
-                df["代码"] = code
-                df["日期"] = pd.to_datetime(df["日期"])
-                for c in ["开盘", "最高", "最低", "收盘", "成交额"]:
-                    df[c] = pd.to_numeric(df[c], errors="coerce")
-                return df
-            except Exception:
-                return None
+            time.sleep(DELAY)
+            return fetch_fn(code, start, end)
 
-        with ThreadPoolExecutor(max_workers=THREADS) as executor:
+        with ThreadPoolExecutor(max_workers=threads) as executor:
             tasks = {executor.submit(_fetch, row["代码"]): row["代码"]
                      for _, row in stocks.iterrows()}
             for future in tqdm(as_completed(tasks), total=len(tasks), desc=desc):
                 result = future.result()
-                if result is not None:
+                if result is not None and len(result) > 0:
                     pending.append(result)
                     if len(pending) >= BATCH_SIZE:
                         _flush()
+                elif result is None:
+                    self.last_failed.append(tasks[future])
 
         # 最后一批
         _flush()
@@ -265,13 +247,22 @@ class StockData:
     # ========== 增量更新 ==========
 
     def update(self, stocks: Optional[pd.DataFrame] = None,
-               board: str = "all", progress: bool = True) -> "StockData":
+               board: str = "all", progress: bool = True,
+               fetch_fn=ak_fetch_kline, threads: int = THREADS) -> "StockData":
         """
         增量更新缓存：只拉取每只股票缺失的近期数据
 
         首次运行：全量拉取（慢）
         后续运行：只拉增量（快，秒级）
+
+        Args:
+            fetch_fn: 数据源函数 (code, start, end) -> DataFrame|None，
+                      默认 akshare，可传 data.sources.bs_fetch_kline 切 baostock
+                      注意 baostock 需在 baostock_session() 内且 threads=1
+            threads: 并发数（baostock 单 socket 会话，只能 1）
+        失败代码记录在 self.last_failed（配合双数据源回退）。
         """
+        self.last_failed = []
         if stocks is None:
             stocks = self.get_stock_list(board=board)
 
@@ -316,23 +307,8 @@ class StockData:
         total_new = 0
 
         def _fetch(code, start):
-            try:
-                time.sleep(DELAY)
-                df = ak.stock_zh_a_hist_tx(
-                    symbol=code, start_date=start, end_date=fetch_end,
-                    adjust="", timeout=5,
-                )
-                if len(df) == 0:
-                    return None
-                df = df[["date", "open", "high", "low", "close", "amount"]]
-                df.columns = ["日期", "开盘", "最高", "最低", "收盘", "成交额"]
-                df["代码"] = code
-                df["日期"] = pd.to_datetime(df["日期"])
-                for c in ["开盘", "最高", "最低", "收盘", "成交额"]:
-                    df[c] = pd.to_numeric(df[c], errors="coerce")
-                return df
-            except Exception:
-                return None
+            time.sleep(DELAY)
+            return fetch_fn(code, start, fetch_end)
 
         def _flush():
             nonlocal total_new
@@ -347,15 +323,17 @@ class StockData:
             new_data.clear()
 
         BATCH = 100  # 每攒够 100 只股票就写一次磁盘
-        with ThreadPoolExecutor(max_workers=THREADS) as executor:
+        with ThreadPoolExecutor(max_workers=threads) as executor:
             tasks = {executor.submit(_fetch, c, s): c for c, s in codes_to_fetch}
             it = tqdm(as_completed(tasks), total=len(tasks)) if progress else as_completed(tasks)
             for future in it:
                 result = future.result()
-                if result is not None:
+                if result is not None and len(result) > 0:
                     new_data.append(result)
                     if len(new_data) >= BATCH:
                         _flush()
+                elif result is None:
+                    self.last_failed.append(tasks[future])
 
         # 最后一批
         _flush()

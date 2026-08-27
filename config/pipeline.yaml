@@ -10,6 +10,8 @@ continuity:
   strict:     true       # true=K线必须重叠不允许跳空，false=允许跳空上涨
   min_amount:  5000      # 日均成交额下限（万元）
   lookback:    30         # 回看天数
+  max_gain_10d: 40       # 近10日累计涨幅上限%（过滤连板妖股）
+  max_break_days: 1      # 允许断裂天数（N日窗口内最多断裂M天，0=严格连续）
 
 sideways:
   # 横盘震荡选股 —— 趋势平坦、K线重叠、振幅小

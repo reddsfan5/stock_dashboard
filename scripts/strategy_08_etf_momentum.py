@@ -13,6 +13,7 @@ ETF 动量轮动策略 — 每月初买近20日涨幅最强的N只ETF，持有M�
 """
 
 import argparse, os, sys, time
+from dataclasses import asdict
 import numpy as np, pandas as pd
 from tqdm import tqdm
 
@@ -146,6 +147,17 @@ def run(capital=50000, start_date="2022-01-01", hold_days=30, top_n=5):
                 pd.Timestamp(last_date).strftime("%Y-%m-%d"),
                 title=f"ETF动量轮动 ({hold_days}天×{top_n}只)",
                 extra_info=f"近20日涨幅排名 | 等权买入 | 持有{hold_days}天")
+
+    # 导出交易/权益 CSV（供 quantstats 等外部绩效工具分析）
+    if trades:
+        pd.DataFrame([asdict(t) for t in trades]).to_csv(
+            os.path.join(PROJECT_DIR, "output", "etf_momentum_trades.csv"),
+            index=False, encoding="utf-8")
+    if equity_curve:
+        pd.DataFrame([asdict(e) for e in equity_curve]).to_csv(
+            os.path.join(PROJECT_DIR, "output", "etf_momentum_equity.csv"),
+            index=False, encoding="utf-8")
+    print("✓ CSV: output/etf_momentum_trades.csv / etf_momentum_equity.csv")
 
     # HTML
     kline_map = collect_kline_for_trades(

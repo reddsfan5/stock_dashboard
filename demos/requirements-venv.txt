@@ -1,0 +1,6 @@
+# vectorbt 专属 venv（.venv，--system-site-packages 共享项目基础依赖）
+# py3.9 下 vectorbt 0.26 锁 numba<0.57 → numpy<1.24，与系统 numpy 2.0 冲突，需隔离
+numpy==1.23.5
+numba==0.56.4
+vectorbt==0.26.0
+plotly==5.13.1      # 新版 plotly 移除 heatmapgl，vectorbt 0.26 主题模板需要旧版

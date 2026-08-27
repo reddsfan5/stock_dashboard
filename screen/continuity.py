@@ -6,8 +6,10 @@ K线连续性选股 — 基于本地缓存
 
 条件：
 1. 仅沪深主板（000/001/002/003/600/601/603/605），排除创业板/科创板/北交所/ST
-2. 近10日，每天最高价 > 前一天最低价 + 前一天收盘价×1%
-3. 近10日日均成交额 >= 5000万
+2. 近N日（lookback，默认10），每天最高价 > 前一天最低价 + 前一天收盘价×min_gap_pct%，
+   允许最多 max_break_days 天断裂（默认0=严格连续）
+3. 近N日日均成交额 >= 5000万
+4. 近N日累计涨幅 <= max_gain_10d（过滤连板妖股）
 
 逻辑说明：
   不要求K线实际重叠——允许向上跳空（今天最低 > 昨天最高），
@@ -58,6 +60,8 @@ LOOKBACK = 10
 MIN_AMOUNT = 5000   # 万元，日均成交额下限
 MIN_GAP_PCT = 1.5    # 最小接续区%（今日最高 > 昨日最低 + 收盘价×1.5%）
 STRICT = False       # True=严格连续（K线必须重叠，不允许跳空）
+MAX_GAIN_10D = 30    # 近N日累计涨幅上限%（过滤连板妖股）
+MAX_BREAK_DAYS = 0   # 允许的断裂天数（N日窗口内最多断裂M天，0=严格连续）
 THREADS = 12
 
 
@@ -65,11 +69,13 @@ THREADS = 12
 # 核心逻辑
 # ======================
 
-def check_continuity(df: pd.DataFrame) -> bool:
+def count_breaks(df: pd.DataFrame) -> int:
     """
-    strict=False: 今日最高 > 昨日最低 + 昨日收盘 × min_gap_pct%（允许跳空上涨）
-    strict=True:  在上面的基础上，还要求 K线必须重叠（今日最低 ≤ 昨日最高）
+    统计窗口内相邻日的断裂天数：
+    strict=False: 今日最高 ≤ 昨日最低 + 昨日收盘×min_gap_pct% 即断裂
+    strict=True:  在此基础上，跳空上涨（今日最低 > 昨日最高）也记断裂
     """
+    breaks = 0
     for i in range(1, len(df)):
         y_high = df.iloc[i - 1]["最高"]
         y_low = df.iloc[i - 1]["最低"]
@@ -79,17 +85,37 @@ def check_continuity(df: pd.DataFrame) -> bool:
 
         # 接续性：今日最高 > 昨日最低 + 昨日收盘 × min_gap_pct%
         if t_high <= y_low + y_close * MIN_GAP_PCT / 100:
-            return False
-
+            breaks += 1
         # 严格模式：K线必须重叠，不允许跳空
-        if STRICT and t_low > y_high:
-            return False
+        elif STRICT and t_low > y_high:
+            breaks += 1
+    return breaks
 
-    return True
+
+def check_continuity(df: pd.DataFrame, max_breaks: Optional[int] = None) -> bool:
+    """
+    连续性检查（允许断裂）：
+
+    strict=False: 今日最高 > 昨日最低 + 昨日收盘 × min_gap_pct%（允许跳空上涨）
+    strict=True:  在上面的基础上，还要求 K线必须重叠（今日最低 ≤ 昨日最高）
+    max_breaks:   N 日窗口内允许的最多断裂天数（None=用全局 MAX_BREAK_DAYS，0=严格连续）
+    """
+    if max_breaks is None:
+        max_breaks = MAX_BREAK_DAYS
+    return count_breaks(df) <= max_breaks
+
+
+def gain_window(df: pd.DataFrame) -> float:
+    """窗口期累计涨幅% = (最新收盘 - 首日收盘) / 首日收盘 × 100（窗口=LOOKBACK 天）"""
+    c0 = df.iloc[0]["收盘"]
+    return (df.iloc[-1]["收盘"] / c0 - 1) * 100 if c0 > 0 else 0
 
 
 def calc_metrics(df: pd.DataFrame) -> Dict[str, float]:
     """计算单只股票的全部指标"""
+
+    # ---- 窗口期涨幅 ----
+    gain10 = gain_window(df)
 
     # ---- 最小接续区（每日 high - prev_low 相对 prev_close 的最小比例） ----
     gaps = []
@@ -134,6 +160,8 @@ def calc_metrics(df: pd.DataFrame) -> Dict[str, float]:
         "10日最低": low,
         "10日振幅%": round(amplitude, 2),
         "区间位置%": round(position, 1),
+        f"近{LOOKBACK}日涨幅%": round(gain10, 2),
+        "断裂天数": count_breaks(df),
         "最小接续区%": round(min_gap, 2),
         "平均重叠率%": round(avg_overlap, 2),
     }
@@ -152,6 +180,9 @@ def analyze(code: str, data: StockData) -> Optional[Dict[str, Any]]:
     if avg_amount < MIN_AMOUNT:
         return None
 
+    if gain_window(df) > MAX_GAIN_10D:
+        return None  # 过滤连板妖股
+
     return {
         "代码": code,
         "名称": data.get_stock_name(code),
@@ -167,11 +198,13 @@ def analyze(code: str, data: StockData) -> Optional[Dict[str, Any]]:
 def find_all(data: StockData, **kwargs) -> pd.DataFrame:
     """统一接口：传入 StockData，返回筛选结果 DataFrame。kwargs 可覆盖全局参数"""
     # 接受配置文件覆盖
-    global MIN_GAP_PCT, MIN_AMOUNT, LOOKBACK, STRICT
+    global MIN_GAP_PCT, MIN_AMOUNT, LOOKBACK, STRICT, MAX_GAIN_10D, MAX_BREAK_DAYS
     MIN_GAP_PCT = kwargs.pop("min_gap_pct", MIN_GAP_PCT)
     MIN_AMOUNT = kwargs.pop("min_amount", MIN_AMOUNT)
     LOOKBACK = kwargs.pop("lookback", LOOKBACK)
     STRICT = kwargs.pop("strict", STRICT)
+    MAX_GAIN_10D = kwargs.pop("max_gain_10d", MAX_GAIN_10D)
+    MAX_BREAK_DAYS = kwargs.pop("max_break_days", MAX_BREAK_DAYS)
     tqdm_kwargs = kwargs.pop("_tqdm_kwargs", {})
 
     main_codes = set(data.cache["代码"].unique())
@@ -200,6 +233,8 @@ def find_all(data: StockData, **kwargs) -> pd.DataFrame:
         avg_amount = group["成交额"].mean() / 10000
         if avg_amount < MIN_AMOUNT:
             continue
+        if gain_window(group) > MAX_GAIN_10D:
+            continue  # 过滤连板妖股
         results.append({
             "代码": code,
             "名称": name_map.get(code, ""),

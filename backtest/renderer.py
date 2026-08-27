@@ -133,7 +133,7 @@ def render_dip_buy_report(
     subs = {
         "$now": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M"),
         "$board_label": title or f"{board_label} Overlap + 回撤买入 组合模拟",
-        "$subtitle_line": subtitle or f"{now} · 回看{lookback}天最大跌幅限价 · 止盈+{target_pct}% · 佣金{commission_rate*10000:.0f}‱ · 印花税{stamp_tax*10000:.0f}‱",
+        "$subtitle_line": subtitle or f"{pd.Timestamp.now().strftime('%Y-%m-%d')} · 回看{lookback}天最大跌幅限价 · 止盈+{target_pct}% · 佣金{commission_rate*10000:.0f}‱ · 印花税{stamp_tax*10000:.0f}‱",
         "$params_block": params_html or f"""💡 <b>板块：</b>{board_label}（{'仅主板' if board == 'main' else '全市场'}）<br>
   💡 <b>选股：</b>连续(3-10)天重叠>{overlap_pct}% + 区间涨幅<{max_gain}% + 前5日无跌停 + 近20日区间振幅<{max_range_20d}%<br>
   💡 <b>买入逻辑：</b>触发日往前回看{lookback}天找最大单日跌幅 → 限价门槛 = 前收×(1-最大跌幅%) → 当日最低触及限价则以最低价成交<br>
