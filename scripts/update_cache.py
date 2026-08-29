@@ -1,172 +1,117 @@
 #!/usr/bin/env python3
-"""
-每日缓存定时更新 — 由 launchd 每个工作日 18:30 调用
+"""每日行情数据库统一更新入口。
 
-职责：拉取当日增量数据，写入 stock_kline_cache.parquet
-数据源：akshare(腾讯) 主源 + baostock 备源（主源失败自动回退）
-后续步骤：更新指数缓存（data/index.py）→ 重新生成行情统计页（gen_market.py）
-日志：~/Library/Logs/stock_cache_update.log
+阶段：股票日线 → ETF 日线 → 指数日线 → 分钟线 → 新鲜度校验 → 行情报告。
+详细运行状态写入 ``cache/daily_update_status.json``。
 
 用法
 ----
-$ python scripts/update_cache.py                    # 自动双源（launchd 默认）
-$ python scripts/update_cache.py --source baostock  # 强制 baostock
-$ python scripts/update_cache.py --source akshare   # 仅 akshare（无回退）
-$ python scripts/update_cache.py --limit 5          # 只更新前 5 只（测试）
+python -m scripts.update_cache
+python -m scripts.update_cache --validate-only
+python -m scripts.update_cache --only minute,validate
+python -m scripts.update_cache --limit 5 --only stocks,etfs,index,minute
 """
 
-import sys
-import os
-import time
-import logging
 import argparse
-import subprocess
-from datetime import datetime, timedelta
+from contextlib import contextmanager
+import fcntl
+import logging
+import os
+import sys
 
-# 日志写到用户库
-LOG_DIR = os.path.expanduser("~/Library/Logs")
-LOG_FILE = os.path.join(LOG_DIR, "stock_cache_update.log")
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s  %(message)s",
-    handlers=[
-        logging.FileHandler(LOG_FILE),
-        logging.StreamHandler(sys.stdout),
-    ],
-)
-logger = logging.getLogger(__name__)
-
-# ----- 确保项目路径可导入 -----
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_DIR)
 
-from data.kline import StockData
-from data.index import IndexData
-from data import sources
+from pipeline.daily_update import DailyUpdatePipeline, STAGES
 
 
-def get_stock_list_with_fallback(data: StockData, source: str) -> "pd.DataFrame":
-    """
-    获取股票列表（双源）。
+LOG_DIR = os.path.expanduser("~/Library/Logs")
+LOG_FILE = os.path.join(LOG_DIR, "stock_cache_update.log")
+LOCK_FILE = os.path.join(PROJECT_DIR, "cache", ".daily_update.lock")
 
-    akshare/auto: 3 次重试（腾讯接口偶尔 SSL 抖动），全挂后 baostock 兜底
-    baostock:    直接走 baostock
-    双源全挂抛异常 → main 捕获后 exit 1（保持原语义）
-    """
-    if source == "baostock":
-        return sources.bs_get_stock_list(board="all")
+os.makedirs(LOG_DIR, exist_ok=True)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s  %(message)s",
+    handlers=[logging.FileHandler(LOG_FILE), logging.StreamHandler(sys.stdout)],
+)
+logger = logging.getLogger(__name__)
 
-    for attempt in range(3):
+
+@contextmanager
+def single_instance_lock():
+    """阻止手工命令与 launchd 同时写同一批 Parquet。"""
+    os.makedirs(os.path.dirname(LOCK_FILE), exist_ok=True)
+    with open(LOCK_FILE, "w", encoding="utf-8") as stream:
         try:
-            return data.get_stock_list(board="all")
-        except Exception:
-            if attempt < 2:
-                logger.warning("股票列表拉取失败, 30 秒后重试 (%d/3)", attempt + 1)
-                time.sleep(30)
+            fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise RuntimeError("另一条每日更新任务正在运行")
+        stream.write(str(os.getpid()))
+        stream.flush()
+        try:
+            yield
+        finally:
+            fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
 
-    if source == "akshare":
-        raise RuntimeError("股票列表连续 3 次拉取失败")
-    logger.warning("akshare 股票列表连续 3 次失败, baostock 兜底")
-    return sources.bs_get_stock_list(board="all")
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="每日行情数据库分阶段更新")
+    parser.add_argument(
+        "--source", choices=["akshare", "baostock", "auto"], default="auto",
+        help="股票历史修复数据源（默认主源失败自动回退）",
+    )
+    parser.add_argument("--limit", type=int, default=None,
+                        help="每类只处理前 N 只，用于小范围验证")
+    parser.add_argument(
+        "--only", default=None,
+        help=f"只运行指定阶段，逗号分隔：{','.join(STAGES)}",
+    )
+    parser.add_argument("--validate-only", action="store_true",
+                        help="不联网更新，只检查各缓存的新鲜度和覆盖率")
+    parser.add_argument("--target-date", default=None,
+                        help="显式指定目标交易日 YYYY-MM-DD（测试/补跑用）")
+    parser.add_argument("--minute-threads", type=int, default=8,
+                        help="分钟接口并发数（默认 8）")
+    parser.add_argument("--minute-checkpoint", type=int, default=1000,
+                        help="分钟线每完成 N 只原子落盘一次（默认 1000）")
+    return parser.parse_args()
 
 
 def main():
-    parser = argparse.ArgumentParser(description="每日缓存更新（akshare 主源 + baostock 备源）")
-    parser.add_argument("--source", choices=["akshare", "baostock", "auto"],
-                        default="auto", help="数据源（默认 auto=主源失败自动回退）")
-    parser.add_argument("--limit", type=int, default=None,
-                        help="只更新前 N 只（测试用）")
-    args = parser.parse_args()
+    args = parse_args()
+    if args.validate_only and args.only:
+        raise SystemExit("--validate-only 不能与 --only 同时使用")
+    only = [part.strip() for part in args.only.split(",") if part.strip()] \
+        if args.only else None
+    if args.validate_only:
+        only = ["validate"]
 
-    start = datetime.now()
-    logger.info("=" * 50)
-    logger.info("开始缓存更新 (source=%s)", args.source)
-
+    logger.info("=" * 64)
+    logger.info("每日更新开始 source=%s stages=%s limit=%s",
+                args.source, only or "all", args.limit or "all")
     try:
-        data = StockData()
-        stocks = get_stock_list_with_fallback(data, args.source)
-        if args.limit:
-            stocks = stocks.head(args.limit)
-        total = len(stocks)
-
-        # 第一遍：主源
-        if args.source == "baostock":
-            with sources.baostock_session():
-                data.update(stocks, progress=False,
-                            fetch_fn=sources.bs_fetch_kline, threads=1)
-            ak_failed, bs_failed = [], list(data.last_failed)
-        else:
-            data.update(stocks, progress=False)  # akshare 主源
-            ak_failed, bs_failed = list(data.last_failed), []
-
-        # 第二遍：baostock 回退（仅重拉 akshare 失败的代码）
-        if ak_failed and args.source == "auto":
-            logger.warning("akshare 失败 %d 只, baostock 回退", len(ak_failed))
-            failed_df = stocks[stocks["代码"].isin(ak_failed)]
-            with sources.baostock_session():
-                data.update(failed_df, progress=False,
-                            fetch_fn=sources.bs_fetch_kline, threads=1)
-            bs_failed = list(data.last_failed)
-
-        # 指数行情更新（独立步骤：失败不阻塞主流程，下次任务自愈）
-        try:
-            idx = IndexData()
-            idx.update(progress=False)
-            logger.info("指数更新 — %d 条记录, 失败: %s",
-                        len(idx.cache), idx.last_failed or "无")
-        except Exception:
-            logger.warning("指数更新失败, 跳过", exc_info=True)
-
-        # 分时缓存更新（子进程跑，独立内存；接口只给最近~9日，
-        # 靠每日积累凑近两个月。失败不阻塞主流程，次日自愈）
-        try:
-            r = subprocess.run([sys.executable, "data/minute.py", "--update"],
-                               cwd=PROJECT_DIR, capture_output=True, text=True,
-                               timeout=1800)
-            out_lines = [x for x in (r.stdout or "").strip().splitlines() if x]
-            if r.returncode == 0:
-                logger.info("分时更新完成 — %s", out_lines[-1] if out_lines else "")
-            else:
-                logger.warning("分时更新失败(退出码 %s): %s",
-                               r.returncode, (r.stderr or "").strip()[-300:])
-        except Exception:
-            logger.warning("分时更新失败, 跳过", exc_info=True)
-
-        # 整体行情统计页刷新（子进程跑，独立内存——本进程已持有全量缓存，
-        # 页内聚合再读一份 11.8M 行会内存翻倍被系统杀；失败不阻塞主流程）
-        try:
-            r = subprocess.run([sys.executable, "scripts/gen_market.py"],
-                               cwd=PROJECT_DIR, capture_output=True, text=True,
-                               timeout=600)
-            out_lines = [x for x in (r.stdout or "").strip().splitlines() if x]
-            if r.returncode == 0:
-                logger.info("行情统计页刷新完成 — %s", out_lines[-1] if out_lines else "")
-            else:
-                logger.warning("行情统计页刷新失败(退出码 %s): %s",
-                               r.returncode, (r.stderr or "").strip()[-300:])
-        except Exception:
-            logger.warning("行情统计页刷新失败, 跳过", exc_info=True)
-
-        elapsed = (datetime.now() - start).total_seconds()
-        logger.info(
-            "更新完成 — %d 只股票, %d 条记录, 耗时 %.0f 秒",
-            data.stock_count, len(data.cache), elapsed,
-        )
-        if ak_failed:
-            logger.info("akshare 失败 %d 只 → baostock 回退", len(ak_failed))
-        if bs_failed:
-            logger.warning(
-                "双源后仍失败 %d 只: %s",
-                len(bs_failed), " ".join(bs_failed[:20]),
+        with single_instance_lock():
+            pipeline = DailyUpdatePipeline(
+                source=args.source,
+                limit=args.limit,
+                only=only,
+                minute_threads=args.minute_threads,
+                minute_checkpoint=args.minute_checkpoint,
+                target_date=args.target_date,
+                logger=logger,
             )
-            if len(bs_failed) > total * 0.5:
-                # 大部分失败通常是数据源级故障，下次任务自愈即可
-                logger.error("超过一半标的双源失败（%d/%d），等下次任务自愈", len(bs_failed), total)
-    except Exception as e:
-        logger.error("更新失败: %s", e, exc_info=True)
-        sys.exit(1)
+            ok = pipeline.run()
+    except Exception as exc:
+        logger.exception("每日更新启动失败: %s", exc)
+        return 1
+
+    logger.info("每日更新%s，目标交易日 %s",
+                "成功" if ok else "失败",
+                pipeline.target_date.date() if pipeline.target_date is not None else "未知")
+    return 0 if ok else 1
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

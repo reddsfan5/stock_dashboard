@@ -43,6 +43,7 @@ A股日K线数据层 — 本地缓存管理 + 增量更新
 """
 
 import os
+import sys
 import time
 import pandas as pd
 from typing import List, Optional
@@ -51,14 +52,17 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import akshare as ak
 from tqdm import tqdm
 
+PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, PROJECT_DIR)
+
 from data.sources import ak_fetch_kline, MAIN_BOARD_PREFIX
+from data.storage import atomic_write_parquet
 
 
 # ====================================================================
 # 配置
 # ====================================================================
 
-PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CACHE_DIR = os.path.join(PROJECT_DIR, "cache")
 CACHE_FILE = os.path.join(CACHE_DIR, "stock_kline_cache.parquet")
 CACHE_DAYS = 60               # 缓存保留的自然日跨度（约40个交易日）
@@ -103,10 +107,23 @@ class StockData:
         return self._cache
 
     def _save_cache(self):
-        """写入磁盘"""
+        """原子写入磁盘，进程被终止时保留上一版完整缓存。"""
         if self._cache is not None:
-            os.makedirs(os.path.dirname(self.cache_file), exist_ok=True)
-            self._cache.to_parquet(self.cache_file, index=False)
+            atomic_write_parquet(self._cache, self.cache_file)
+
+    def upsert(self, rows: pd.DataFrame) -> int:
+        """按 ``代码+日期`` 合并一批标准日 K 数据并安全落盘。"""
+        if rows is None or len(rows) == 0:
+            return 0
+        rows = rows.copy()
+        rows["日期"] = pd.to_datetime(rows["日期"])
+        before = len(self.cache)
+        self._cache = pd.concat([self.cache, rows], ignore_index=True)
+        self._cache = self._cache.drop_duplicates(
+            subset=["代码", "日期"], keep="last"
+        ).sort_values(["代码", "日期"]).reset_index(drop=True)
+        self._save_cache()
+        return len(self._cache) - before
 
     @property
     def stock_count(self) -> int:
@@ -248,7 +265,8 @@ class StockData:
 
     def update(self, stocks: Optional[pd.DataFrame] = None,
                board: str = "all", progress: bool = True,
-               fetch_fn=ak_fetch_kline, threads: int = THREADS) -> "StockData":
+               fetch_fn=ak_fetch_kline, threads: int = THREADS,
+               target_date=None) -> "StockData":
         """
         增量更新缓存：只拉取每只股票缺失的近期数据
 
@@ -260,6 +278,7 @@ class StockData:
                       默认 akshare，可传 data.sources.bs_fetch_kline 切 baostock
                       注意 baostock 需在 baostock_session() 内且 threads=1
             threads: 并发数（baostock 单 socket 会话，只能 1）
+            target_date: 明确的目标交易日；定时管线传入，避免凌晨/节假日误判
         失败代码记录在 self.last_failed（配合双数据源回退）。
         """
         self.last_failed = []
@@ -267,10 +286,12 @@ class StockData:
             stocks = self.get_stock_list(board=board)
 
         today = pd.Timestamp.today().normalize()
-        now = pd.Timestamp.now()
-        # 收盘前（<15:00）当天 K 线不完整，只期望到昨天；收盘后期望到今天
-        market_closed = now.hour >= 15
-        expected = today if market_closed else today - pd.Timedelta(days=1)
+        if target_date is not None:
+            expected = pd.Timestamp(target_date).normalize()
+        else:
+            now = pd.Timestamp.now()
+            # 收盘前当天 K 线不完整；这里只是无管线调用时的保守默认值
+            expected = today if now.hour >= 15 else today - pd.Timedelta(days=1)
 
         need_since = (today - pd.Timedelta(days=CACHE_DAYS)).strftime("%Y%m%d")
         FULL_START = "20100101"  # 缓存中没有的股票，从 2010 年开始全量拉
@@ -302,7 +323,7 @@ class StockData:
         if progress:
             print(f"更新 {len(codes_to_fetch)} / {len(stocks)} 只...")
 
-        fetch_end = today.strftime("%Y%m%d")
+        fetch_end = expected.strftime("%Y%m%d")
         new_data = []
         total_new = 0
 

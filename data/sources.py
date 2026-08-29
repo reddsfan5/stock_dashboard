@@ -6,9 +6,8 @@
 
 约定
 ----
-- 统一返回格式：日期(datetime)/开盘/最高/最低/收盘/成交额(万元)/代码
-  成交额单位为万元 —— 与 cache/stock_kline_cache.parquet 及选股阈值
-  （screen/*.py MIN_AMOUNT 单位）保持一致
+- 统一返回格式：日期(datetime)/开盘/最高/最低/收盘/成交额(元)/代码
+  screen/*.py 在使用流动性阈值时统一除以 10000 转为万元
 - 失败语义：所有 fetch 函数失败/空结果返回 None（由调用方记录 last_failed）
 - baostock 线程不安全（全局单 socket 会话），必须包在 baostock_session()
   内且顺序调用（threads=1）
@@ -16,10 +15,12 @@
 
 import os
 import logging
+import time
 from contextlib import contextmanager
-from typing import Callable, Optional
+from typing import Callable, Iterable, List, Optional, Tuple
 
 import pandas as pd
+import requests
 
 import akshare as ak
 
@@ -38,10 +39,13 @@ MAIN_BOARD_PREFIX = (
     "600", "601", "603", "605",     # 沪市主板
 )
 
-# baostock 成交额为"元"，缓存约定"万元"
-BS_AMOUNT_SCALE = 1e-4
+# baostock 与腾讯历史接口的成交额都统一按“元”写入缓存。
+BS_AMOUNT_SCALE = 1.0
 
 _BS_LOGGED_IN = False  # baostock 模块级会话标志
+
+TX_QUOTE_URL = "https://qt.gtimg.cn/q="
+TX_QUOTE_BATCH = 400
 
 
 # ====================================================================
@@ -49,7 +53,7 @@ _BS_LOGGED_IN = False  # baostock 模块级会话标志
 # ====================================================================
 
 def _normalize(df: pd.DataFrame, code: str, amount_scale: float = 1.0) -> pd.DataFrame:
-    """英文列 → 项目统一格式：日期/开盘/最高/最低/收盘/成交额(万元)/代码"""
+    """英文列 → 项目统一格式：日期/开盘/最高/最低/收盘/成交额(元)/代码。"""
     df = df[["date", "open", "high", "low", "close", "amount"]].copy()
     df.columns = ["日期", "开盘", "最高", "最低", "收盘", "成交额"]
     df["代码"] = code
@@ -89,6 +93,82 @@ def ak_fetch_kline(code: str, start: str, end: str, timeout: int = 5) -> Optiona
         return _normalize(df, code)
     except Exception:
         return None
+
+
+def _tx_symbol(code: str) -> str:
+    """纯数字或项目代码统一为腾讯报价代码。"""
+    value = str(code).strip().lower()
+    if value.startswith(("sh", "sz")):
+        return value
+    return ("sh" if value.startswith(("5", "6")) else "sz") + value
+
+
+def tx_fetch_daily_snapshot(
+    codes: Iterable[str], batch_size: int = TX_QUOTE_BATCH,
+    timeout: int = 15, retries: int = 3,
+) -> Tuple[pd.DataFrame, List[str]]:
+    """批量拉取腾讯收盘快照，通常十几次请求即可覆盖全市场。
+
+    返回的数据可直接合并进日 K 缓存，成交额使用报价字段中的精确“元”值。
+    单批请求连续失败或返回中缺少某代码时，该代码进入 ``failed``。
+    """
+    symbols = list(dict.fromkeys(_tx_symbol(code) for code in codes))
+    rows = []
+    failed: List[str] = []
+
+    for offset in range(0, len(symbols), batch_size):
+        batch = symbols[offset:offset + batch_size]
+        text = None
+        for attempt in range(retries):
+            try:
+                response = requests.get(
+                    TX_QUOTE_URL + ",".join(batch), timeout=(5, timeout)
+                )
+                response.raise_for_status()
+                response.encoding = "gbk"
+                text = response.text
+                break
+            except Exception:
+                if attempt + 1 < retries:
+                    time.sleep(1 + attempt)
+        if text is None:
+            failed.extend(batch)
+            continue
+
+        returned = set()
+        for line in text.split(";"):
+            if '="' not in line or "~" not in line:
+                continue
+            variable, payload = line.split('="', 1)
+            symbol = variable.rsplit("_", 1)[-1].strip()
+            values = payload.rstrip('"\r\n').split("~")
+            if len(values) <= 35:
+                continue
+            try:
+                stamp = values[30]
+                amount_parts = values[35].split("/")
+                row = {
+                    "代码": symbol,
+                    "日期": pd.to_datetime(stamp[:8], format="%Y%m%d"),
+                    "开盘": float(values[5]),
+                    "最高": float(values[33]),
+                    "最低": float(values[34]),
+                    "收盘": float(values[3]),
+                    "成交额": float(amount_parts[2]),
+                }
+            except (IndexError, TypeError, ValueError):
+                continue
+            if min(row["开盘"], row["最高"], row["最低"], row["收盘"]) <= 0:
+                continue
+            rows.append(row)
+            returned.add(symbol)
+        failed.extend(code for code in batch if code not in returned)
+
+    columns = ["代码", "日期", "开盘", "最高", "最低", "收盘", "成交额"]
+    frame = pd.DataFrame(rows, columns=columns)
+    if len(frame):
+        frame = frame.drop_duplicates(subset=["代码", "日期"], keep="last")
+    return frame, failed
 
 
 # ====================================================================
@@ -133,7 +213,7 @@ def bs_fetch_kline(code: str, start: str, end: str) -> Optional[pd.DataFrame]:
     baostock 日K线（备源）。必须在 baostock_session() 内调用。
 
     复权: adjustflag="3" 不复权，与 akshare adjust="" 对齐
-    成交额: baostock 返回"元"，按 BS_AMOUNT_SCALE 换算为万元
+    成交额: baostock 返回“元”，与缓存保持同一单位
     """
     if not _BS_LOGGED_IN:
         raise RuntimeError("baostock 未登录，请在 baostock_session() 内调用")

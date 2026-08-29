@@ -25,15 +25,16 @@ $ python data/etf.py --start 20250101          # 指定起始日期
 >>> kline = etf.get_kline("510050", days=10)    # 近 10 日 K 线
 
 # 选股时自动包含 ETF
-$ python scripts/screen.py                      # 股票+ETF 全部
-$ python scripts/screen.py --universe etf       # 仅 ETF
-$ python scripts/screen.py --universe stock     # 仅股票
+$ python -m scripts.screen                      # 股票+ETF 全部
+$ python -m scripts.screen --universe etf       # 仅 ETF
+$ python -m scripts.screen --universe stock     # 仅股票
 
 缓存文件: cache/etf_kline_cache.parquet (独立于股票缓存)
 代码格式: 纯数字 "510050"（接口自动处理 sh/sz 前缀映射）
 """
 
 import os
+import sys
 import time
 from typing import List, Optional
 
@@ -43,6 +44,10 @@ from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, PROJECT_DIR)
+
+from data.storage import atomic_write_parquet
+
 CACHE_FILE = os.path.join(PROJECT_DIR, "cache", "etf_kline_cache.parquet")
 
 THREADS = 8
@@ -55,6 +60,7 @@ class ETFData:
 
     def __init__(self):
         self._list: Optional[pd.DataFrame] = None
+        self.last_failed: List[str] = []
 
     # ========== 缓存 ==========
 
@@ -68,8 +74,22 @@ class ETFData:
         return pd.DataFrame(columns=["代码"] + COLUMNS)
 
     def _save(self, df: pd.DataFrame):
-        os.makedirs(os.path.dirname(CACHE_FILE), exist_ok=True)
-        df.to_parquet(CACHE_FILE, index=False)
+        atomic_write_parquet(df, CACHE_FILE)
+
+    def upsert(self, rows: pd.DataFrame) -> int:
+        """按 ``代码+日期`` 合并一批 ETF 日 K 数据并安全落盘。"""
+        if rows is None or len(rows) == 0:
+            return 0
+        rows = rows.copy()
+        rows["日期"] = pd.to_datetime(rows["日期"])
+        cache = self.cache
+        before = len(cache)
+        cache = pd.concat([cache, rows], ignore_index=True)
+        cache = cache.drop_duplicates(
+            subset=["代码", "日期"], keep="last"
+        ).sort_values(["代码", "日期"]).reset_index(drop=True)
+        self._save(cache)
+        return len(cache) - before
 
     # ========== ETF 列表 ==========
 
@@ -85,21 +105,25 @@ class ETFData:
 
     # ========== 更新 ==========
 
-    def update(self, start_date: str = "20240101", codes: List[str] = None) -> "ETFData":
+    def update(self, start_date: str = "20240101", codes: List[str] = None,
+               target_date=None) -> "ETFData":
         """
         增量更新 ETF K 线。
 
         Args:
             start_date: 起始日期 YYYYMMDD
             codes: 指定代码列表，None=全部
+            target_date: 明确的目标交易日；None=今天
         """
+        self.last_failed = []
         etfs = self.get_list()
         if codes:
             etfs = etfs[etfs["代码"].isin(codes)]
             print(f"指定 {len(etfs)} 只 ETF")
 
-        today = pd.Timestamp.today().normalize()
-        end_date = today.strftime("%Y%m%d")
+        target = (pd.Timestamp(target_date).normalize() if target_date is not None
+                  else pd.Timestamp.today().normalize())
+        end_date = target.strftime("%Y%m%d")
 
         cache = self.cache
         if len(cache) > 0:
@@ -112,7 +136,7 @@ class ETFData:
             code = row["代码"]
             if code in latest_map.index:
                 latest = latest_map[code]
-                if latest >= today:
+                if latest >= target:
                     continue
                 fetch_start = (latest + pd.Timedelta(days=1)).strftime("%Y%m%d")
             else:
@@ -160,6 +184,8 @@ class ETFData:
                 result = future.result()
                 if result is not None:
                     new_data.append(result)
+                else:
+                    self.last_failed.append(tasks[future])
 
         if new_data:
             ndf = pd.concat(new_data, ignore_index=True)
@@ -224,7 +250,7 @@ class ETFData:
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="ETF 数据管理")
-    parser.add_argument("--update", action="store_true", default=True, help="更新")
+    parser.add_argument("--update", action="store_true", help="更新")
     parser.add_argument("--codes", type=str, default=None, help="逗号分隔的代码（测试用）")
     parser.add_argument("--stats", action="store_true", help="统计")
     parser.add_argument("--start", type=str, default="20240101", help="起始日期")
@@ -237,6 +263,6 @@ if __name__ == "__main__":
         s = etf.stats()
         print(f"缓存: {s['cached']}/{s['total']} 只, {s['records']:,} 条")
 
-    if args.update:
+    if args.update or not args.stats:
         codes = args.codes.split(",") if args.codes else None
         etf.update(start_date=args.start, codes=codes)

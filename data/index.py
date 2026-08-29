@@ -26,7 +26,10 @@ import numpy as np
 import pandas as pd
 
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, PROJECT_DIR)  # 直接运行 data/index.py 时也能导入 data.etf
+sys.path.insert(0, PROJECT_DIR)
+
+from data.storage import atomic_write_parquet
+
 CACHE_FILE = os.path.join(PROJECT_DIR, "cache", "index_kline_cache.parquet")
 
 COLUMNS = ["日期", "开盘", "最高", "最低", "收盘", "成交量(手)"]
@@ -61,8 +64,7 @@ class IndexData:
         return pd.DataFrame(columns=["代码"] + COLUMNS + ["来源"])
 
     def _save(self, df: pd.DataFrame):
-        os.makedirs(os.path.dirname(CACHE_FILE), exist_ok=True)
-        df.to_parquet(CACHE_FILE, index=False)
+        atomic_write_parquet(df, CACHE_FILE)
 
     # ========== 更新 ==========
 
@@ -109,7 +111,8 @@ class IndexData:
         df["来源"] = "etf"
         return df
 
-    def update(self, start_date: str = FULL_START, progress: bool = True) -> "IndexData":
+    def update(self, start_date: str = FULL_START, progress: bool = True,
+               target_date=None) -> "IndexData":
         """
         增量更新 3 个指数。akshare 失败且缓存落后 ≥2 天时走 ETF 兜底。
         双源全挂只记 last_failed + warning，不抛异常（定时链不因指数中断）。
@@ -121,19 +124,20 @@ class IndexData:
         else:
             latest_map = pd.Series(dtype="datetime64[ns]")
 
-        today = pd.Timestamp.today().normalize()
-        end = today.strftime("%Y%m%d")
+        target = (pd.Timestamp(target_date).normalize() if target_date is not None
+                  else pd.Timestamp.today().normalize())
+        end = target.strftime("%Y%m%d")
 
         new_data = []
         for code in INDEXES:
             latest = latest_map.get(code)
             fetch_start = (latest + pd.Timedelta(days=1)).strftime("%Y%m%d") \
                 if latest is not None else start_date
-            if latest is not None and latest >= today:
+            if latest is not None and latest >= target:
                 continue
             df = self._fetch_ak(code, fetch_start, end)
             # ETF 兜底：akshare 失败且指数缓存落后 ≥2 天（防止用 2024 起的老 ETF 数据覆盖新鲜指数）
-            if df is None and (latest is None or latest < today - pd.Timedelta(days=2)):
+            if df is None and (latest is None or latest < target - pd.Timedelta(days=2)):
                 if progress:
                     print(f"  ⚠ {code} akshare 失败, 尝试 ETF 兜底 {ETF_FALLBACK.get(code, '')}")
                 df = self._fetch_etf_fallback(code, latest if latest is not None else pd.Timestamp(start_date))
@@ -169,7 +173,7 @@ class IndexData:
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="指数数据管理")
-    parser.add_argument("--update", action="store_true", default=True, help="增量更新")
+    parser.add_argument("--update", action="store_true", help="增量更新")
     parser.add_argument("--info", action="store_true", help="查看缓存覆盖")
     parser.add_argument("--start", type=str, default=FULL_START, help="首次拉取起点")
     args = parser.parse_args()
@@ -186,5 +190,5 @@ if __name__ == "__main__":
             )
             print(g.to_string())
 
-    if args.update:
+    if args.update or not args.info:
         idx.update(start_date=args.start)

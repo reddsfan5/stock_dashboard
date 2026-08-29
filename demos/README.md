@@ -37,12 +37,12 @@ brew install ta-lib                                 # TA-Lib 的 C 库（talib-b
 | 5 | `/usr/local/bin/python demos/demo_pyecharts.py` | `output/demo_kline.html` | 510050 交互 K 线（自包含，可离线打开） |
 
 生产工具（demo 的放大版）：
-- `scripts/quant_report.py` — 任意权益/交易 CSV 的绩效报告
-- `scripts/sweep.py` — 全市场 ETF/股票参数扫描（venv python 运行）
+- `scripts/reports/quant_report.py` — 任意权益/交易 CSV 的绩效报告
+- `scripts/tools/sweep.py` — 全市场 ETF/股票参数扫描（venv python 运行）
 
 ## 注意事项
 
-- **baostock 成交额单位**：返回「元」，`data/sources.py` 已按缓存约定（万元）÷1e4；demo_sources 实测验证过比率
+- **成交额单位**：腾讯/akshare、baostock、efinance 适配器都按缓存约定归一化为「元」；`demo_sources.py` 用三源比率接近 1 做校验
 - **周末可跑**：所有数据来自本地缓存，不依赖交易日；网络接口只用于 demo_sources 的实时对比
 - **efinance 偶发失败**：东财 push2his 接口连接重置（2026-08-16 实测），demo 会重试一次后跳过——这正是双数据源存在的意义
 - **py3.9 版本锁**：vectorbt 0.26 在 py<3.10 要求 numba<0.57（numpy<1.24）；numba 0.59 与 numpy 2.0 的组合在 py3.9 上不兼容，勿升级

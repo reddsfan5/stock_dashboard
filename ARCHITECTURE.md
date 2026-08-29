@@ -31,20 +31,27 @@ stock/
 ├── pipeline/                     # 管线编排层
 │   ├── runner.py                 # 模块自动发现 + 并行执行
 │   ├── reporter.py               # 统一 HTML 报告生成
+│   ├── daily_update.py           # 每日数据分阶段更新 + 质量门禁
 │   └── config.py                 # YAML 配置加载 + 参数注入
 │
-├── scripts/                      # 入口脚本
+├── scripts/                      # 命令入口（顶层仅放全局编排）
+│   ├── update_cache.py           # 数据更新编排 → 日线/指数/分时/市场页
 │   ├── screen.py                 # 选股管线 → dashboard.html
 │   ├── backtest.py               # 回测管线 → stats_report.html
-│   ├── debug_overlap.py          # 单股票逐笔调试（Overlap策略）
-│   ├── sim_overlap.py            # 单股票资金模拟
-│   └── sim_portfolio.py          # 全市场组合模拟
+│   ├── run_all_strategies.py     # 独立策略研究的总编排
+│   ├── strategies/               # 单项策略 strategy_01 ~ strategy_14
+│   ├── simulations/              # 资金与交易流程模拟
+│   ├── research/                 # 市场统计与专题回测
+│   ├── reports/                  # HTML 报告与导航生成
+│   ├── services/                 # 分时行情查询服务
+│   └── tools/                    # 调试与参数扫描工具
 │
 ├── output/                       # 生成输出（HTML、CSV等）
 ├── stock_data.py                 # → data.kline（向后兼容 shim）
-├── stock_info.py                 # → data.industry（shim）
-└── update_cache.py               # 定时缓存更新（launchd 每日18:30）
+└── stock_info.py                 # → data.industry（shim）
 ```
+
+脚本职责、编排关系和新增脚本的归类规则见 [`scripts/README.md`](scripts/README.md)。
 
 ---
 
@@ -54,7 +61,10 @@ stock/
 
 ```bash
 # 增量更新（拉取缺失股票的近期数据，秒级~分钟级）
-python update_cache.py
+python -m scripts.update_cache
+
+# 只检查股票/ETF/指数/分钟缓存是否覆盖同一目标交易日
+python -m scripts.update_cache --validate-only
 
 # 或代码调用
 from data.kline import StockData
@@ -62,6 +72,10 @@ data = StockData()
 data.update()                     # 增量
 data.rebuild(start_date="20100101")  # 全量重建
 ```
+
+日常任务由 `pipeline.daily_update` 依次执行股票、ETF、指数、分钟线、质量校验和
+报告刷新。状态写入 `cache/daily_update_status.json`；关键数据未达到覆盖率门禁时
+命令返回非零退出码。分钟线每 1000 只原子落盘，可在中断后续跑。
 
 缓存范围：2010-01-01 ~ 至今，排除北交所（bj）和科创板（sh688），约 4400 只。
 
@@ -81,16 +95,16 @@ python -c "from data.industry import StockInfo; StockInfo().build(force=True)"
 
 ```bash
 # 全部 5 个模块
-python scripts/screen.py
+python -m scripts.screen
 
 # 指定模块（逗号分隔）
-python scripts/screen.py --only continuity,sideways
+python -m scripts.screen --only continuity,sideways
 
 # 先更新缓存再跑
-python scripts/screen.py --refresh
+python -m scripts.screen --refresh
 
 # 输出到指定路径
-python scripts/screen.py --out output/my_dashboard.html
+python -m scripts.screen --out output/my_dashboard.html
 ```
 
 ### 2.2 模块列表
@@ -141,16 +155,16 @@ hammer:
 
 ```bash
 # 全部 12 个策略
-python scripts/backtest.py
+python -m scripts.backtest
 
 # 指定策略
-python scripts/backtest.py --only overlap,rising,baseline
+python -m scripts.backtest --only overlap,rising,baseline
 
 # 指定日期范围（只统计 N 年至今）
-python scripts/backtest.py --start 2024-01-01 --only overlap,rising
+python -m scripts.backtest --start 2024-01-01 --only overlap,rising
 
 # 输出到指定路径
-python scripts/backtest.py --out output/my_report.html
+python -m scripts.backtest --out output/my_report.html
 ```
 
 ### 3.2 策略列表
@@ -186,10 +200,10 @@ python scripts/backtest.py --out output/my_report.html
 
 ```bash
 # 比亚迪，连续3天重叠>2%，理想模式
-python scripts/debug_overlap.py --code sz002594 --days 3 --pct 2.0
+python -m scripts.tools.debug_overlap --code sz002594 --days 3 --pct 2.0
 
 # 茅台，连续5天重叠>3%，真实挂单模式
-python scripts/debug_overlap.py --code sh600519 --days 5 --pct 3.0 --realistic --target 1.0
+python -m scripts.tools.debug_overlap --code sh600519 --days 5 --pct 3.0 --realistic --target 1.0
 ```
 
 终端输出每笔信号的详细信息：
@@ -206,13 +220,13 @@ python scripts/debug_overlap.py --code sh600519 --days 5 --pct 3.0 --realistic -
 
 ```bash
 # 比亚迪，5万起步，2020年至今，挂单+1%
-python scripts/sim_overlap.py --code sz002594
+python -m scripts.simulations.sim_overlap --code sz002594
 
 # 茅台，100万起步
-python scripts/sim_overlap.py --code sh600519 --capital 1000000 --days 5 --pct 3.0
+python -m scripts.simulations.sim_overlap --code sh600519 --capital 1000000 --days 5 --pct 3.0
 
 # 2024年起
-python scripts/sim_overlap.py --code sz002594 --start 2024-01-01
+python -m scripts.simulations.sim_overlap --code sz002594 --start 2024-01-01
 ```
 
 模拟规则：
@@ -231,19 +245,19 @@ python scripts/sim_overlap.py --code sz002594 --start 2024-01-01
 
 ```bash
 # 默认：5万起步，2024年至今，全市场主板
-python scripts/sim_portfolio.py
+python -m scripts.simulations.sim_portfolio
 
 # 100万起步
-python scripts/sim_portfolio.py --capital 1000000
+python -m scripts.simulations.sim_portfolio --capital 1000000
 
 # 调整重叠阈值
-python scripts/sim_portfolio.py --overlap 2.0          # 重叠>2%（更宽松）
+python -m scripts.simulations.sim_portfolio --overlap 2.0          # 重叠>2%（更宽松）
 
 # 调整佣金（万分之N）
-python scripts/sim_portfolio.py --commission 2.5         # 万2.5
+python -m scripts.simulations.sim_portfolio --commission 2.5         # 万2.5
 
 # 调整挂单目标
-python scripts/sim_portfolio.py --target 2.0             # 挂单+2%
+python -m scripts.simulations.sim_portfolio --target 2.0             # 挂单+2%
 ```
 
 ### 5.2 策略逻辑
@@ -295,7 +309,7 @@ breakout:
 4. 运行即自动发现：
 
 ```bash
-python scripts/screen.py --only breakout
+python -m scripts.screen --only breakout
 ```
 
 ---
@@ -324,7 +338,7 @@ data/kline.py (StockData)
     │                                              ▼
     │                                       output/stats_report.html
     │
-    └──→ scripts/sim_portfolio.py (模拟引擎) ──→ output/portfolio_sim.html
+    └──→ scripts/simulations/sim_portfolio.py (模拟引擎) ──→ output/portfolio_sim.html
 ```
 
 ---

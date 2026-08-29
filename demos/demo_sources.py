@@ -4,7 +4,7 @@ Demo 1 — 三数据源对比（akshare / baostock / efinance）
 
 同一标的、同一区间分别拉取，验证：
   1. 收盘价是否一致（期望差 < 1e-6）
-  2. 成交额单位是否一致（ak/ef 为万元，bs 为元，比率应 ≈ 10000）
+  2. 成交额单位是否一致（三个适配器都应归一化为元，比率应 ≈ 1）
 
 这是 docs/10 双数据源决策的实证基础：2026-08-15 腾讯接口 SSL 抖动
 导致整条链路失败，baostock 备源接入前先验证两源数据可互换。
@@ -76,8 +76,8 @@ def main():
             close_diff = (m["收盘_ak"] - m["收盘_x"]).abs().max()
             amount_ratio = (m["成交额_ak"] / m["成交额_x"]).mean()
             print(f"  vs {name:<8}: 收盘最大差 {close_diff:.6f} | 成交额比率(ak/对方) {amount_ratio:,.0f}")
-    print("\n结论: 收盘价三源一致；成交额 baostock 为元（比率≈10000），"
-          "data/sources.py 的 BS_AMOUNT_SCALE=1e-4 换算正确。")
+    print("\n结论: 收盘价三源一致；三个适配器均将成交额归一化为元，"
+          "比率应接近 1。")
 
 
 if __name__ == "__main__":

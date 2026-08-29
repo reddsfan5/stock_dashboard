@@ -40,7 +40,7 @@ def main():
     dates = df["日期"].dt.strftime("%Y-%m-%d").tolist()
     # ECharts 蜡烛图数据顺序: [open, close, low, high]（注意不是 ohlc）
     ohlc = df[["开盘", "收盘", "最低", "最高"]].values.tolist()
-    volume = df["成交额"].round(0).tolist()  # 万元
+    volume = (df["成交额"] / 10000).round(0).tolist()  # 缓存元 → 展示万元
 
     kline = (
         Kline(init_opts=opts.InitOpts(width="1100px", height="640px"))

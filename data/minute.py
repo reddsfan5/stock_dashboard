@@ -1,8 +1,8 @@
 """
 分时（1分钟）数据层 — 独立缓存 cache/minute_kline_cache.parquet
 
-数据源：新浪 stock_zh_a_minute（东财被本机代理阻断，不可用）
-覆盖：接口只返回最近 ~9 个交易日——无法回补历史，靠每日收盘后增量
+数据源：腾讯五日分时主源 + 新浪分钟 K 线备源（东财被本机代理阻断）
+覆盖：接口只返回最近 5~9 个交易日——无法回补更早历史，靠每日收盘后增量
       "养数据"积累近两个月（KEEP_DAYS=65 自然日 ≈ 44 交易日）
 
 数据格式
@@ -27,21 +27,27 @@ $ python data/minute.py --stats                 # 缓存覆盖统计
 import os
 import sys
 import time
+import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Optional
 
 import pandas as pd
-
-import akshare as ak
+import requests
 
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_DIR)
 
+from data.storage import atomic_write_parquet
+
 CACHE_FILE = os.path.join(PROJECT_DIR, "cache", "minute_kline_cache.parquet")
 KEEP_DAYS = 65          # 保留自然日（近两个月 ≈ 44 交易日 + 缓冲）
 THREADS = 8
-DELAY = 0.05            # 请求间隔（秒）——新浪对高频请求限流，太密会大量失败
+DELAY = 0.02            # 腾讯主源请求的轻量节流
+CHECKPOINT_CODES = 1000 # 每完成 N 只原子落盘一次；超时后下次可续跑
+COMPLETE_TIME = "14:55:00"
 COLUMNS = ["代码", "时间", "开盘", "最高", "最低", "收盘", "成交量", "成交额"]
+SINA_URL = "https://quotes.sina.cn/cn/api/jsonp_v2.php/=/CN_MarketDataService.getKLineData"
+TENCENT_DAY_URL = "https://web.ifzq.gtimg.cn/appstock/app/day/query"
 
 
 class MinuteData:
@@ -49,6 +55,10 @@ class MinuteData:
 
     def __init__(self):
         self.last_failed: List[str] = []
+        self.last_no_data: List[str] = []
+        self.last_requested = 0
+        self.last_updated = 0
+        self.last_new_rows = 0
 
     # ========== 缓存 ==========
 
@@ -61,19 +71,88 @@ class MinuteData:
         return pd.DataFrame(columns=COLUMNS)
 
     def _save(self, df: pd.DataFrame):
-        os.makedirs(os.path.dirname(CACHE_FILE), exist_ok=True)
-        df.to_parquet(CACHE_FILE, index=False)
+        atomic_write_parquet(df, CACHE_FILE)
 
     # ========== 更新 ==========
 
-    def _fetch(self, code: str) -> Optional[pd.DataFrame]:
-        """新浪 1 分钟线（返回最近 ~9 个交易日），3 次重试"""
+    def _fetch_tencent(self, code: str, after=None,
+                       target=None) -> Optional[pd.DataFrame]:
+        """腾讯最近五日分时；量额为累计值，转换为每分钟增量。"""
         for attempt in range(3):
             try:
                 time.sleep(DELAY)
-                df = ak.stock_zh_a_minute(symbol=code, period="1", adjust="")
+                response = requests.get(
+                    TENCENT_DAY_URL, params={"code": code}, timeout=(5, 15)
+                )
+                response.raise_for_status()
+                item = response.json().get("data", {}).get(code, {})
+                days = item.get("data") or []
+                if not days:
+                    return pd.DataFrame(columns=COLUMNS)
+
+                rows = []
+                for day in days:
+                    date = str(day.get("date", ""))
+                    if len(date) != 8:
+                        continue
+                    day_date = pd.Timestamp(date)
+                    if target is not None and day_date > pd.Timestamp(target).normalize():
+                        continue
+                    if after is not None and day_date < pd.Timestamp(after).normalize():
+                        continue
+                    previous_volume = 0.0
+                    previous_amount = 0.0
+                    for value in day.get("data") or []:
+                        parts = value.split()
+                        if len(parts) < 4:
+                            continue
+                        clock = parts[0]
+                        if not ("0931" <= clock <= "1130" or
+                                "1301" <= clock <= "1500"):
+                            continue
+                        price = float(parts[1])
+                        cumulative_volume = float(parts[2])
+                        cumulative_amount = float(parts[3])
+                        volume = max(cumulative_volume - previous_volume, 0.0) * 100
+                        amount = max(cumulative_amount - previous_amount, 0.0)
+                        previous_volume = cumulative_volume
+                        previous_amount = cumulative_amount
+                        rows.append((
+                            code,
+                            date + clock,
+                            price, price, price, price, volume, amount,
+                        ))
+                if not rows:
+                    return pd.DataFrame(columns=COLUMNS)
+                frame = pd.DataFrame(rows, columns=COLUMNS)
+                frame["时间"] = pd.to_datetime(frame["时间"], format="%Y%m%d%H%M")
+                if after is not None:
+                    frame = frame[frame["时间"] > pd.Timestamp(after)]
+                return frame
+            except Exception:
+                if attempt < 2:
+                    time.sleep(1 + attempt)
+        return None
+
+    def _fetch_sina(self, code: str) -> Optional[pd.DataFrame]:
+        """新浪最近约九日分钟 K 线备源。"""
+        for attempt in range(3):
+            try:
+                response = requests.get(
+                    SINA_URL,
+                    params={"symbol": code, "scale": "1", "ma": "no", "datalen": "1970"},
+                    timeout=(5, 15),
+                )
+                response.raise_for_status()
+                text = response.text
+                start = text.find("=(")
+                end = text.rfind(");")
+                if start < 0 or end <= start:
+                    raise ValueError("新浪分钟响应格式异常")
+                payload = json.loads(text[start + 2:end])
+                df = pd.DataFrame(payload)
                 if df is None or len(df) == 0:
-                    return None
+                    return pd.DataFrame(columns=COLUMNS)
                 df = df.rename(columns={
                     "day": "时间", "open": "开盘", "high": "最高", "low": "最低",
                     "close": "收盘", "volume": "成交量", "amount": "成交额",
@@ -86,58 +165,150 @@ class MinuteData:
                 return df
             except Exception:
                 if attempt < 2:
-                    time.sleep(2)
+                    time.sleep(1 + attempt)
         return None
 
+    def _fetch(self, code: str, after=None, target=None) -> Optional[pd.DataFrame]:
+        """腾讯主源；仅在网络/响应异常时回退新浪。"""
+        frame = self._fetch_tencent(code, after=after, target=target)
+        if frame is not None:
+            return frame
+        return self._fetch_sina(code)
+
+    @staticmethod
+    def _prefix_etf(code: str) -> str:
+        return ("sh" if str(code).startswith(("5", "56", "58")) else "sz") + str(code)
+
+    def _active_codes(self, target_date=None):
+        """从已更新的日线缓存取得目标交易日实际有交易的股票和 ETF。"""
+        from data.etf import CACHE_FILE as ETF_CACHE_FILE
+        from data.kline import CACHE_FILE as STOCK_CACHE_FILE
+
+        target = pd.Timestamp(target_date).normalize() if target_date else None
+        if target is None:
+            latest = []
+            for path in (STOCK_CACHE_FILE, ETF_CACHE_FILE):
+                if os.path.exists(path):
+                    dates = pd.read_parquet(path, columns=["日期"])["日期"]
+                    if len(dates):
+                        latest.append(pd.to_datetime(dates).max().normalize())
+            if not latest:
+                raise RuntimeError("股票和 ETF 日线缓存均为空，无法确定分钟线目标日期")
+            target = max(latest)
+
+        stocks = pd.read_parquet(
+            STOCK_CACHE_FILE, columns=["代码", "日期"],
+            filters=[("日期", "==", target)],
+        ) if os.path.exists(STOCK_CACHE_FILE) else pd.DataFrame(columns=["代码"])
+        etfs = pd.read_parquet(
+            ETF_CACHE_FILE, columns=["代码", "日期"],
+            filters=[("日期", "==", target)],
+        ) if os.path.exists(ETF_CACHE_FILE) else pd.DataFrame(columns=["代码"])
+        codes = list(stocks["代码"].drop_duplicates())
+        codes.extend(self._prefix_etf(code) for code in etfs["代码"].drop_duplicates())
+        return list(dict.fromkeys(codes)), target
+
     def update(self, codes: List[str] = None, progress: bool = True,
-               threads: int = THREADS) -> "MinuteData":
+               threads: int = THREADS, target_date=None,
+               checkpoint_codes: int = CHECKPOINT_CODES) -> "MinuteData":
         """
         增量更新分时缓存（覆盖式：接口返回最近 ~9 日，按 代码+时间 去重合并）。
 
         Args:
-            codes: 带前缀代码列表（sh600519 / sh510050），None=全部（股票+ETF）
+            codes: 带前缀代码列表（sh600519 / sh510050）；None=目标日实际交易标的
+            target_date: 目标交易日；None=股票/ETF 日线缓存的最新日期
+            checkpoint_codes: 每完成多少只原子落盘一次
         """
         self.last_failed = []
+        self.last_no_data = []
+        self.last_requested = 0
+        self.last_updated = 0
+        self.last_new_rows = 0
         if codes is None:
-            from data.kline import StockData
-            from data.etf import ETFData
-            codes = (list(StockData().get_stock_list(board="all")["代码"])
-                     + list(ETFData().cache_with_prefix["代码"].unique()))
-            codes = list(dict.fromkeys(codes))  # 去重保序
+            codes, target = self._active_codes(target_date)
+        else:
+            codes = list(dict.fromkeys(codes))
+            target = pd.Timestamp(target_date).normalize() if target_date else None
 
         cache = self.cache
+        cutoff = pd.Timestamp.today().normalize() - pd.Timedelta(days=KEEP_DAYS)
+        original_rows = len(cache)
+        if len(cache):
+            cache = cache[cache["时间"] >= cutoff].reset_index(drop=True)
+            latest_map = cache.groupby("代码")["时间"].max()
+        else:
+            latest_map = pd.Series(dtype="datetime64[ns]")
+
+        if target is not None:
+            complete_at = target + pd.Timedelta(COMPLETE_TIME)
+            codes = [code for code in codes
+                     if code not in latest_map.index or latest_map[code] < complete_at]
+        codes.sort(key=lambda code: latest_map.get(code, pd.Timestamp.min))
+        self.last_requested = len(codes)
+        if not codes:
+            if len(cache) != original_rows:
+                self._save(cache)
+            if progress:
+                print(f"✓ 分时缓存已覆盖 {target.date() if target is not None else '目标日'}")
+            return self
+
         new_data = []
+        completed = 0
+
+        def _checkpoint():
+            nonlocal cache
+            if not new_data:
+                return
+            ndf = pd.concat(new_data, ignore_index=True)
+            ndf = ndf.drop_duplicates(subset=["代码", "时间"], keep="last")
+            cache = pd.concat([cache, ndf], ignore_index=True)
+            self.last_new_rows += len(ndf)
+            self._save(cache)
+            new_data.clear()
+
         with ThreadPoolExecutor(max_workers=threads) as executor:
-            tasks = {executor.submit(self._fetch, c): c for c in codes}
+            tasks = {
+                executor.submit(self._fetch, c, latest_map.get(c), target): c
+                for c in codes
+            }
             it = as_completed(tasks)
             if progress:
                 from tqdm import tqdm
                 it = tqdm(it, total=len(tasks), desc="分时")
             for future in it:
+                code = tasks[future]
                 df = future.result()
                 if df is not None and len(df) > 0:
-                    new_data.append(df)
+                    if code in latest_map.index:
+                        df = df[df["时间"] > latest_map[code]]
+                    else:
+                        df = df[df["时间"] >= cutoff]
+                    if target is not None:
+                        df = df[df["时间"] < target + pd.Timedelta(days=1)]
+                    if len(df):
+                        new_data.append(df)
+                        self.last_updated += 1
+                elif df is not None:
+                    self.last_no_data.append(code)
                 elif df is None:
-                    self.last_failed.append(tasks[future])
+                    self.last_failed.append(code)
+                completed += 1
+                if checkpoint_codes > 0 and completed % checkpoint_codes == 0:
+                    _checkpoint()
+                    if progress:
+                        print(f"  checkpoint {completed}/{len(codes)}，新增 {self.last_new_rows:,} 条")
 
-        if new_data:
-            ndf = pd.concat(new_data, ignore_index=True)
-            if len(cache) > 0:
-                cache = pd.concat([cache, ndf], ignore_index=True)
-            else:
-                cache = ndf
-            cache = cache.drop_duplicates(subset=["代码", "时间"], keep="last")
-            # 清理过期：只保留近 KEEP_DAYS 自然日
-            cutoff = pd.Timestamp.today().normalize() - pd.Timedelta(days=KEEP_DAYS)
-            cache = cache[cache["时间"] >= cutoff]
-            cache = cache.sort_values(["代码", "时间"]).reset_index(drop=True)
-            self._save(cache)
+        _checkpoint()
+        if self.last_new_rows:
             if progress:
-                print(f"✓ 分时更新: 新增 {len(ndf)} 条, 缓存共 {len(cache):,} 条, "
-                      f"{cache['代码'].nunique()} 只")
+                print(f"✓ 分时更新: 请求 {self.last_requested} 只, "
+                      f"更新 {self.last_updated} 只, 新增 {self.last_new_rows:,} 条, "
+                      f"缓存共 {len(cache):,} 条")
         else:
+            if len(cache) != original_rows:
+                self._save(cache)
             if progress:
-                print("✗ 分时无新数据（网络可能异常）")
+                print("⚠ 分时无新增数据")
         return self
 
     # ========== 查询 ==========
@@ -175,16 +346,20 @@ class MinuteData:
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="分时数据管理")
-    parser.add_argument("--update", action="store_true", default=True)
+    parser.add_argument("--update", action="store_true")
     parser.add_argument("--codes", type=str, default=None, help="逗号分隔（测试）")
     parser.add_argument("--stats", action="store_true")
+    parser.add_argument("--target-date", type=str, default=None, help="目标交易日 YYYY-MM-DD")
+    parser.add_argument("--threads", type=int, default=THREADS)
+    parser.add_argument("--checkpoint", type=int, default=CHECKPOINT_CODES)
     args = parser.parse_args()
 
     m = MinuteData()
     if args.stats:
         print(m.stats())
-    if args.update:
+    if args.update or not args.stats:
         codes = args.codes.split(",") if args.codes else None
-        m.update(codes=codes)
+        m.update(codes=codes, target_date=args.target_date, threads=args.threads,
+                 checkpoint_codes=args.checkpoint)
         if m.last_failed:
             print(f"失败 {len(m.last_failed)} 只: {' '.join(m.last_failed[:10])}")
