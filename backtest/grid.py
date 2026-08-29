@@ -1,5 +1,10 @@
 """
-银河证券网格交易回测系统
+研究型网格历史回测系统（旧实现）
+
+本模块保留固定多层挂单与极值追踪两种研究模型，不代表银河证券当前公开的
+两类委托执行语义。需要银河风格的“成交驱动/到价触发”及逐分钟账户回放时，
+使用 ``backtest.intraday_grid``；后者实现双侧预埋、撤单重挂、资券冻结和到价
+后报单等差异。
 
 设计模式：
   - Strategy Pattern：两种网格策略可互换
@@ -725,7 +730,7 @@ class Report:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="银河证券网格交易回测系统")
+    parser = argparse.ArgumentParser(description="研究型网格历史回测系统（旧实现）")
     parser.add_argument("--stock", default="sh600519")
     parser.add_argument("--mode", type=int, default=1, choices=[1, 2])
     parser.add_argument("--step", type=float, default=0.5)
