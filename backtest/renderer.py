@@ -172,8 +172,8 @@ def render_dip_buy_report(
 
     # 自动刷新导航页
     try:
-        from scripts.gen_index import generate; generate()
-        from scripts.gen_mobile import generate as gen_m; gen_m()
+        from scripts.reports.gen_index import generate; generate()
+        from scripts.reports.gen_mobile import generate as gen_m; gen_m()
     except Exception:
         pass
 

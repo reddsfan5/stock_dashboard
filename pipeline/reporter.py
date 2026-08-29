@@ -341,7 +341,7 @@ def build_screening_html(
 
     # 自动刷新导航页
     try:
-        from scripts.gen_index import generate; generate()
+        from scripts.reports.gen_index import generate; generate()
     except Exception:
         pass
 

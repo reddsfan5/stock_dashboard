@@ -2,9 +2,9 @@
 """
 Demo 2 — quantstats 绩效报告（策略 8 实战）
 
-复用 scripts/quant_report.py 的数据构造函数，产出：
+复用 scripts/reports/quant_report.py 的数据构造函数，产出：
   output/quantstats_demo.html — Sharpe/回撤/月度热力图/收益曲线全套
-（与 scripts/quant_report.py 同功能，这里是"先自动跑策略出 CSV"的一站式版）
+（与 scripts/reports/quant_report.py 同功能，这里是"先自动跑策略出 CSV"的一站式版）
 
 运行: /usr/local/bin/python demos/demo_quantstats.py
 """
@@ -35,7 +35,7 @@ def main():
     # 无 CSV 则先跑策略 8（~40 秒，产出交易/权益 CSV）
     if not os.path.exists(EQUITY_CSV):
         print("未找到权益 CSV，先运行策略 8 ...")
-        subprocess.run([sys.executable, "scripts/strategy_08_etf_momentum.py"],
+        subprocess.run([sys.executable, "scripts/strategies/strategy_08_etf_momentum.py"],
                        cwd=PROJECT_DIR, check=True)
 
     returns = build_returns(pd.read_csv(EQUITY_CSV))

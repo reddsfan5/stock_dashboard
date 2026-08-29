@@ -22,7 +22,7 @@ PIPELINE_META = {"id": "upward_gap", "title": "持续推高", "kwargs": {"days":
 使用示例
 --------
 # 命令行
-$ python scripts/screen.py --only upward_gap
+$ python -m scripts.screen --only upward_gap
 
 # 代码调用
 >>> from data.kline import StockData

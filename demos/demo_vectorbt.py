@@ -2,7 +2,7 @@
 """
 Demo 4 — vectorbt 均线金叉参数扫描（30 只 ETF 小规模演示）
 
-scripts/sweep.py 的全市场版这里缩到 30 只 ETF 跑通完整工作流：
+scripts/tools/sweep.py 的全市场版这里缩到 30 只 ETF 跑通完整工作流：
   vbt.MA.run → 金叉/死叉信号 → 共享资金组合 → 3×3 参数矩阵 → 热力图
 
 重要概念（详见 docs/10-库与生态.md）：

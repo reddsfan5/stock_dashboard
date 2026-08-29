@@ -5,16 +5,16 @@
 用法
 ----
 # ── 基础 ──
-  python scripts/screen.py                              # 全部模块 → dashboard.html
-  python scripts/screen.py --only continuity,sideways   # 指定模块（逗号分隔）
-  python scripts/screen.py --refresh                    # 先更新缓存再跑
-  python scripts/screen.py --backfill                   # 拉取120天历史
+  python -m scripts.screen                              # 全部模块 → dashboard.html
+  python -m scripts.screen --only continuity,sideways   # 指定模块（逗号分隔）
+  python -m scripts.screen --refresh                    # 先更新缓存再跑
+  python -m scripts.screen --backfill                   # 拉取120天历史
 
 # ── 标的范围 ──
-  python scripts/screen.py                              # 股票+ETF 全部（默认）
-  python scripts/screen.py --universe stock             # 仅股票
-  python scripts/screen.py --universe etf               # 仅 ETF
-  python scripts/screen.py --universe all               # 全部
+  python -m scripts.screen                              # 股票+ETF 全部（默认）
+  python -m scripts.screen --universe stock             # 仅股票
+  python -m scripts.screen --universe etf               # 仅 ETF
+  python -m scripts.screen --universe all               # 全部
 
 # ── 选股模块 ──
   continuity  — K线连续性（每天高点持续高于前低）

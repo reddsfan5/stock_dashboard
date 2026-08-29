@@ -12,7 +12,7 @@ PIPELINE_META = {"id": "long_shadow", "title": "长下影线(10日)", "kwargs": 
 
 使用示例
 --------
-$ python scripts/screen.py --only long_shadow
+$ python -m scripts.screen --only long_shadow
 """
 
 import numpy as np

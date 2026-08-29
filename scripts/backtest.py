@@ -3,8 +3,8 @@
 回测管线入口 — 一键运行全部策略，生成统计报告 HTML
 
 用法：
-  python scripts/backtest.py                       # 全策略
-  python scripts/backtest.py --only overlap,rising  # 指定策略
+  python -m scripts.backtest                       # 全策略
+  python -m scripts.backtest --only overlap,rising  # 指定策略
 """
 
 import argparse
