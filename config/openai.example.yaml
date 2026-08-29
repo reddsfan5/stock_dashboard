@@ -1,0 +1,7 @@
+# OpenAI API 非敏感配置模板。
+# 请通过 OPENAI_API_KEY 环境变量或密钥管理服务提供密钥，禁止写入本文件。
+
+api_key_env: "OPENAI_API_KEY"
+base_url: "https://api.openai.com/v1"
+model: "gpt-4o"
+timeout: 60
