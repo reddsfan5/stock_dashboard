@@ -12,6 +12,10 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
+from backtest.execution import (
+    ExecutionConfig, buy_cash_required, commission_for,
+    max_affordable_shares, sell_cash_received,
+)
 from backtest.sim_types import Position, Trade, EquityPoint
 
 # 沪深主板代码前缀
@@ -102,34 +106,42 @@ def compute_lots(cash: float, buy_price: float, position_pct: float,
                  min_commission: float = 0.0) -> Optional[int]:
     """计算可买手数。position_pct=1.0 满仓，0.5 半仓。"""
     available = cash * position_pct
-    lots = int(available / (buy_price * 100 * (1 + commission_rate)))
-    while lots > 0 and buy_total_cost(
-        buy_price, lots * 100, commission_rate, min_commission
-    ) > available:
-        lots -= 1
+    config = ExecutionConfig(
+        commission_rate=commission_rate,
+        min_commission=min_commission,
+    )
+    lots = max_affordable_shares(available, buy_price, config) // 100
     return lots if lots > 0 else None
 
 
 def transaction_fee(amount: float, commission_rate: float,
                     min_commission: float = 0.0) -> float:
     """佣金；最低佣金为 0 时保持旧版回测口径。"""
-    if amount <= 0:
-        return 0.0
-    return max(amount * commission_rate, min_commission)
+    config = ExecutionConfig(
+        commission_rate=commission_rate,
+        min_commission=min_commission,
+    )
+    return commission_for(amount, config)
 
 
 def buy_total_cost(price: float, shares: int, commission_rate: float,
                    min_commission: float = 0.0) -> float:
-    amount = price * shares
-    return amount + transaction_fee(amount, commission_rate, min_commission)
+    config = ExecutionConfig(
+        commission_rate=commission_rate,
+        min_commission=min_commission,
+    )
+    return buy_cash_required(price, shares, config)
 
 
 def sell_net_proceeds(price: float, shares: int, commission_rate: float,
                       stamp_tax: float,
                       min_commission: float = 0.0) -> float:
-    amount = price * shares
-    fees = transaction_fee(amount, commission_rate, min_commission)
-    return amount - fees - amount * stamp_tax
+    config = ExecutionConfig(
+        commission_rate=commission_rate,
+        min_commission=min_commission,
+        stamp_tax_rate=stamp_tax,
+    )
+    return sell_cash_received(price, shares, config)
 
 
 def record_equity(date, cash: float, positions: List[Position],
