@@ -30,6 +30,7 @@ stock/
 │   ├── sim_engine.py             # 通用资金模拟、撮合与结构化结果
 │   ├── execution.py              # 费用、滑点、整手、容量与涨跌停执行模型
 │   ├── rebalance.py              # 周期轮动、前一日信号和逐日盯市
+│   ├── validation.py             # 时间留出、隔离期与滚动前推切分
 │   ├── sim_core.py               # 费用、手数、盯市、平仓公共规则
 │   ├── sim_types.py              # Signal/Position/Trade/SimulationResult
 │   └── metrics.py                # 统一收益与风险指标

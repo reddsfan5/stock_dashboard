@@ -41,6 +41,7 @@ from backtest.intraday_grid import (  # noqa: E402
     TRANSACTION_DRIVEN,
     simulate_intraday_grid,
 )
+from backtest.validation import chronological_holdout  # noqa: E402
 from data.minute import MinuteData  # noqa: E402
 
 
@@ -165,9 +166,9 @@ def load_recent_days(
 
 
 def split_dates(dates: Sequence[str], validation_days: int) -> Tuple[List[str], List[str]]:
-    if validation_days < 1 or validation_days >= len(dates):
-        raise ValueError("验证日数必须至少为 1，且小于总样本日数")
-    return list(dates[:-validation_days]), list(dates[-validation_days:])
+    """向后兼容的无隔离期切分入口。"""
+    split = chronological_holdout(dates, validation_days)
+    return list(split.train), list(split.validation)
 
 
 def build_candidates(
@@ -373,6 +374,16 @@ def robust_score(metrics: Dict, min_train_trades: float) -> float:
     )
 
 
+def rank_candidates(rows: Sequence[Dict]) -> pd.DataFrame:
+    """只使用训练段指标排序，验证结果不得参与选优或破除平局。"""
+    ranking = pd.DataFrame(rows).sort_values(
+        ["score", "train_mean_excess_pct", "candidate_id"],
+        ascending=[False, False, True],
+    ).reset_index(drop=True)
+    ranking.insert(0, "rank", range(1, len(ranking) + 1))
+    return ranking
+
+
 def evaluate_candidate(
     candidate: Candidate,
     frames: Sequence[Tuple[str, pd.DataFrame]],
@@ -411,6 +422,8 @@ def create_parser() -> argparse.ArgumentParser:
     parser.add_argument("--code", default="520500", help="证券代码，默认 520500")
     parser.add_argument("--days", type=int, default=10, help="最近交易日数，默认 10")
     parser.add_argument("--validation-days", type=int, default=3, help="末尾验证日数，默认 3")
+    parser.add_argument("--embargo-days", type=int, default=0,
+                        help="训练与验证之间的隔离交易日数")
     parser.add_argument("--min-bars", type=int, default=200, help="单日最少分钟线根数")
     parser.add_argument("--method", choices=["grid", "random"], default="grid")
     parser.add_argument("--max-evals", type=int, default=100, help="random 模式最多评估参数数")
@@ -451,6 +464,10 @@ def validate_args(args) -> None:
         raise ValueError("资金和最小报价单位必须大于 0")
     if args.max_evals < 1 or args.top < 1:
         raise ValueError("max-evals 和 top 必须大于 0")
+    if args.embargo_days < 0:
+        raise ValueError("embargo-days 不能为负数")
+    if args.validation_days + args.embargo_days >= args.days:
+        raise ValueError("验证日数+隔离日数必须小于总样本日数")
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -481,7 +498,13 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         frames, quality = load_recent_days(code, args.days, args.min_bars)
         dates = [date for date, _ in frames]
-        train_dates, validation_dates = split_dates(dates, args.validation_days)
+        split = chronological_holdout(
+            dates, args.validation_days,
+            embargo_size=args.embargo_days,
+        )
+        train_dates = list(split.train)
+        embargo_dates = list(split.embargo)
+        validation_dates = list(split.validation)
         candidates = build_candidates(
             args.step_mode, steps, lots, order_modes, turn_values, base_prices
         )
@@ -494,6 +517,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         print(f"标的: {code}  样本: {dates[0]} ~ {dates[-1]} ({len(dates)}日)")
         print(f"训练: {', '.join(train_dates)}")
+        if embargo_dates:
+            print(f"隔离: {', '.join(embargo_dates)}")
         print(f"验证: {', '.join(validation_dates)}")
         print(f"搜索: {args.method}，候选 {len(candidates)} 组，报价约束剔除 {len(rejected)} 组")
 
@@ -508,12 +533,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             if index % 25 == 0 or index == len(candidates):
                 print(f"  已完成 {index}/{len(candidates)}")
 
-        ranking = pd.DataFrame(ranking_rows).sort_values(
-            ["score", "validation_mean_excess_pct"], ascending=False
-        ).reset_index(drop=True)
-        ranking.insert(0, "rank", range(1, len(ranking) + 1))
+        ranking = rank_candidates(ranking_rows)
         daily_frame = pd.DataFrame(daily_rows)
         split_map = {date: "train" for date in train_dates}
+        split_map.update({date: "embargo" for date in embargo_dates})
         split_map.update({date: "validation" for date in validation_dates})
         daily_frame.insert(2, "split", daily_frame["date"].map(split_map))
 
@@ -542,6 +565,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "episode_mode": "daily_independent",
             "dates": dates,
             "train_dates": train_dates,
+            "embargo_dates": embargo_dates,
             "validation_dates": validation_dates,
             "data_quality": quality,
             "search": {
@@ -564,7 +588,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "best_by_mode": best_by_mode,
             "best_daily": best_daily.to_dict(orient="records"),
             "limitations": [
-                "仅使用最近10个可用交易日时，样本很小，结果不能直接外推到未来",
+                f"仅使用最近{len(dates)}个可用交易日时，样本很小，结果不能直接外推到未来",
                 "一分钟OHLC无法还原分笔先后、盘口排队、部分成交和真实滑点",
                 "每天独立重置账户用于公平调参，不模拟隔夜持仓连续演化",
                 "验证段未参与排序，但仍应继续做更长样本、滚动前推和实盘仿真",

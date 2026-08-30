@@ -11,6 +11,7 @@ from scripts.research.optimize_intraday_grid import (
     create_parser,
     filter_candidates_for_tick,
     normalize_code,
+    rank_candidates,
     run_one_day,
     split_dates,
     validate_minute_frame,
@@ -42,6 +43,24 @@ class OptimizeIntradayGridTest(unittest.TestCase):
         train, validation = split_dates(["d1", "d2", "d3", "d4"], 1)
         self.assertEqual(train, ["d1", "d2", "d3"])
         self.assertEqual(validation, ["d4"])
+
+    def test_ranking_does_not_use_validation_results(self):
+        rows = [
+            {
+                "candidate_id": "b",
+                "score": 1.0,
+                "train_mean_excess_pct": 0.2,
+                "validation_mean_excess_pct": 99.0,
+            },
+            {
+                "candidate_id": "a",
+                "score": 1.0,
+                "train_mean_excess_pct": 0.3,
+                "validation_mean_excess_pct": -99.0,
+            },
+        ]
+        ranking = rank_candidates(rows)
+        self.assertEqual(ranking["candidate_id"].tolist(), ["a", "b"])
 
     def test_data_quality_rejects_duplicate_time(self):
         data = frame([1.0, 1.1, 1.2])
