@@ -40,6 +40,10 @@ python -m scripts.tools.debug_overlap --code sh600519
 
 `data/`、`screen/`、`backtest/` 和 `pipeline/` 是可复用业务代码；`scripts/` 仅负责命令入口和任务编排，不在这里继续堆积底层实现。
 
+策略 07～14 的周期轮动统一由 `backtest.rebalance.RebalanceEngine` 执行，
+`scripts/strategies/rebalance_utils.py` 只保留 CLI 参数与报告适配；旧的
+`scripts.simulations.sim_etf_momentum` 是策略 08 的兼容入口，不再维护第二套实现。
+
 分时服务同时提供 `minute_view.html` 行情查询和 `grid_simulator.html` T+0
 网格逐分钟回放；两者共用本地分钟缓存和 8765 端口。网格页可切换银河风格的
 成交驱动型（双侧预埋、占用资券）与到价触发型（触价报单、不预占资券），

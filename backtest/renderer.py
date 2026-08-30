@@ -61,6 +61,7 @@ def _build_monthly_html(trades: List[Trade]) -> str:
                 "stop": "🛑止损",
                 "expiry": "⏱到期",
                 "strategy": "策略退出",
+                "rebalance": "调仓换出",
                 "end_of_data": "期末平仓",
                 "end_of_data_estimate": "期末估值平仓",
             }.get(t.exit_reason, "✅止盈" if t.filled else "❌尾盘")
@@ -121,6 +122,8 @@ def render_dip_buy_report(
     params_html: str = None,
     metrics: SimulationMetrics = None,
     assumptions_html: str = None,
+    secondary_rate_label: str = "止盈率",
+    secondary_rate: float = None,
 ) -> str:
     """渲染模拟报告 HTML。传 title/subtitle/params_html 可覆盖默认描述。"""
     tpl = _load_template("dip_buy_report.html")
@@ -129,6 +132,10 @@ def render_dip_buy_report(
     wins = sum(1 for t in trades if t.is_win)
     total_pnl = sum(t.pnl for t in trades)
     hit = sum(1 for t in trades if t.is_target_exit)
+    displayed_secondary_rate = (
+        secondary_rate if secondary_rate is not None
+        else (hit / total * 100 if total > 0 else 0.0)
+    )
     if metrics is None:
         metrics = calculate_metrics(
             equity_curve, trades, capital, final_equity,
@@ -167,7 +174,8 @@ def render_dip_buy_report(
         "$start_date": start_date,
         "$total_trades": str(total),
         "$win_rate": f"{wins/total*100:.1f}" if total > 0 else "0.0",
-        "$hit_rate": f"{hit/total*100:.1f}" if total > 0 else "0.0",
+        "$hit_rate": f"{displayed_secondary_rate:.1f}",
+        "$secondary_rate_label": secondary_rate_label,
         "$pnl_class": pnl_class,
         "$total_pnl_fmt": f"{total_pnl:+,.0f}",
         "$ret_class": ret_class,

@@ -215,7 +215,9 @@ def force_close_positions(positions: List[Position], last_date,
 
 def print_stats(trades: List[Trade], cash: float, capital: float,
                 start_date: str, end_date: str, title: str = "",
-                extra_info: str = "", metrics=None):
+                extra_info: str = "", metrics=None,
+                secondary_rate_label: str = "止盈率",
+                secondary_rate: float = None):
     """打印模拟统计结果"""
     total = len(trades)
     wins = sum(1 for t in trades if t.is_win)
@@ -231,7 +233,9 @@ def print_stats(trades: List[Trade], cash: float, capital: float,
     print(f"{'='*60}")
     if total > 0:
         print(f"  总交易: {total} 笔  胜率: {wins}/{total} = {wins/total*100:.1f}%")
-        print(f"  止盈率: {hit/total*100:.1f}% ({hit}笔止盈)")
+        rate = secondary_rate if secondary_rate is not None else hit / total * 100
+        suffix = f" ({hit}笔止盈)" if secondary_rate is None else ""
+        print(f"  {secondary_rate_label}: {rate:.1f}%{suffix}")
     else:
         print(f"  总交易: 0 笔")
     print(f"  总盈亏: ¥{total_pnl:+,.0f}  期末: ¥{cash:,.0f}  ({(cash-capital)/capital*100:+.1f}%)")

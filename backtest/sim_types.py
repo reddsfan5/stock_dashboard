@@ -4,7 +4,7 @@
 消灭裸元组——Signal/Position/Trade 统一使用 dataclass，加字段时只改一处。
 """
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Optional
 
 
@@ -50,7 +50,7 @@ class Trade:
     filled: bool                # 兼容字段；新代码优先读取 exit_reason
     lots: int                   # 手数
     streak_days: int = 0        # 买入时的连续天数（重叠/推高天数）
-    exit_reason: str = ""       # target/stop/expiry/strategy/end_of_data(_estimate)
+    exit_reason: str = ""       # target/stop/expiry/strategy/rebalance/end_of_data
 
     @property
     def is_win(self) -> bool:
@@ -102,6 +102,8 @@ class SimulationResult:
     random_seed: int
     assumptions: Dict[str, Any]
     output_html: Optional[str] = None
+    open_positions: List[Position] = field(default_factory=list)
+    events: List[Dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         """转成可直接 JSON 序列化的字典。"""
