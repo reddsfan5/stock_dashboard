@@ -32,10 +32,13 @@ def build_kline_index(cache: pd.DataFrame, start_date: str = None) -> Dict:
     if start_date:
         cache = cache[cache["日期"] >= pd.Timestamp(start_date)]
     kline_idx = {}
-    for _, row in tqdm(cache.iterrows(), total=len(cache), desc="索引K线"):
-        kline_idx[(row["代码"], row["日期"])] = (
-            float(row["最高"]), float(row["最低"]),
-            float(row["收盘"]), float(row["开盘"]),
+    columns = ["代码", "日期", "最高", "最低", "收盘", "开盘"]
+    rows = cache[columns].itertuples(index=False, name=None)
+    for code, date, high, low, close, open_ in tqdm(
+        rows, total=len(cache), desc="索引K线"
+    ):
+        kline_idx[(code, date)] = (
+            float(high), float(low), float(close), float(open_),
         )
     return kline_idx
 
@@ -65,7 +68,7 @@ def group_signals_by_date(signals: pd.DataFrame,
 
 def sell_position(pos: Position, date, kline_idx: Dict,
                   commission_rate: float, stamp_tax: float,
-                  code_to_name: dict) -> Trade:
+                  code_to_name: dict, min_commission: float = 0.0) -> Trade:
     """卖出一个持仓，返回 Trade 记录"""
     key = (pos.code, date)
     if key not in kline_idx:
@@ -75,7 +78,8 @@ def sell_position(pos: Position, date, kline_idx: Dict,
     filled = high >= pos.target_price
     sell_price = pos.target_price if filled else close
     proceeds = pos.shares * sell_price
-    sell_fee = proceeds * commission_rate + proceeds * stamp_tax
+    sell_fee = transaction_fee(proceeds, commission_rate, min_commission)
+    sell_fee += proceeds * stamp_tax
     net_proceeds = proceeds - sell_fee
 
     return Trade(
@@ -89,32 +93,76 @@ def sell_position(pos: Position, date, kline_idx: Dict,
         pnl=round(net_proceeds - pos.total_cost, 2),
         filled=filled,
         lots=pos.shares // 100,
+        exit_reason="target" if filled else "expiry",
     )
 
 
 def compute_lots(cash: float, buy_price: float, position_pct: float,
-                 commission_rate: float) -> Optional[int]:
+                 commission_rate: float,
+                 min_commission: float = 0.0) -> Optional[int]:
     """计算可买手数。position_pct=1.0 满仓，0.5 半仓。"""
     available = cash * position_pct
     lots = int(available / (buy_price * 100 * (1 + commission_rate)))
+    while lots > 0 and buy_total_cost(
+        buy_price, lots * 100, commission_rate, min_commission
+    ) > available:
+        lots -= 1
     return lots if lots > 0 else None
 
 
-def record_equity(date, cash: float, positions: List[Position]) -> EquityPoint:
-    """记录当日权益"""
-    pos_value = sum(p.shares * p.buy_price for p in positions)
+def transaction_fee(amount: float, commission_rate: float,
+                    min_commission: float = 0.0) -> float:
+    """佣金；最低佣金为 0 时保持旧版回测口径。"""
+    if amount <= 0:
+        return 0.0
+    return max(amount * commission_rate, min_commission)
+
+
+def buy_total_cost(price: float, shares: int, commission_rate: float,
+                   min_commission: float = 0.0) -> float:
+    amount = price * shares
+    return amount + transaction_fee(amount, commission_rate, min_commission)
+
+
+def sell_net_proceeds(price: float, shares: int, commission_rate: float,
+                      stamp_tax: float,
+                      min_commission: float = 0.0) -> float:
+    amount = price * shares
+    fees = transaction_fee(amount, commission_rate, min_commission)
+    return amount - fees - amount * stamp_tax
+
+
+def record_equity(date, cash: float, positions: List[Position],
+                  kline_idx: Dict = None,
+                  last_prices: Dict[str, float] = None) -> EquityPoint:
+    """按当日收盘价记录权益；停牌/缺失行情时使用最近可得价。"""
+    position_value = 0.0
+    for pos in positions:
+        price = None
+        if kline_idx is not None:
+            bar = kline_idx.get((pos.code, date))
+            if bar is not None and len(bar) >= 3:
+                price = float(bar[2])
+        if price is None and last_prices is not None:
+            price = last_prices.get(pos.code)
+        if price is None:
+            price = pos.buy_price
+        position_value += pos.shares * price
     return EquityPoint(
         date=pd.Timestamp(date).strftime("%Y-%m-%d"),
-        equity=cash + pos_value,
+        equity=cash + position_value,
         cash=cash,
         positions=len(positions),
+        position_value=position_value,
     )
 
 
 def force_close_positions(positions: List[Position], last_date,
                           kline_idx: Dict, commission_rate: float,
                           stamp_tax: float, code_to_name: dict,
-                          cash: float) -> Tuple[List[Trade], float]:
+                          cash: float,
+                          min_commission: float = 0.0,
+                          last_prices: Dict[str, float] = None) -> Tuple[List[Trade], float]:
     """期末强制平仓所有持仓，返回 (交易列表, 最终现金)"""
     trades = []
     for pos in positions:
@@ -122,11 +170,15 @@ def force_close_positions(positions: List[Position], last_date,
         if key in kline_idx:
             _, _, close, _ = kline_idx[key]
             sell_price = close
+            exit_reason = "end_of_data"
         else:
-            sell_price = pos.buy_price
-        proceeds = pos.shares * sell_price
-        sell_fee = proceeds * commission_rate + proceeds * stamp_tax
-        net_proceeds = proceeds - sell_fee
+            sell_price = ((last_prices or {}).get(pos.code)
+                          or pos.buy_price)
+            exit_reason = "end_of_data_estimate"
+        net_proceeds = sell_net_proceeds(
+            sell_price, pos.shares, commission_rate, stamp_tax,
+            min_commission,
+        )
         cash += net_proceeds
         trades.append(Trade(
             code=pos.code,
@@ -140,6 +192,7 @@ def force_close_positions(positions: List[Position], last_date,
             filled=False,
             lots=pos.shares // 100,
             streak_days=pos.streak_days,
+            exit_reason=exit_reason,
         ))
     return trades, cash
 
@@ -150,12 +203,12 @@ def force_close_positions(positions: List[Position], last_date,
 
 def print_stats(trades: List[Trade], cash: float, capital: float,
                 start_date: str, end_date: str, title: str = "",
-                extra_info: str = ""):
+                extra_info: str = "", metrics=None):
     """打印模拟统计结果"""
     total = len(trades)
     wins = sum(1 for t in trades if t.is_win)
     total_pnl = sum(t.pnl for t in trades)
-    hit = sum(1 for t in trades if t.filled)
+    hit = sum(1 for t in trades if t.is_target_exit)
     avg_pnl = total_pnl / total if total > 0 else 0
 
     print(f"\n{'='*60}")
@@ -171,6 +224,10 @@ def print_stats(trades: List[Trade], cash: float, capital: float,
         print(f"  总交易: 0 笔")
     print(f"  总盈亏: ¥{total_pnl:+,.0f}  期末: ¥{cash:,.0f}  ({(cash-capital)/capital*100:+.1f}%)")
     print(f"  平均: ¥{avg_pnl:+,.0f}/笔")
+    if metrics is not None:
+        sharpe = (f"{metrics.sharpe_ratio:.2f}"
+                  if metrics.sharpe_ratio is not None else "N/A")
+        print(f"  最大回撤: {metrics.max_drawdown_pct:.2f}%  Sharpe: {sharpe}")
     print(f"{'='*60}")
 
 

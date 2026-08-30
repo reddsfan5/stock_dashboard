@@ -21,8 +21,8 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional
-from collections import defaultdict
+from typing import Dict, List
+import random
 
 import pandas as pd
 
@@ -40,6 +40,10 @@ class DayContext:
     commission_rate: float          # 佣金率
     target_pct: float               # 止盈目标%
     code_to_name: dict              # 代码→名称映射
+    rng: random.Random = field(     # 引擎注入的确定性随机数生成器
+        default_factory=lambda: random.Random(42)
+    )
+    min_commission: float = 0.0      # 单笔最低佣金（元）
 
 
 class SimStrategy(ABC):

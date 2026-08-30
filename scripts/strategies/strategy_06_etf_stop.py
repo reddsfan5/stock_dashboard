@@ -13,7 +13,7 @@ PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__
 sys.path.insert(0, PROJECT_DIR)
 from backtest.strategy import SimStrategy, DayContext
 from backtest.sim_types import Position
-from backtest.sim_core import compute_lots
+from backtest.sim_core import buy_total_cost, compute_lots
 from backtest.sim_engine import SimEngine
 OUTPUT_HTML = os.path.join(PROJECT_DIR, "output", "strategy_06.html")
 
@@ -51,9 +51,9 @@ class ETFStopStrategy(SimStrategy):
             if key not in ctx.kline_idx: continue
             h, l, c, o = ctx.kline_idx[key]
             if c <= 0: continue
-            lots = compute_lots(ctx.cash, c, 0.2, ctx.commission_rate)
+            lots = compute_lots(ctx.cash, c, 0.2, ctx.commission_rate, ctx.min_commission)
             if not lots or lots < 1: continue
-            sh = lots * 100; cost = sh * c * (1 + ctx.commission_rate)
+            sh = lots * 100; cost = buy_total_cost(c, sh, ctx.commission_rate, ctx.min_commission)
             if cost > ctx.cash: continue
             ctx.cash -= cost
             new.append(Position(code=s["代码"], shares=sh, buy_price=c, total_cost=cost, target_price=round(c*1.05,2), stop_price=round(c*0.97,2), max_hold_days=5, holding_days=1, buy_date=ctx.date, buy_day_low=l))

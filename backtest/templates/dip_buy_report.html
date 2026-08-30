@@ -48,6 +48,7 @@ tr.win td{background:#f6fff6}tr.loss td{background:#fff6f6}
 <div class="header"><h1>$board_label</h1>
 <div class="sub">$subtitle_line</div></div>
 <div class="params">$params_block
+  <div>$assumptions_block</div>
 </div>
 <div class="summary">
   <div class="card"><span class="big blue">$total_trades</span><span class="label">总交易</span></div>
@@ -56,6 +57,8 @@ tr.win td{background:#f6fff6}tr.loss td{background:#fff6f6}
   <div class="card"><span class="big $pnl_class">¥$total_pnl_fmt</span><span class="label">总盈亏</span></div>
   <div class="card"><span class="big $ret_class">¥$final_equity_fmt</span><span class="label">期末</span></div>
   <div class="card"><span class="big $ret_class">$total_return%</span><span class="label">收益率</span></div>
+  <div class="card"><span class="big red">$max_drawdown%</span><span class="label">最大回撤</span></div>
+  <div class="card"><span class="big blue">$sharpe</span><span class="label">Sharpe</span></div>
 </div>
 <div class="charts">
   <div class="chart-box"><canvas id="eq"></canvas></div>

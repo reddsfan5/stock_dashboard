@@ -6,14 +6,14 @@
 教训: A股假突破多，一日游为主，量价过滤不够区分真假突破
 """
 
-import argparse, os, sys, time, random
+import argparse, os, sys, time
 import numpy as np, pandas as pd
 from tqdm import tqdm
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, PROJECT_DIR)
 from backtest.strategy import SimStrategy, DayContext
 from backtest.sim_types import Position
-from backtest.sim_core import compute_lots
+from backtest.sim_core import buy_total_cost, compute_lots
 from backtest.sim_engine import SimEngine
 OUTPUT_HTML = os.path.join(PROJECT_DIR, "output", "strategy_02.html")
 
@@ -43,16 +43,16 @@ class BreakoutStrategy(SimStrategy):
         return df
 
     def process_day(self, ctx: DayContext):
-        new = []; today = ctx.today_signals; random.shuffle(today)
+        new = []; today = list(ctx.today_signals); ctx.rng.shuffle(today)
         for s in today:
             if ctx.today_start_cash > 0 and (ctx.today_start_cash - ctx.cash) / ctx.today_start_cash >= 0.90: break
             key = (s["代码"], ctx.date)
             if key not in ctx.kline_idx: continue
             h, l, c, o = ctx.kline_idx[key]
             if c <= 0: continue
-            lots = compute_lots(ctx.cash, c, 0.3, ctx.commission_rate)
+            lots = compute_lots(ctx.cash, c, 0.3, ctx.commission_rate, ctx.min_commission)
             if not lots: continue
-            sh = lots * 100; cost = sh * c * (1 + ctx.commission_rate)
+            sh = lots * 100; cost = buy_total_cost(c, sh, ctx.commission_rate, ctx.min_commission)
             if cost > ctx.cash: continue
             ctx.cash -= cost
             new.append(Position(code=s["代码"], shares=sh, buy_price=c, total_cost=cost, target_price=round(c*1.015,2), stop_price=round(c*0.98,2), buy_date=ctx.date, buy_day_low=l))

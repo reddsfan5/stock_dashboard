@@ -104,8 +104,10 @@ def compute_signals_fast(data: StockData, code_to_name: dict,
 
 def run_sim(capital: float = 50000, target_pct: float = 1.0,
             overlap_pct: float = 3.0, commission_rate: float = 0.0001,
-            stamp_tax: float = 0.0005, start_date: str = "2024-01-01"):
+            stamp_tax: float = 0.0005, start_date: str = "2024-01-01",
+            random_seed: int = 42):
     data = StockData()
+    rng = random.Random(random_seed)
 
     # 预加载全量股票名称（从 StockInfo，保证含创业/科创/北交）
     info = StockInfo()
@@ -163,6 +165,7 @@ def run_sim(capital: float = 50000, target_pct: float = 1.0,
                 return_pct=round((net_proceeds - total_cost) / total_cost * 100, 2),
                 pnl=round(net_proceeds - total_cost, 2),
                 filled=filled, lots=shares // 100,
+                exit_reason="target" if filled else "expiry",
             ))
         positions = survivors
 
@@ -172,7 +175,7 @@ def run_sim(capital: float = 50000, target_pct: float = 1.0,
             bought_codes = set()
 
             # 阶段1: 随机选2只，各买最大手数
-            picks = random.sample(today, min(2, len(today)))
+            picks = rng.sample(today, min(2, len(today)))
             for s in picks:
                 buy_price = s["买入价"]
                 lots = int(cash / (buy_price * 100 * (1 + commission_rate)))
@@ -212,10 +215,14 @@ def run_sim(capital: float = 50000, target_pct: float = 1.0,
                 ))
 
         # c. 记录权益
-        pos_value = sum(p[1] * p[2] for p in positions)
+        pos_value = sum(
+            p[1] * (kline_idx.get((p[0], date), (0, 0, p[2]))[2])
+            for p in positions
+        )
         equity_curve.append(EquityPoint(
             date=pd.Timestamp(date).strftime("%Y-%m-%d"),
-            equity=cash + pos_value, cash=cash, positions=len(positions)))
+            equity=cash + pos_value, cash=cash, positions=len(positions),
+            position_value=pos_value))
 
     all_dates = all_trading_days
 
@@ -241,7 +248,12 @@ def run_sim(capital: float = 50000, target_pct: float = 1.0,
                 return_pct=round((proceeds - sell_fee - total_cost) / total_cost * 100, 2),
                 pnl=round(proceeds - sell_fee - total_cost, 2),
                 filled=False, lots=shares // 100,
+                exit_reason="end_of_data",
             ))
+        equity_curve[-1] = EquityPoint(
+            date=pd.Timestamp(last_date).strftime("%Y-%m-%d"),
+            equity=cash, cash=cash, positions=0, position_value=0.0,
+        )
 
     # 5. 统计
     print_stats(closed_trades, cash, capital, start_date,
@@ -271,10 +283,12 @@ if __name__ == "__main__":
     parser.add_argument("--target", type=float, default=1.0)
     parser.add_argument("--overlap", type=float, default=3.0)
     parser.add_argument("--commission", type=float, default=1.0, help="佣金(万分之)")
+    parser.add_argument("--seed", type=int, default=42, help="随机种子")
     args = parser.parse_args()
 
     t0 = time.time()
     run_sim(capital=args.capital, target_pct=args.target,
             overlap_pct=args.overlap,
-            commission_rate=args.commission / 10000)
+            commission_rate=args.commission / 10000,
+            random_seed=args.seed)
     print(f"\n总耗时: {time.time()-t0:.0f}秒")

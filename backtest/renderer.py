@@ -12,7 +12,8 @@ from typing import List
 
 import pandas as pd
 
-from backtest.sim_types import Trade, EquityPoint
+from backtest.metrics import calculate_metrics
+from backtest.sim_types import EquityPoint, SimulationMetrics, Trade
 
 TEMPLATE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
 
@@ -55,7 +56,14 @@ def _build_monthly_html(trades: List[Trade]) -> str:
 
         rows = ""
         for t in mt:
-            status = "✅止盈" if t.filled else "❌尾盘"
+            status = {
+                "target": "✅止盈",
+                "stop": "🛑止损",
+                "expiry": "⏱到期",
+                "strategy": "策略退出",
+                "end_of_data": "期末平仓",
+                "end_of_data_estimate": "期末估值平仓",
+            }.get(t.exit_reason, "✅止盈" if t.filled else "❌尾盘")
             win_cls = "win" if t.is_win else "loss"
             ret_cls = "positive" if t.return_pct > 0 else "negative"
             pnl_cls = "positive" if t.pnl > 0 else "negative"
@@ -111,6 +119,8 @@ def render_dip_buy_report(
     title: str = None,
     subtitle: str = None,
     params_html: str = None,
+    metrics: SimulationMetrics = None,
+    assumptions_html: str = None,
 ) -> str:
     """渲染模拟报告 HTML。传 title/subtitle/params_html 可覆盖默认描述。"""
     tpl = _load_template("dip_buy_report.html")
@@ -118,7 +128,11 @@ def render_dip_buy_report(
     total = len(trades)
     wins = sum(1 for t in trades if t.is_win)
     total_pnl = sum(t.pnl for t in trades)
-    hit = sum(1 for t in trades if t.filled)
+    hit = sum(1 for t in trades if t.is_target_exit)
+    if metrics is None:
+        metrics = calculate_metrics(
+            equity_curve, trades, capital, final_equity,
+        )
 
     eq_dates = [e.date for e in equity_curve]
     eq_values = [round(e.equity, 0) for e in equity_curve]
@@ -140,6 +154,7 @@ def render_dip_buy_report(
   💡 <b>卖出逻辑：</b>次日目标 = 上一日最低价×{target_pct}% → 触及止盈 ✅，否则尾盘强平 ❌<br>
   💡 <b>资金分配：</b>当日信号随机打乱，逐只满仓买入，现金用掉 90%+ 停止<br>
   💡 <b>起止：</b>¥{capital:,.0f} | {start_date} ~ 至今 | 重叠>{overlap_pct}% 连续3-10天 | 短期涨幅<{max_gain}%""",
+        "$assumptions_block": assumptions_html or "",
         "$board_note": "仅主板" if board == "main" else "全市场",
         "$lookback": str(lookback),
         "$target_pct": str(target_pct),
@@ -158,6 +173,9 @@ def render_dip_buy_report(
         "$ret_class": ret_class,
         "$final_equity_fmt": f"{final_equity:,.0f}",
         "$total_return": f"{(final_equity-capital)/max(capital,1)*100:+.1f}",
+        "$max_drawdown": f"{metrics.max_drawdown_pct:.1f}",
+        "$sharpe": (f"{metrics.sharpe_ratio:.2f}"
+                    if metrics.sharpe_ratio is not None else "N/A"),
         "$eq_dates": json.dumps(eq_dates, ensure_ascii=False),
         "$eq_values": json.dumps(eq_values),
         "$daily_pos": json.dumps(daily_pos),

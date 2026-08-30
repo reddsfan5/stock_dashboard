@@ -12,7 +12,7 @@
   python -m scripts.simulations.sim_upward_gap --capital 100000 -n 5 -m 1.5
 """
 
-import argparse, os, sys, time, random
+import argparse, os, sys, time
 
 import numpy as np
 import pandas as pd
@@ -23,7 +23,7 @@ sys.path.insert(0, PROJECT_DIR)
 
 from backtest.strategy import SimStrategy, DayContext
 from backtest.sim_types import Position
-from backtest.sim_core import compute_lots
+from backtest.sim_core import buy_total_cost, compute_lots
 from backtest.sim_engine import SimEngine
 
 OUTPUT_HTML = os.path.join(PROJECT_DIR, "output", "upward_gap_sim.html")
@@ -93,8 +93,8 @@ class UpwardGapStrategy(SimStrategy):
 
     def process_day(self, ctx: DayContext):
         new_positions = []
-        today = ctx.today_signals
-        random.shuffle(today)
+        today = list(ctx.today_signals)
+        ctx.rng.shuffle(today)
 
         for s in today:
             # 仓位上限 90%
@@ -117,11 +117,16 @@ class UpwardGapStrategy(SimStrategy):
                 continue
 
             bp = close
-            lots = compute_lots(ctx.cash, bp, 0.5, ctx.commission_rate)
+            lots = compute_lots(
+                ctx.cash, bp, 0.5, ctx.commission_rate,
+                ctx.min_commission,
+            )
             if not lots:
                 continue
             shares = lots * 100
-            cost = shares * bp * (1 + ctx.commission_rate)
+            cost = buy_total_cost(
+                bp, shares, ctx.commission_rate, ctx.min_commission,
+            )
             if cost > ctx.cash:
                 continue
             ctx.cash -= cost  # 引擎依赖 ctx.cash 跟踪资金
@@ -148,6 +153,9 @@ if __name__ == "__main__":
     parser.add_argument("-m", type=float, default=1.0, help="止盈目标%%")
     parser.add_argument("--gap", type=float, default=1.5, help="每日推高幅度%%")
     parser.add_argument("--commission", type=float, default=1.0, help="佣金万分之")
+    parser.add_argument("--min-commission", type=float, default=0.0,
+                        help="单笔最低佣金（元，默认0以兼容历史结果）")
+    parser.add_argument("--seed", type=int, default=42, help="随机种子")
     parser.add_argument("--start", type=str, default="2026-03-01", help="起始日期")
     args = parser.parse_args()
 
@@ -156,6 +164,7 @@ if __name__ == "__main__":
     engine.run(
         capital=args.capital, start_date=args.start,
         target_pct=args.m, commission_rate=args.commission / 10000,
+        min_commission=args.min_commission, random_seed=args.seed,
         output_html=OUTPUT_HTML,
         min_days=args.n, gap_pct=args.gap,
     )

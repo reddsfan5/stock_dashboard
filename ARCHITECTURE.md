@@ -26,7 +26,11 @@ stock/
 │
 ├── backtest/                     # 回测统计层
 │   ├── engine.py                 # StatsEngine + 12种策略（模板方法模式）
-│   └── grid.py                   # 网格交易回测（策略模式，两种网格）
+│   ├── grid.py                   # 网格交易回测（策略模式，两种网格）
+│   ├── sim_engine.py             # 通用资金模拟、撮合与结构化结果
+│   ├── sim_core.py               # 费用、手数、盯市、平仓公共规则
+│   ├── sim_types.py              # Signal/Position/Trade/SimulationResult
+│   └── metrics.py                # 统一收益与风险指标
 │
 ├── pipeline/                     # 管线编排层
 │   ├── runner.py                 # 模块自动发现 + 并行执行

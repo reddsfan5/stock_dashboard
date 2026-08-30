@@ -4,8 +4,8 @@
 消灭裸元组——Signal/Position/Trade 统一使用 dataclass，加字段时只改一处。
 """
 
-from dataclasses import dataclass, field
-from typing import List, Optional
+from dataclasses import asdict, dataclass
+from typing import Any, Dict, List, Optional
 
 
 @dataclass
@@ -47,13 +47,21 @@ class Trade:
     sell_price: float
     return_pct: float           # 收益率%
     pnl: float                  # 盈亏金额
-    filled: bool                # True=止盈成交, False=尾盘强平
+    filled: bool                # 兼容字段；新代码优先读取 exit_reason
     lots: int                   # 手数
     streak_days: int = 0        # 买入时的连续天数（重叠/推高天数）
+    exit_reason: str = ""       # target/stop/expiry/strategy/end_of_data(_estimate)
 
     @property
     def is_win(self) -> bool:
         return self.pnl > 0
+
+    @property
+    def is_target_exit(self) -> bool:
+        """兼容旧记录：没有 exit_reason 时沿用 filled 的含义。"""
+        return self.exit_reason == "target" or (
+            not self.exit_reason and self.filled
+        )
 
 
 @dataclass
@@ -63,3 +71,38 @@ class EquityPoint:
     equity: float               # 总权益（现金+持仓市值）
     cash: float                 # 现金
     positions: int              # 持仓数量
+    position_value: float = 0.0  # 按当日收盘价盯市后的持仓市值
+
+
+@dataclass(frozen=True)
+class SimulationMetrics:
+    """一组可跨策略比较的资金曲线指标。百分比字段均使用百分数口径。"""
+    total_return_pct: float = 0.0
+    annualized_return_pct: Optional[float] = None
+    annualized_volatility_pct: Optional[float] = None
+    sharpe_ratio: Optional[float] = None
+    max_drawdown_pct: float = 0.0
+    calmar_ratio: Optional[float] = None
+    trade_count: int = 0
+    win_rate_pct: float = 0.0
+    profit_factor: Optional[float] = None
+    avg_trade_return_pct: float = 0.0
+
+
+@dataclass
+class SimulationResult:
+    """通用模拟引擎的结构化结果，便于测试、参数搜索和结果归档。"""
+    initial_capital: float
+    final_equity: float
+    start_date: Optional[str]
+    end_date: Optional[str]
+    trades: List[Trade]
+    equity_curve: List[EquityPoint]
+    metrics: SimulationMetrics
+    random_seed: int
+    assumptions: Dict[str, Any]
+    output_html: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """转成可直接 JSON 序列化的字典。"""
+        return asdict(self)

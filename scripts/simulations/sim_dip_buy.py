@@ -19,11 +19,11 @@
 
 import argparse
 import os
+import random
 import sys
 import time
 from collections import defaultdict
 
-import random
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
@@ -224,7 +224,7 @@ def run_sim(capital: float = 50000, target_pct: float = 1.0,
             stamp_tax: float = 0.0005, start_date: str = "2024-01-01",
             lookback: int = 15, board: str = "main",
             max_gain: float = 20.0, limit_down: float = 9.5,
-            max_range_20d: float = 20.0):
+            max_range_20d: float = 20.0, random_seed: int = 42):
     """
     主模拟流程。
 
@@ -234,6 +234,7 @@ def run_sim(capital: float = 50000, target_pct: float = 1.0,
       c. 记录权益
     """
     data = StockData()
+    rng = random.Random(random_seed)
     info = StockInfo()
     code_to_name = dict(zip(info.df["代码"], info.df["名称"]))
 
@@ -266,7 +267,8 @@ def run_sim(capital: float = 50000, target_pct: float = 1.0,
 
     print(f"逐日模拟 ({len(all_trading_days)} 天)...")
 
-    from backtest.sim_types import Position, Trade, EquityPoint
+    from backtest.sim_types import Position, Trade
+    from backtest.sim_core import record_equity
     from backtest.renderer import render_dip_buy_report
 
     cash = capital
@@ -306,6 +308,7 @@ def run_sim(capital: float = 50000, target_pct: float = 1.0,
                 filled=filled,
                 lots=pos.shares // 100,
                 streak_days=pos.streak_days,
+                exit_reason="target" if filled else "expiry",
             ))
         positions = survivors
 
@@ -315,7 +318,7 @@ def run_sim(capital: float = 50000, target_pct: float = 1.0,
         if date in sig_by_date:
             today_cash_start = cash
             today_signals = list(sig_by_date[date])
-            random.shuffle(today_signals)
+            rng.shuffle(today_signals)
 
             for s in today_signals:
                 cash_used = today_cash_start - cash
@@ -359,13 +362,8 @@ def run_sim(capital: float = 50000, target_pct: float = 1.0,
         # ================================================================
         # c. 记录权益
         # ================================================================
-        pos_value = sum(p.shares * p.buy_price for p in positions)
-        date_str = pd.Timestamp(date).strftime("%Y-%m-%d")
-        equity_curve.append(EquityPoint(
-            date=date_str,
-            equity=cash + pos_value,
-            cash=cash,
-            positions=len(positions),
+        equity_curve.append(record_equity(
+            date, cash, positions, kline_idx=kline_idx,
         ))
 
     all_dates = all_trading_days
@@ -400,7 +398,9 @@ def run_sim(capital: float = 50000, target_pct: float = 1.0,
                 filled=False,
                 lots=pos.shares // 100,
                 streak_days=pos.streak_days,
+                exit_reason="end_of_data",
             ))
+        equity_curve[-1] = record_equity(last_date, cash, [])
 
     # ================================================================
     # 5. 统计输出
@@ -517,6 +517,8 @@ if __name__ == "__main__":
                         help="跌停阈值%%，前5日有跌幅>=此值则跳过 (默认 9.5)")
     parser.add_argument("--max-range-20d", type=float, default=20.0,
                         help="近20日区间最大涨跌幅上限%%，超此值视为波动过大跳过 (默认 20)")
+    parser.add_argument("--seed", type=int, default=42,
+                        help="同日多信号排序随机种子（默认 42）")
     args = parser.parse_args()
 
     t0 = time.time()
@@ -530,5 +532,6 @@ if __name__ == "__main__":
         board=args.board,
         max_gain=args.max_gain,
         limit_down=args.limit_down,
+        random_seed=args.seed,
     )
     print(f"\n总耗时: {time.time() - t0:.0f}秒")
