@@ -12,7 +12,7 @@ scripts/
 ├── simulations/             # 单项：资金与交易流程模拟
 ├── research/                # 单项：市场统计研究
 ├── reports/                 # 基础设施：报告和导航生成
-├── services/                # 服务：分时查询与T+0网格动态回放
+├── services/                # 服务：分时查询、网格回放与T+1训练
 └── tools/                   # 开发工具：逐笔调试、参数扫描
 ```
 
@@ -33,8 +33,12 @@ python -m scripts.update_cache
 python -m scripts.strategies.strategy_08_etf_momentum
 python -m scripts.simulations.sim_portfolio
 python -m scripts.research.weekday_stats
+python -m scripts.research.backtest_market_proverbs     # 市场口诀前七条事件回测
+python -m scripts.research.backtest_slow_rise           # 缓涨3～5日开盘买入、5日止盈回测
 python -m scripts.research.optimize_intraday_grid          # 520500 最近10日网格调参
-python -m scripts.services.minute_viewer --serve
+python -m scripts.serve                                    # 一键启动全部 HTTP 服务
+python -m scripts.serve start trainer                      # 单独启动训练入口
+python -m scripts.serve status                             # 查看服务和定时任务
 python -m scripts.tools.debug_overlap --code sh600519
 ```
 
@@ -45,11 +49,22 @@ python -m scripts.tools.debug_overlap --code sh600519
 `scripts.simulations.sim_etf_momentum` 是策略 08 的兼容入口，不再维护第二套实现。
 
 分时服务同时提供 `minute_view.html` 行情查询和 `grid_simulator.html` T+0
-网格逐分钟回放；两者共用本地分钟缓存和 8765 端口。网格页可切换银河风格的
+网格逐分钟回放；两者共用本地分钟缓存和 8765 端口。独立分时页和选股日记内嵌
+分时都可在固定全天时间轴上暂停、单步、调速和重新播放，未播放区间不会泄露价格。
+网格页可切换银河风格的
 成交驱动型（双侧预埋、占用资券）与到价触发型（触价报单、不预占资券），
 固定全天坐标轴后让行情曲线从左向右推进。
 到价触发型还可动态演示累计反弹/回落、保底价、触发后或全成后更新基准、
 排队限价与自动撤单；这些盘口行为使用分钟 OHLC 做可解释近似。
+
+同一服务还会生成 `trading_trainer.html`。训练器在服务端保存会话，浏览器每次只能取得
+已经播放的分钟线；日 K 的当日蜡烛由这些已揭示分钟实时合成。手动买卖统一走执行模型，
+当天买入仓位锁定到下一交易日，适合练习入场、离场和交易理由复盘。
+
+统一入口 `python -m scripts.serve` 可一键启动交互 Web 与静态报告服务；也可用
+`start minute`、`start grid` 或 `start trainer` 按业务入口启动。三者共用 8765 的同一
+进程，避免重复加载分钟索引。完整命令和端口冲突处理见
+[`docs/15-服务管理.md`](../docs/15-服务管理.md)。
 
 网格参数的离线研究入口是 `scripts/research/optimize_intraday_grid.py`。它默认读取
 520500 最近 10 个有数据的交易日，前 7 日搜索、后 3 日验证，同时比较成交驱动型
@@ -66,7 +81,8 @@ update_cache ──→ pipeline.daily_update
 screen ──→ pipeline.runner ──→ screen/* ──→ output/dashboard.html
 backtest ──→ backtest/* ──→ output/stats_report.html
 run_all_strategies
-  ├─ strategies/* + research/backtest_break_resume
+  ├─ strategies/* + research/backtest_break_resume + research/backtest_market_proverbs
+  ├─ research/backtest_slow_rise
   └─ reports.gen_index + reports.gen_mobile
 ```
 
@@ -96,8 +112,8 @@ python -m scripts.update_cache --only minute,validate --target-date 2026-08-27
 | 新调试/参数扫描 | `scripts/tools/` | 面向开发者，不是最终业务选项卡 |
 | 新全局编排 | `scripts/` 顶层 | 同时调度多个模块或多个输出 |
 
-迁移旧命令时，将 `python scripts/foo.py` 改为对应的模块命令。例如分时服务现在使用：
+迁移旧命令时，将 `python scripts/foo.py` 改为对应的模块命令。例如服务现在使用：
 
 ```bash
-python -m scripts.services.minute_viewer --serve
+python -m scripts.serve start web
 ```

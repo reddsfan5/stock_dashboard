@@ -8,6 +8,8 @@ PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__
 OUTPUT_DIR = os.path.join(PROJECT_DIR, "output")
 MINUTE_VIEW_URL = "http://127.0.0.1:8765/minute_view.html"
 GRID_SIMULATOR_URL = "http://127.0.0.1:8765/grid_simulator.html"
+TRADING_TRAINER_URL = "http://127.0.0.1:8765/trading_trainer.html"
+STOCK_JOURNAL_URL = "http://127.0.0.1:8765/stock_journal.html"
 
 
 def get_mtime(fname):
@@ -45,8 +47,10 @@ def generate():
         ]),
         ("📊 今日选股", [
             card("🔍", "选股仪表盘", "7模块全市场扫描", "dashboard_mobile.html", dash),
-            card("🕐", "分时行情查询", "名称/代码查询·悬停看分钟价格", MINUTE_VIEW_URL, get_mtime("minute_view.html")),
+            card("📓", "选股日记工作台", "日K标记·内嵌动态分时·决策时间线", STOCK_JOURNAL_URL, get_mtime("stock_journal.html")),
+            card("🕐", "分时行情查询", "名称/代码查询·动态回放·悬停查价", MINUTE_VIEW_URL, get_mtime("minute_view.html")),
             card("🔁", "T+0网格动态回放", "逐分钟观察网格买卖与账户变化", GRID_SIMULATOR_URL, get_mtime("grid_simulator.html")),
+            card("🎯", "T+1无剧透交易训练", "日K/分时逐步呈现·手动练习进出场", TRADING_TRAINER_URL, get_mtime("trading_trainer.html")),
         ]),
         ("✅ 盈利策略", [
             card("🥇", "策略8: ETF动量轮动", "+60% 年化13% 回撤-12%", "etf_momentum.html", s8),
@@ -66,6 +70,8 @@ def generate():
         ]),
         ("📈 统计回测", [
             card("📊", "回测统计报告", "12策略全市场统计", "stats_report.html", get_mtime("stats_report.html")),
+            card("🧠", "市场口诀回测（前7条）", "1/3/5日收益·指数超额·条件基线", "market_proverbs.html", get_mtime("market_proverbs.html")),
+            card("🌱", "低位缓涨3～5日回测", "近30日低位·开盘买入·T+1·5日退出", "slow_rise_backtest.html", get_mtime("slow_rise_backtest.html")),
             card("🔗", "连续性中断恢复回测", "连续K日→中断→次日恢复率", "backtest_break_resume.html", get_mtime("backtest_break_resume.html")),
             card("📋", "绩效分析报告", "quantstats: Sharpe/回撤/热力图", "quant_report.html", get_mtime("quant_report.html")),
         ]),
