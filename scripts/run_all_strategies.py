@@ -4,7 +4,7 @@
 
 用法
 ----
-$ python -m scripts.run_all_strategies                 # 全部 14 个策略 + 1 个统计回测并行跑
+$ python -m scripts.run_all_strategies                 # 全部 14 个策略 + 3 个统计回测并行跑
 $ python -m scripts.run_all_strategies --workers 4     # 限制并发数
 $ python -m scripts.run_all_strategies --only 08,13    # 只跑指定策略（按脚本编号）
 
@@ -45,6 +45,8 @@ STRATEGIES = [
     ("scripts/strategies/strategy_13_pullback.py", "强趋势回调", ["--start", "2022-01-01"]),
     ("scripts/strategies/strategy_14_lowvol.py", "低波强势", ["--start", "2022-01-01"]),
     ("scripts/research/backtest_break_resume.py", "连续性中断恢复回测", ["--streaks", "2,3,5,8,10"]),
+    ("scripts/research/backtest_market_proverbs.py", "市场口诀前七条回测", ["--no-nav"]),
+    ("scripts/research/backtest_slow_rise.py", "缓涨3～5日止盈回测", ["--no-nav"]),
 ]
 
 LOG_DIR = os.path.join(PROJECT_DIR, "output", "logs")
