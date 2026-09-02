@@ -39,6 +39,8 @@ PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_DIR)
 
 from data.kline import StockData
+from data.daily_basic import DailyBasicData
+from features.snapshot import build_decision_snapshot, enrich_screening_results
 from pipeline.runner import discover_modules, run_all
 from pipeline.config import load_config, apply_config
 from pipeline.reporter import build_screening_html, build_screening_mobile
@@ -62,6 +64,7 @@ class CombinedData:
         self._stock = stock_data
         self._etf = etf_data
         self._etf_cache = etf_cache
+        self._combined_cache = None
         # ETF 名称映射
         self._etf_names = {}
         if etf_data is not None:
@@ -77,11 +80,12 @@ class CombinedData:
 
     @property
     def cache(self):
-        df = self._stock.cache
-        if self._etf_cache is not None and len(self._etf_cache) > 0:
-            df = pd.concat([df, self._etf_cache], ignore_index=True)
-
-        return df
+        if self._combined_cache is None:
+            df = self._stock.cache
+            if self._etf_cache is not None and len(self._etf_cache) > 0:
+                df = pd.concat([df, self._etf_cache], ignore_index=True)
+            self._combined_cache = df
+        return self._combined_cache
 
     def get_kline(self, code: str, days: int = 60):
         # ETF: 查 ETF 缓存
@@ -160,9 +164,18 @@ def main():
     # 3. 执行分析
     results = run_all(combined, pipeline, only=only)
 
-    # 4. 生成仪表盘
+    # 4. 将所有模块统一接入同一份量价/风险/估值截面，避免各页面复制公式。
+    decision_snapshot = build_decision_snapshot(
+        combined.cache,
+        DailyBasicData().cache,
+    )
+    results = enrich_screening_results(results, decision_snapshot)
+
+    # 5. 生成仪表盘
     modules = [m for m in pipeline if not only or m.id in only]
-    html = build_screening_html(modules, results, data=combined)
+    html = build_screening_html(
+        modules, results, data=combined, decision_snapshot=decision_snapshot
+    )
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     with open(args.out, "w", encoding="utf-8") as f:
         f.write(html)
@@ -171,7 +184,9 @@ def main():
 
     # 手机版
     mobile_path = os.path.join(os.path.dirname(args.out), "dashboard_mobile.html")
-    mobile_html = build_screening_mobile(modules, results, data=combined)
+    mobile_html = build_screening_mobile(
+        modules, results, data=combined, decision_snapshot=decision_snapshot
+    )
     with open(mobile_path, "w", encoding="utf-8") as f:
         f.write(mobile_html)
     print(f"✓ 手机版: {mobile_path}")

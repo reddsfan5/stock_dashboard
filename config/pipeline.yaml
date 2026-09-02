@@ -50,7 +50,7 @@ long_shadow:
 
 hammer:
   # 金针探底 —— 近N日出现长下影线探底形态
-  min_shadow_ratio: 3     # 下影线/实体最小倍数（越大越严格）
+  min_shadow_ratio: 5     # 下影线/实体最小倍数（越大越严格）
   max_bottom_pos:  20     # 金针最低价必须处于近期区间底部N%以内
   max_price_pos:   30     # 当前股价必须在近30日区间的下N%以内
   hammer_days:    2       # 近N天内出现即可

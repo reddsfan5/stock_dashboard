@@ -37,8 +37,8 @@ def run(capital=50_000, start_date="2022-01-01", hold_days=20, top_n=5,
             & (indicators["ma150"].iloc[idx] > indicators["ma200"].iloc[idx])
         )
         near_high = indicators["near_high_250"].iloc[idx] > 0.7
-        volume = indicators["vol_ratio_20"].iloc[idx]
-        volume_ok = volume.notna() & (volume > 0.3)
+        amount_ratio = indicators["amount_ratio_20"].iloc[idx]
+        volume_ok = amount_ratio.notna() & (amount_ratio > 0.3)
         low_amplitude = indicators["amp20"].iloc[idx] < 15
         score = indicators["mom20"].iloc[idx]
         mask = (

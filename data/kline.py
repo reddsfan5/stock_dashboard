@@ -55,8 +55,13 @@ from tqdm import tqdm
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_DIR)
 
-from data.sources import ak_fetch_kline, MAIN_BOARD_PREFIX
-from data.storage import atomic_write_parquet
+from data.sources import ak_fetch_kline, sina_fetch_kline, MAIN_BOARD_PREFIX
+from data.schema import (
+    codes_missing_field_history,
+    empty_daily_bars,
+    ensure_daily_bar_schema,
+)
+from data.storage import atomic_write_parquet, parquet_row_count
 
 
 # ====================================================================
@@ -101,26 +106,31 @@ class StockData:
                 df["日期"] = pd.to_datetime(df["日期"])
                 self._cache = df
             else:
-                self._cache = pd.DataFrame(
-                    columns=["代码", "日期", "开盘", "最高", "最低", "收盘", "成交额"]
-                )
+                self._cache = empty_daily_bars()
         return self._cache
 
     def _save_cache(self):
         """原子写入磁盘，进程被终止时保留上一版完整缓存。"""
         if self._cache is not None:
+            existing_rows = parquet_row_count(self.cache_file)
+            if existing_rows >= 1_000 and len(self._cache) < existing_rows * 0.9:
+                raise RuntimeError(
+                    f"拒绝覆盖日 K 缓存：现有 {existing_rows:,} 行，"
+                    f"待写仅 {len(self._cache):,} 行"
+                )
             atomic_write_parquet(self._cache, self.cache_file)
 
     def upsert(self, rows: pd.DataFrame) -> int:
         """按 ``代码+日期`` 合并一批标准日 K 数据并安全落盘。"""
         if rows is None or len(rows) == 0:
             return 0
-        rows = rows.copy()
-        rows["日期"] = pd.to_datetime(rows["日期"])
+        rows = ensure_daily_bar_schema(rows)
         before = len(self.cache)
-        self._cache = pd.concat([self.cache, rows], ignore_index=True)
-        self._cache = self._cache.drop_duplicates(
-            subset=["代码", "日期"], keep="last"
+        self._cache = rows.copy() if before == 0 else pd.concat(
+            [self.cache, rows], ignore_index=True
+        )
+        self._cache = ensure_daily_bar_schema(
+            self._cache.drop_duplicates(subset=["代码", "日期"], keep="last")
         ).sort_values(["代码", "日期"]).reset_index(drop=True)
         self._save_cache()
         return len(self._cache) - before
@@ -174,8 +184,14 @@ class StockData:
 
     # ========== 重建/回填 ==========
 
-    def rebuild(self, start_date: str = "20100101",
-                stocks: Optional[pd.DataFrame] = None):
+    def rebuild(
+        self,
+        start_date: str = "20100101",
+        stocks: Optional[pd.DataFrame] = None,
+        *,
+        fetch_fn=sina_fetch_kline,
+        threads: int = 32,
+    ):
         """
         删除缓存，从 start_date 开始全量重建（如 20100101）
         """
@@ -189,7 +205,10 @@ class StockData:
         print(f"全量重建缓存: {start_date} → {end_date}")
         print(f"{len(stocks)} 只股票，预计 {len(stocks)*5/60:.0f}~{len(stocks)*10/60:.0f} 分钟...")
 
-        self._fetch_range(stocks, start_date, end_date, desc="重建")
+        self._fetch_range(
+            stocks, start_date, end_date, desc="重建",
+            fetch_fn=fetch_fn, threads=threads,
+        )
         return self
 
     def backfill(self, stocks: Optional[pd.DataFrame] = None):
@@ -213,16 +232,51 @@ class StockData:
         self._fetch_range(stocks, fetch_start, fetch_end, desc="回填")
         return self
 
+    def codes_missing_history(
+        self,
+        codes: List[str],
+        field: str,
+        target_date,
+        periods: int = 21,
+    ) -> List[str]:
+        """返回指定字段没有足够近期样本的代码。"""
+        return codes_missing_field_history(
+            self.cache, codes, field, target_date, periods=periods
+        )
+
+    def backfill_fields(
+        self,
+        stocks: pd.DataFrame,
+        start_date,
+        end_date,
+        *,
+        fetch_fn=ak_fetch_kline,
+        threads: int = THREADS,
+        progress: bool = True,
+    ) -> "StockData":
+        """强制重取一个日期区间，用新数据源字段覆盖同键旧行。
+
+        与 ``update`` 不同，它不会因为代码的最新日期已覆盖目标日而跳过，专用于
+        成交量/换手率等新增字段的存量迁移。
+        """
+        if len(stocks) == 0:
+            self.last_failed = []
+            return self
+        _ = self.cache
+        start = pd.Timestamp(start_date).strftime("%Y%m%d")
+        end = pd.Timestamp(end_date).strftime("%Y%m%d")
+        description = "字段回填" if progress else ""
+        self._fetch_range(stocks, start, end, desc=description,
+                          fetch_fn=fetch_fn, threads=threads)
+        return self
+
     def _fetch_range(self, stocks: pd.DataFrame, start: str, end: str, desc: str = "",
                      fetch_fn=ak_fetch_kline, threads: int = THREADS):
         BATCH_SIZE = 100  # 每攒够 N 只股票就写一次磁盘
         self.last_failed = []
 
-        # 确保缓存已初始化
-        if self._cache is None:
-            self._cache = pd.DataFrame(columns=["代码", "日期", "开盘", "最高", "最低", "收盘", "成交额"])
-            if "日期" in self._cache.columns:
-                self._cache["日期"] = pd.to_datetime(self._cache["日期"])
+        # 必须通过属性加载已有文件，不能把未初始化误判为“没有历史缓存”。
+        _ = self.cache
 
         pending = []    # 待写入的数据
         total_new = 0   # 累计新增条数
@@ -231,10 +285,13 @@ class StockData:
             nonlocal total_new
             if not pending:
                 return
-            new_df = pd.concat(pending, ignore_index=True)
-            self._cache = pd.concat([self._cache, new_df], ignore_index=True)
-            self._cache = self._cache.drop_duplicates(subset=["代码", "日期"], keep="last")
-            self._cache = self._cache.sort_values(["代码", "日期"]).reset_index(drop=True)
+            new_df = ensure_daily_bar_schema(pd.concat(pending, ignore_index=True))
+            self._cache = new_df.copy() if len(self._cache) == 0 else pd.concat(
+                [self._cache, new_df], ignore_index=True
+            )
+            self._cache = ensure_daily_bar_schema(
+                self._cache.drop_duplicates(subset=["代码", "日期"], keep="last")
+            ).sort_values(["代码", "日期"]).reset_index(drop=True)
             total_new += len(new_df)
             self._save_cache()
             pending.clear()
@@ -335,10 +392,13 @@ class StockData:
             nonlocal total_new
             if not new_data:
                 return
-            new_df = pd.concat(new_data, ignore_index=True)
-            self._cache = pd.concat([self.cache, new_df], ignore_index=True)
-            self._cache = self._cache.drop_duplicates(subset=["代码", "日期"], keep="last")
-            self._cache = self._cache.sort_values(["代码", "日期"]).reset_index(drop=True)
+            new_df = ensure_daily_bar_schema(pd.concat(new_data, ignore_index=True))
+            self._cache = new_df.copy() if len(self.cache) == 0 else pd.concat(
+                [self.cache, new_df], ignore_index=True
+            )
+            self._cache = ensure_daily_bar_schema(
+                self._cache.drop_duplicates(subset=["代码", "日期"], keep="last")
+            ).sort_values(["代码", "日期"]).reset_index(drop=True)
             total_new += len(new_df)
             self._save_cache()
             new_data.clear()
@@ -377,7 +437,10 @@ class StockData:
             return pd.DataFrame()
 
         df = df.sort_values("日期").tail(days)
-        cols = ["日期", "开盘", "最高", "最低", "收盘", "成交额"]
+        cols = [
+            "日期", "开盘", "最高", "最低", "收盘", "前收",
+            "成交量", "成交额", "换手率%",
+        ]
         cols = [c for c in cols if c in df.columns]
         return df[cols].reset_index(drop=True)
 

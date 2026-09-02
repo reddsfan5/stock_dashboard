@@ -14,7 +14,32 @@ from typing import Dict, List, Optional
 
 import pandas as pd
 
+from features.snapshot import METRIC_DEFINITIONS, snapshot_lookup
+
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+KLINE_TOOLTIP_JS = r"""
+function klineTooltipHtml(ps,ohlc,dates,prevs,volumes,changes,endLabel){
+  var idx=-1;
+  for(var i=0;i<ps.length;i++){
+    if(ps[i].seriesName==="K线"&&ps[i].dataIndex!=null){idx=ps[i].dataIndex;break;}
+  }
+  if(idx<0&&ps.length&&ps[0].dataIndex!=null)idx=ps[0].dataIndex;
+  if(idx<0||!ohlc[idx])return "";
+  var raw=ohlc[idx],o=+raw[0],c=+raw[1],l=+raw[2],h=+raw[3],prev=+(prevs[idx]||0);
+  var chg=changes[idx],vol=+(volumes[idx]||0),ampUp=0,ampDown=0;
+  var r="<b>"+dates[idx]+"</b><br>开: "+o+"　收: "+c+"<br>高: "+h+"　低: "+l;
+  if(vol>0)r+="<br>成交额: "+(vol/1e8).toFixed(2)+"亿";
+  if(prev>0){ampUp=(h-prev)/prev*100;ampDown=(l-prev)/prev*100;}
+  if(chg!=null)r+="<br>涨跌幅: "+(chg>0?"+":"")+(+chg).toFixed(2)+"%　振幅: "+(ampUp-ampDown).toFixed(2)+"%";
+  var last=ohlc[ohlc.length-1],start=o,end=last?+last[1]:NaN;
+  if(start>0&&Number.isFinite(end)){
+    var delta=end-start,pct=delta/start*100,color=delta>0?"#d32f2f":delta<0?"#159568":"#758096";
+    r+='<div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(128,128,128,.35)">区间涨跌 <b style="color:'+color+'">'+(delta>=0?'+':'')+delta.toFixed(start<10?3:2)+'（'+(pct>=0?'+':'')+pct.toFixed(2)+'%）</b><br><span style="color:#8a94a6">'+dates[idx]+' 开 '+start.toFixed(start<10?3:2)+' → '+dates[dates.length-1]+' '+(endLabel||'最新收')+' '+end.toFixed(end<10?3:2)+' · '+(ohlc.length-idx)+'根K线</span></div>';
+  }
+  return r;
+}
+"""
 
 
 # ====================================================================
@@ -25,10 +50,12 @@ def build_screening_mobile(
     pipeline_modules: List,
     results: Dict[str, pd.DataFrame],
     data=None,
+    decision_snapshot: Optional[pd.DataFrame] = None,
     title: str = "A股选股",
 ) -> str:
     """生成手机版选股页面 — 卡片式布局，每模块显示前15只"""
     now = datetime.now().strftime("%m/%d %H:%M")
+    decision_map = snapshot_lookup(decision_snapshot)
 
     all_codes = set()
     for df in results.values():
@@ -58,8 +85,8 @@ def build_screening_mobile(
                 if len(grp) > 0:
                     grp["涨跌%"] = grp["收盘"].pct_change() * 100
                     grp["前收"] = grp["收盘"].shift(1)
-                    changes = [round(v, 2) if not pd.isna(v) else 0 for v in grp["涨跌%"].values]
-                    prevs = [round(v, 2) if not pd.isna(v) else 0 for v in grp["前收"].values]
+                    changes = [round(v, 2) if not pd.isna(v) else None for v in grp["涨跌%"].values]
+                    prevs = [round(v, 2) if not pd.isna(v) else None for v in grp["前收"].values]
                     volumes = [float(v) if not pd.isna(v) else 0 for v in grp["成交额"].values]
                     ohlc = [[float(r["开盘"]), float(r["收盘"]), float(r["最低"]), float(r["最高"])]
                             for _, r in grp.iterrows()]
@@ -68,6 +95,7 @@ def build_screening_mobile(
                         "data": ohlc, "prevs": prevs, "changes": changes,
                         "volumes": volumes, "name": data.get_stock_name(code),
                         "sector": sector_map.get(code, ""),
+                        "metrics": decision_map.get(str(code), {}),
                     }
             except Exception:
                 pass
@@ -97,12 +125,22 @@ def build_screening_mobile(
                     if c in row.index and not pd.isna(row[c]):
                         score = f"¥{row[c]}"
                         break
+            facts = []
+            for column, label, suffix in (
+                ("成交量比20", "量", "×"),
+                ("换手率%", "换", "%"),
+                ("ATR14%", "ATR", "%"),
+            ):
+                value = row.get(column)
+                if pd.notna(value):
+                    facts.append(f"{label} {float(value):.2f}{suffix}")
+            decision = " · ".join(facts)
             name_str = f"{name}" if name else ""
             sector_str = f'<span class="sector">{sector}</span>' if sector else ""
             rows += f"""<div class="stock-row" onclick="showKline('{code}')">
   <span class="code">{code}</span>
   <span class="name">{name_str} {sector_str}</span>
-  <span class="score">{score}</span>
+  <span class="score">{score}<small>{decision}</small></span>
 </div>"""
 
         more_btn = ""
@@ -138,7 +176,7 @@ body{{font-family:-apple-system,"PingFang SC",sans-serif;background:#f0f2f5;colo
 .code{{font-family:"SF Mono",monospace;font-size:13px;color:#1a73e8;min-width:80px;font-weight:600}}
 .name{{flex:1;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
 .sector{{font-size:10px;color:#999;margin-left:4px}}
-.score{{font-size:12px;color:#666;white-space:nowrap}}
+.score{{font-size:12px;color:#374151;white-space:nowrap;text-align:right}}.score small{{display:block;color:#8a94a6;font-size:9px;margin-top:2px}}
 .limited{{max-height:65vh;overflow-y:auto}}
 .limited .stock-row:nth-child(n+31){{display:none}}
 .limited.expanded .stock-row:nth-child(n+31){{display:block}}
@@ -149,7 +187,9 @@ body{{font-family:-apple-system,"PingFang SC",sans-serif;background:#f0f2f5;colo
 .kline-panel{{display:none;position:fixed;left:0;top:0;width:100vw;height:100vh;background:#fff;z-index:100;overflow-y:auto}}
 .kline-panel.active{{display:block}}
 .kline-panel .close{{position:sticky;top:0;background:#1a73e8;color:#fff;border:none;width:100%;padding:12px;font-size:15px;z-index:1}}
+.kline-metrics{{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#e3e8f0;border-bottom:1px solid #e3e8f0}}.kline-metric{{background:#fff;padding:8px 9px}}.kline-metric b{{display:block;font-size:13px}}.kline-metric span{{display:block;color:#8992a3;font-size:9px;margin-bottom:2px}}
 .kline-panel .chart{{width:100%;height:55vh}}
+.journal-action{{display:block;margin:10px 12px;padding:9px;text-align:center;text-decoration:none;background:#edf4ff;color:#1a73e8;border:1px solid #bfd2f7;border-radius:8px;font-weight:650}}
 .footer{{text-align:center;padding:20px;font-size:11px;color:#bbb}}
 </style>
 </head>
@@ -159,6 +199,8 @@ body{{font-family:-apple-system,"PingFang SC",sans-serif;background:#f0f2f5;colo
 <div class="kline-overlay" id="overlay" onclick="closeKline()"></div>
 <div class="kline-panel" id="klinePanel">
   <button class="close" onclick="closeKline()">← 返回 <span id="klineTitle"></span></button>
+  <div class="kline-metrics" id="klineMetrics"></div>
+  <a class="journal-action" id="klineJournalLink" href="http://127.0.0.1:8765/stock_journal.html">📓 在选股日记中打开</a>
   <div class="chart" id="klineChart"></div>
   <div style="text-align:center;padding:16px"><button onclick="closeKline()" style="background:#1a73e8;color:#fff;border:none;padding:10px 40px;border-radius:8px;font-size:15px">关闭K线</button></div>
 </div>
@@ -174,23 +216,27 @@ function switchTab(id){{
   document.getElementById("panel-"+id).classList.add("active");
 }}
 var KLINES={kline_json};var klineChart=null;
+{KLINE_TOOLTIP_JS}
+function metricHtml(m){{if(!m)return'';var defs=[['成交量比20','成交量比','×'],['成交额比20','成交额比','×'],['换手率%','换手率','%'],['20日动量%','20日动量','%'],['ATR14%','ATR14','%'],['距60日高点%','距60日高点','%']];return defs.map(function(x){{var v=m[x[0]],text=v===null||v===undefined?'—':(+v).toFixed(2)+x[2];return'<div class="kline-metric"><span>'+x[1]+'</span><b>'+text+'</b></div>'}}).join('')}}
 function showKline(code){{
   var d=KLINES[code];if(!d)return;
   document.getElementById("overlay").classList.add("active");
   document.getElementById("klinePanel").classList.add("active");
   document.getElementById("klineTitle").textContent=code+" "+(d.name||"");
+  document.getElementById("klineJournalLink").href="http://127.0.0.1:8765/stock_journal.html?code="+encodeURIComponent(code);
+  document.getElementById("klineMetrics").innerHTML=metricHtml(d.metrics);
   setTimeout(function(){{
     if(klineChart){{klineChart.dispose();klineChart=null;}}
     klineChart=echarts.init(document.getElementById("klineChart"));
     var dates=d.dates,ohlc=d.data,changes=d.changes||[],prevs=d.prevs||[],vols=d.volumes||[];
     klineChart.setOption({{
-      tooltip:{{trigger:"axis",axisPointer:{{type:"cross"}},confine:true}},
+      tooltip:{{trigger:"axis",axisPointer:{{type:"cross"}},confine:true,formatter:function(ps){{return klineTooltipHtml(ps,ohlc,dates,prevs,vols,changes,"最新收")}}}},
       grid:[{{left:"8%",right:"2%",top:"5%",height:"50%"}},{{left:"8%",right:"2%",top:"63%",height:"12%"}},{{left:"8%",right:"2%",top:"82%",height:"10%"}}],
       xAxis:[{{data:dates,axisLabel:{{rotate:30,fontSize:9}},gridIndex:0}},{{data:dates,axisLabel:{{show:false}},gridIndex:1}},{{data:dates,axisLabel:{{show:false}},gridIndex:2}}],
       yAxis:[{{scale:true,gridIndex:0}},{{gridIndex:1,splitNumber:2,axisLabel:{{formatter:function(v){{return (v/1e8).toFixed(1)+"亿"}}}}}},{{gridIndex:2,splitNumber:2,axisLabel:{{formatter:"{{value}}%"}}}}],
       series:[
         {{name:"K线",type:"candlestick",data:ohlc,xAxisIndex:0,yAxisIndex:0,itemStyle:{{color:"#d32f2f",color0:"#34a853",borderColor:"#d32f2f",borderColor0:"#34a853"}},barWidth:"60%"}},
-        {{name:"成交量",type:"bar",data:vols,xAxisIndex:1,yAxisIndex:1,itemStyle:{{color:function(p){{var i=p.dataIndex;return ohlc[i][1]>=ohlc[i][0]?"#d32f2f":"#34a853"}}}}}},
+        {{name:"成交额",type:"bar",data:vols,xAxisIndex:1,yAxisIndex:1,itemStyle:{{color:function(p){{var i=p.dataIndex;return ohlc[i][1]>=ohlc[i][0]?"#d32f2f":"#34a853"}}}}}},
         {{name:"涨跌%",type:"bar",data:changes,xAxisIndex:2,yAxisIndex:2,itemStyle:{{color:function(p){{return p.value>=0?"#d32f2f":"#34a853"}}}}}}
       ]
     }});klineChart.resize();
@@ -210,10 +256,12 @@ def build_screening_html(
     pipeline_modules: List,
     results: Dict[str, pd.DataFrame],
     data=None,
+    decision_snapshot: Optional[pd.DataFrame] = None,
     title: str = "A股选股仪表盘",
 ) -> str:
     """生成选股仪表盘 HTML（桌面版）"""
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
+    decision_map = snapshot_lookup(decision_snapshot)
 
     # ---- 收集K线数据（最多1000只） ----
     all_codes = set()
@@ -250,8 +298,8 @@ def build_screening_html(
                 if len(grp) > 0:
                     grp["涨跌%"] = grp["收盘"].pct_change() * 100
                     grp["前收"] = grp["收盘"].shift(1)
-                    changes = [round(v, 2) if not pd.isna(v) else 0 for v in grp["涨跌%"].values]
-                    prevs = [round(v, 2) if not pd.isna(v) else 0 for v in grp["前收"].values]
+                    changes = [round(v, 2) if not pd.isna(v) else None for v in grp["涨跌%"].values]
+                    prevs = [round(v, 2) if not pd.isna(v) else None for v in grp["前收"].values]
                     volumes = [float(v) if not pd.isna(v) else 0 for v in grp["成交额"].values]
                     ohlc = []
                     for _, r in grp.iterrows():
@@ -267,6 +315,7 @@ def build_screening_html(
                         "volumes": volumes,
                         "name": data.get_stock_name(code),
                         "sector": sector_map.get(code, ""),
+                        "metrics": decision_map.get(str(code), {}),
                     }
             except Exception:
                 pass
@@ -289,7 +338,10 @@ def build_screening_html(
         cols = []
         for c in df.columns:
             cols.append(c.strftime("%Y-%m-%d") if isinstance(c, pd.Timestamp) else str(c))
-        header = "".join(f"<th>{c}</th>" for c in cols)
+        header = "".join(
+            f'<th title="{METRIC_DEFINITIONS.get(c, "")}">{c}</th>'
+            for c in cols
+        )
         orig_cols = list(df.columns)
         rows = ""
         for _, row in df.head(2000).iterrows():
@@ -338,6 +390,10 @@ def build_screening_html(
         if df is not None and len(df) > 0 and "代码" in df.columns:
             tab_codes[m.id] = df["代码"].head(500).tolist()
     tab_codes_json = json.dumps(tab_codes, ensure_ascii=False)
+    definitions_html = "".join(
+        f"<li><b>{label}</b><span>{definition}</span></li>"
+        for label, definition in METRIC_DEFINITIONS.items()
+    )
 
     # 自动刷新导航页
     try:
@@ -367,6 +423,10 @@ body {{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-seri
 .tab-btn:hover {{ color:#1a73e8; }}
 .tab-btn.active {{ color:#1a73e8; border-bottom-color:#1a73e8; font-weight:600; }}
 .tab-btn .count {{ background:#1a73e8; color:white; font-size:10px; padding:2px 8px; border-radius:10px; }}
+.decision-tools {{ display:flex;align-items:end;gap:8px;padding:10px 32px;background:#fff;border-bottom:1px solid #e4e7ec;flex-wrap:wrap }}
+.decision-tools .filter-field {{ display:flex;flex-direction:column;gap:3px }}.decision-tools label {{ color:#7b8495;font-size:10px;font-weight:600 }}
+.decision-tools input {{ width:105px;height:34px;border:1px solid #ccd3df;border-radius:6px;padding:0 8px;font:inherit }}.decision-tools button {{ height:34px;border:1px solid #bfc9d8;border-radius:6px;background:#fff;padding:0 12px;cursor:pointer }}.decision-tools button.primary {{ background:#1a73e8;color:#fff;border-color:#1a73e8 }}
+.metric-guide {{ margin-left:auto;position:relative }}.metric-guide summary {{ height:34px;display:flex;align-items:center;color:#1a73e8;cursor:pointer;font-size:12px }}.metric-guide ul {{ position:absolute;right:0;top:37px;width:430px;z-index:20;background:#fff;border:1px solid #dbe1ea;border-radius:8px;box-shadow:0 10px 28px rgba(20,30,50,.16);padding:8px 14px;list-style:none }}.metric-guide li {{ padding:6px 0;border-bottom:1px solid #eef1f5 }}.metric-guide li:last-child {{ border:0 }}.metric-guide li b {{ display:block;font-size:11px }}.metric-guide li span {{ color:#737e91;font-size:10px;line-height:1.45 }}
 .content {{ padding:20px 24px; }}
 .tab-content {{ display:none; }}
 .tab-content.active {{ display:block; }}
@@ -378,19 +438,23 @@ table.dataTable {{ font-size:12px; }}
 .kline-panel {{ display:none; position:fixed; right:0; top:0; width:520px; height:100vh; background:white; box-shadow:-4px 0 20px rgba(0,0,0,.15); z-index:1000; overflow-y:auto; }}
 .kline-panel.active {{ display:block; }}
 .kline-panel .close {{ position:sticky; top:0; background:#1a73e8; color:white; border:none; width:100%; padding:12px; font-size:14px; cursor:pointer; z-index:1; }}
+.kline-metrics {{ display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#e0e5ed }}.kline-metric {{ background:#fff;padding:8px 10px }}.kline-metric span {{ display:block;color:#818b9d;font-size:9px;margin-bottom:3px }}.kline-metric b {{ font-size:13px;font-variant-numeric:tabular-nums }}
 .kline-panel .chart {{ width:100%; height:600px; }}
+.journal-action {{ display:block;margin:10px 12px;padding:9px;text-align:center;text-decoration:none;background:#edf4ff;color:#1a73e8;border:1px solid #bfd2f7;border-radius:8px;font-weight:650 }}
 .kline-overlay {{ display:none; position:fixed; inset:0; background:rgba(0,0,0,.2); z-index:999; }}
 .kline-overlay.active {{ display:block; }}
 .code-clickable {{ cursor:pointer; }}
 .code-clickable:hover {{ background:#e8f0fe !important; }}
 footer {{ text-align:center; color:#999; font-size:11px; padding:20px; }}
-@media(max-width:768px){{ .kline-panel{{width:100vw}} }}
+@media(max-width:768px){{ .kline-panel{{width:100vw}}.decision-tools{{padding:8px 12px}}.metric-guide{{margin-left:0}}.metric-guide ul{{position:fixed;left:10px;right:10px;top:150px;width:auto}} }}
 </style>
 </head>
 <body>
 <div class="kline-overlay" id="overlay" onclick="closeKline()"></div>
 <div class="kline-panel" id="klinePanel">
   <button class="close" onclick="closeKline()">✕ <span id="klineTitle"></span><span style="float:right;opacity:.6;font-size:11px" id="klineNav"></span></button>
+  <div class="kline-metrics" id="klineMetrics"></div>
+  <a class="journal-action" id="klineJournalLink" href="http://127.0.0.1:8765/stock_journal.html">📓 在选股日记中打开</a>
   <div class="chart" id="klineChart"></div>
 </div>
 <div class="header">
@@ -399,6 +463,15 @@ footer {{ text-align:center; color:#999; font-size:11px; padding:20px; }}
 </div>
 <div class="stats">{stats}</div>
 <div class="tabs">{tab_buttons}</div>
+<div class="decision-tools">
+  <div class="filter-field"><label>成交量比20 ≥</label><input id="fVolume" type="number" step="0.1" placeholder="不限"></div>
+  <div class="filter-field"><label>换手率% ≥</label><input id="fTurnover" type="number" step="0.1" placeholder="不限"></div>
+  <div class="filter-field"><label>20日动量% ≥</label><input id="fMomentum" type="number" step="1" placeholder="不限"></div>
+  <div class="filter-field"><label>ATR14% ≤</label><input id="fAtr" type="number" step="0.1" placeholder="不限"></div>
+  <div class="filter-field"><label>动态PE ≤</label><input id="fPe" type="number" step="1" placeholder="不限"></div>
+  <button class="primary" id="applyFilters">应用筛选</button><button id="resetFilters">清空</button>
+  <details class="metric-guide"><summary>指标口径</summary><ul>{definitions_html}</ul></details>
+</div>
 <div class="content">{tables_html}</div>
 <footer>数据每日 18:30 自动更新 · 点击股票代码查看K线图</footer>
 
@@ -408,12 +481,19 @@ footer {{ text-align:center; color:#999; font-size:11px; padding:20px; }}
 <script>window.jQuery && jQuery.fn.dataTable || document.write(`<script src='https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js'><\/script>`);</script>
 <script>
 function switchTab(id){{
+  currentTabId=id;
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
   document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));
   document.querySelector(`[onclick="switchTab('${{id}}')"]`).classList.add('active');
   document.getElementById('tab-'+id).classList.add('active');
-  try{{ $('#'+id).DataTable().columns.adjust().draw(); }}catch(e){{}}
+  try{{ $('#tbl-'+id).DataTable().columns.adjust().draw(); }}catch(e){{}}
 }}
+var currentTabId=({tab_ids})[0]||null;
+function filterValue(id){{var raw=document.getElementById(id).value;return raw===''?null:+raw}}
+function metricValue(settings,row,label){{var idx=-1;for(var i=0;i<settings.aoColumns.length;i++){{if(settings.aoColumns[i].nTh.textContent.trim()===label){{idx=i;break}}}}if(idx<0)return null;var raw=String(row[idx]??'').replace(/,/g,'').trim();if(raw==='')return null;var value=+raw;return Number.isFinite(value)?value:null}}
+$.fn.dataTable.ext.search.push(function(settings,row){{if(!currentTabId||settings.nTable.id!=='tbl-'+currentTabId)return true;var rules=[['fVolume','成交量比20','min'],['fTurnover','换手率%','min'],['fMomentum','20日动量%','min'],['fAtr','ATR14%','max'],['fPe','动态PE','max']];for(var i=0;i<rules.length;i++){{var wanted=filterValue(rules[i][0]);if(wanted===null)continue;var actual=metricValue(settings,row,rules[i][1]);if(actual===null)return false;if(rules[i][2]==='min'&&actual<wanted)return false;if(rules[i][2]==='max'&&actual>wanted)return false}}return true}});
+function applyDecisionFilters(){{if(currentTabId)$('#tbl-'+currentTabId).DataTable().draw()}}
+document.getElementById('applyFilters').onclick=applyDecisionFilters;document.getElementById('resetFilters').onclick=function(){{['fVolume','fTurnover','fMomentum','fAtr','fPe'].forEach(function(id){{document.getElementById(id).value=''}});applyDecisionFilters()}};
 $(document).ready(function(){{
   var ids={tab_ids};
   ids.forEach(function(id){{
@@ -432,6 +512,8 @@ var KLINES={kline_json};
 var TAB_CODES={tab_codes_json};
 var klineChart=null;
 var currentKlineCode=null;
+{KLINE_TOOLTIP_JS}
+function metricHtml(m){{if(!m)return'';var defs=[['成交量比20','成交量比20','×'],['成交额比20','成交额比20','×'],['换手率%','换手率','%'],['20日动量%','20日动量','%'],['市场相对强弱20%','市场相对强弱','%'],['ATR14%','ATR14','%'],['20日年化波动%','20日年化波动','%'],['距60日高点%','距60日高点','%'],['动态PE','动态PE',''],['流通市值(亿)','流通市值','亿'],['供应商量比','供应商量比','×']];return defs.map(function(x){{var v=m[x[0]],text=v===null||v===undefined?'—':(+v).toFixed(2)+x[2];return'<div class="kline-metric"><span>'+x[1]+'</span><b>'+text+'</b></div>'}}).join('')}}
 
 function getCodeList(){{
   var btns=document.querySelectorAll('.tab-btn.active');
@@ -470,6 +552,8 @@ function showKline(code){{
   document.getElementById("klinePanel").classList.add("active");
   var sector=d.sector||"";
   document.getElementById("klineTitle").innerHTML=code+" "+(d.name||"")+(sector?"<br><small style='opacity:.6'>"+sector+"</small>":"");
+  document.getElementById("klineJournalLink").href="http://127.0.0.1:8765/stock_journal.html?code="+encodeURIComponent(code);
+  document.getElementById("klineMetrics").innerHTML=metricHtml(d.metrics);
   setTimeout(function(){{
     if(klineChart){{klineChart.dispose();klineChart=null;}}
     klineChart=echarts.init(document.getElementById("klineChart"));
@@ -479,27 +563,7 @@ function showKline(code){{
       ma10.push(i>=9?(ohlc.slice(i-9,i+1).reduce(function(s,x){{return s+x[1]}},0)/10).toFixed(2):"-");
     }}
     klineChart.setOption({{
-      tooltip:{{trigger:"axis",axisPointer:{{type:"cross"}},confine:true,
-        formatter:function(ps){{
-          var r=ps[0].axisValue,chg=null,hh=0,ll=0,idx=-1,vol=0;
-          for(var i=0;i<ps.length;i++){{
-            var p=ps[i];
-            if(p.seriesName=="K线"&&p.dataIndex!=null){{
-              var raw=ohlc[p.dataIndex];
-              var o=raw[0],c=raw[1],l=raw[2],h=raw[3];
-              hh=h; ll=l; idx=p.dataIndex;
-              r+="<br/>开: "+o+"  收: "+c+"  高: "+h+"  低: "+l;
-            }}
-            if(p.seriesName=="成交量") vol=p.value;
-            if(p.seriesName=="涨跌%") chg=p.value;
-          }}
-          if(vol>0) r+="<br/>成交额: "+(vol/1e8).toFixed(2)+"亿";
-          var prev=prevs[idx]||0,ampUp=0,ampDown=0;
-          if(prev>0){{ampUp=((hh-prev)/prev*100);ampDown=((ll-prev)/prev*100);}}
-          if(chg!=null) r+="<br/>涨跌幅: "+(chg>0?"+":"")+chg.toFixed(2)+"%  振幅: "+((ampUp-ampDown)).toFixed(2)+"% (↑"+ampUp.toFixed(1)+"% ↓"+ampDown.toFixed(1)+"%)";
-          return r;
-        }}
-      }},
+      tooltip:{{trigger:"axis",axisPointer:{{type:"cross"}},confine:true,formatter:function(ps){{return klineTooltipHtml(ps,ohlc,dates,prevs,vols,changes,"最新收")}}}},
       axisPointer:{{link:[{{xAxisIndex:"all"}}]}},
       grid:[{{left:"8%",right:"2%",top:"5%",height:"46%"}},{{left:"8%",right:"2%",top:"57%",height:"13%"}},{{left:"8%",right:"2%",top:"76%",height:"12%"}}],
       xAxis:[{{data:dates,axisLabel:{{rotate:30,fontSize:10}},gridIndex:0}},{{data:dates,axisLabel:{{show:false}},gridIndex:1}},{{data:dates,axisLabel:{{show:false}},gridIndex:2}}],
@@ -510,7 +574,7 @@ function showKline(code){{
           itemStyle:{{color:"#d32f2f",color0:"#34a853",borderColor:"#d32f2f",borderColor0:"#34a853"}},barWidth:"60%"}},
         {{name:"MA5",type:"line",data:ma5,xAxisIndex:0,yAxisIndex:0,smooth:true,lineStyle:{{width:1,color:"#ff9800"}},symbol:"none"}},
         {{name:"MA10",type:"line",data:ma10,xAxisIndex:0,yAxisIndex:0,smooth:true,lineStyle:{{width:1,color:"#2196f3"}},symbol:"none"}},
-        {{name:"成交量",type:"bar",data:vols,xAxisIndex:1,yAxisIndex:1,
+        {{name:"成交额",type:"bar",data:vols,xAxisIndex:1,yAxisIndex:1,
           itemStyle:{{color:function(p){{var i=p.dataIndex,o=ohlc[i][0],c=ohlc[i][1];return c>=o?"#d32f2f":"#34a853";}}}}}},
         {{name:"涨跌%",type:"bar",data:changes,xAxisIndex:2,yAxisIndex:2,
           itemStyle:{{color:function(p){{return p.value>=0?"#d32f2f":"#34a853";}}}}}}

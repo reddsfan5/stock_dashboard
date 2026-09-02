@@ -6,7 +6,7 @@
 
 约定
 ----
-- 统一返回格式：日期(datetime)/开盘/最高/最低/收盘/成交额(元)/代码
+- 统一返回格式：代码/日期/开盘/最高/最低/收盘/前收/成交量(股)/成交额(元)/换手率(%)
   screen/*.py 在使用流动性阈值时统一除以 10000 转为万元
 - 失败语义：所有 fetch 函数失败/空结果返回 None（由调用方记录 last_failed）
 - baostock 线程不安全（全局单 socket 会话），必须包在 baostock_session()
@@ -23,6 +23,8 @@ import pandas as pd
 import requests
 
 import akshare as ak
+
+from data.schema import ensure_daily_bar_schema
 
 try:
     import baostock as bs
@@ -48,21 +50,42 @@ TX_QUOTE_URL = "https://qt.gtimg.cn/q="
 TX_QUOTE_BATCH = 400
 
 
+def baostock_available() -> bool:
+    """当前 Python 环境是否具备可选的 baostock 备源。"""
+    return bs is not None
+
+
 # ====================================================================
 # 数据规范化
 # ====================================================================
 
-def _normalize(df: pd.DataFrame, code: str, amount_scale: float = 1.0) -> pd.DataFrame:
-    """英文列 → 项目统一格式：日期/开盘/最高/最低/收盘/成交额(元)/代码。"""
-    df = df[["date", "open", "high", "low", "close", "amount"]].copy()
-    df.columns = ["日期", "开盘", "最高", "最低", "收盘", "成交额"]
+def normalize_source_daily_bars(
+    df: pd.DataFrame,
+    code: str,
+    amount_scale: float = 1.0,
+    turnover_scale: float = 1.0,
+) -> pd.DataFrame:
+    """英文列映射为项目日 K 契约，并统一金额/换手率单位。"""
+    required = ["date", "open", "high", "low", "close", "amount"]
+    missing = [column for column in required if column not in df.columns]
+    if missing:
+        raise ValueError(f"数据源缺少字段: {', '.join(missing)}")
+    selected = required + [column for column in ("volume", "turnover") if column in df]
+    df = df[selected].copy().rename(columns={
+        "date": "日期", "open": "开盘", "high": "最高", "low": "最低",
+        "close": "收盘", "volume": "成交量", "amount": "成交额",
+        "turnover": "换手率%",
+    })
     df["代码"] = code
-    df["日期"] = pd.to_datetime(df["日期"])
-    for c in ["开盘", "最高", "最低", "收盘", "成交额"]:
-        df[c] = pd.to_numeric(df[c], errors="coerce")
     if amount_scale != 1.0:
         df["成交额"] = df["成交额"] * amount_scale
-    return df
+    if "换手率%" in df and turnover_scale != 1.0:
+        df["换手率%"] = pd.to_numeric(df["换手率%"], errors="coerce") * turnover_scale
+    return ensure_daily_bar_schema(df)
+
+
+# 兼容早期内部调用；新代码使用语义明确的公共名称。
+_normalize = normalize_source_daily_bars
 
 
 def _to_bs_date(yyyymmdd: str) -> str:
@@ -90,9 +113,33 @@ def ak_fetch_kline(code: str, start: str, end: str, timeout: int = 5) -> Optiona
             adjust="", timeout=timeout,
         )
         # 空结果（周末/停牌）= 成功但无新数据，与 None（失败）区分开
-        return _normalize(df, code)
+        # AkShare 腾讯适配器的 turnover 是小数（0.0019 = 0.19%）。
+        return normalize_source_daily_bars(df, code, turnover_scale=100.0)
     except Exception:
         return None
+
+
+def sina_fetch_kline(code: str, start: str, end: str) -> Optional[pd.DataFrame]:
+    """新浪全历史日 K，适合首次重建和字段迁移。
+
+    与腾讯分页历史接口相比，该接口单次返回完整日期区间；原始成交量单位是股，
+    turnover 是小数，适配后统一为百分数。
+    """
+    for attempt in range(3):
+        try:
+            frame = ak.stock_zh_a_daily(
+                symbol=code,
+                start_date=start,
+                end_date=end,
+                adjust="",
+            )
+            return normalize_source_daily_bars(
+                frame, code, turnover_scale=100.0
+            )
+        except Exception:
+            if attempt < 2:
+                time.sleep(1 + attempt)
+    return None
 
 
 def _tx_symbol(code: str) -> str:
@@ -101,6 +148,17 @@ def _tx_symbol(code: str) -> str:
     if value.startswith(("sh", "sz")):
         return value
     return ("sh" if value.startswith(("5", "6")) else "sz") + value
+
+
+def _float_at(values, index: int, scale: float = 1.0):
+    """安全读取腾讯报价数组中的可选数值字段。"""
+    try:
+        value = values[index]
+        if value in ("", "--", None):
+            return float("nan")
+        return float(value) * scale
+    except (IndexError, TypeError, ValueError):
+        return float("nan")
 
 
 def tx_fetch_daily_snapshot(
@@ -154,7 +212,16 @@ def tx_fetch_daily_snapshot(
                     "最高": float(values[33]),
                     "最低": float(values[34]),
                     "收盘": float(values[3]),
+                    "前收": _float_at(values, 4),
+                    # 腾讯报价量以手为单位，标准缓存统一为股。
+                    "成交量": _float_at(values, 6, 100.0),
                     "成交额": float(amount_parts[2]),
+                    "换手率%": _float_at(values, 38),
+                    "市盈率_动态": _float_at(values, 39),
+                    # 腾讯市值字段以亿元为单位。
+                    "流通市值": _float_at(values, 44, 1e8),
+                    "总市值": _float_at(values, 45, 1e8),
+                    "供应商量比": _float_at(values, 49),
                 }
             except (IndexError, TypeError, ValueError):
                 continue
@@ -164,7 +231,11 @@ def tx_fetch_daily_snapshot(
             returned.add(symbol)
         failed.extend(code for code in batch if code not in returned)
 
-    columns = ["代码", "日期", "开盘", "最高", "最低", "收盘", "成交额"]
+    columns = [
+        "代码", "日期", "开盘", "最高", "最低", "收盘", "前收",
+        "成交量", "成交额", "换手率%", "供应商量比", "市盈率_动态",
+        "总市值", "流通市值",
+    ]
     frame = pd.DataFrame(rows, columns=columns)
     if len(frame):
         frame = frame.drop_duplicates(subset=["代码", "日期"], keep="last")
@@ -219,7 +290,7 @@ def bs_fetch_kline(code: str, start: str, end: str) -> Optional[pd.DataFrame]:
         raise RuntimeError("baostock 未登录，请在 baostock_session() 内调用")
     try:
         rs = bs.query_history_k_data_plus(
-            bs_code(code), "date,open,high,low,close,amount",
+            bs_code(code), "date,open,high,low,close,volume,amount,turn",
             start_date=_to_bs_date(start), end_date=_to_bs_date(end),
             frequency="d", adjustflag="3",
         )
@@ -232,7 +303,8 @@ def bs_fetch_kline(code: str, start: str, end: str) -> Optional[pd.DataFrame]:
         df = pd.DataFrame(rows, columns=rs.fields)
         df = df[df["close"] != ""]  # 停牌日字段为空
         # 空结果（周末/停牌）= 成功但无新数据，与 None（失败）区分开
-        return _normalize(df, code, amount_scale=BS_AMOUNT_SCALE)
+        df = df.rename(columns={"turn": "turnover"})
+        return normalize_source_daily_bars(df, code, amount_scale=BS_AMOUNT_SCALE)
     except Exception:
         return None
 

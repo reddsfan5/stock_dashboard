@@ -331,6 +331,20 @@ class MinuteData:
         target = pd.Timestamp(date).date() if date else max(days)
         return df[df["时间"].dt.date == target].sort_values("时间").reset_index(drop=True)
 
+    def get_history(self, code: str, end_date: str = None, days: int = None) -> pd.DataFrame:
+        """读取单标的分钟历史，可限制截止日和最近交易日数。"""
+        if not os.path.exists(CACHE_FILE):
+            return pd.DataFrame(columns=COLUMNS)
+        df = pd.read_parquet(CACHE_FILE, filters=[("代码", "==", code)])
+        df["时间"] = pd.to_datetime(df["时间"])
+        if end_date is not None:
+            end = pd.Timestamp(end_date).normalize() + pd.Timedelta(days=1)
+            df = df[df["时间"] < end]
+        if days is not None and len(df):
+            dates = sorted(df["时间"].dt.normalize().unique())[-days:]
+            df = df[df["时间"].dt.normalize().isin(dates)]
+        return df.sort_values("时间").reset_index(drop=True)
+
     def stats(self) -> dict:
         if not os.path.exists(CACHE_FILE):
             return {"cached": 0, "records": 0}

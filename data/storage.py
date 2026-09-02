@@ -6,7 +6,7 @@ import tempfile
 from typing import Any
 
 
-def atomic_write_parquet(df, path: str) -> None:
+def atomic_write_parquet(df, path: str, *, index: bool = False) -> None:
     """先写同目录临时文件，再原子替换，避免进程中断损坏正式缓存。"""
     directory = os.path.dirname(os.path.abspath(path))
     os.makedirs(directory, exist_ok=True)
@@ -15,7 +15,7 @@ def atomic_write_parquet(df, path: str) -> None:
     )
     os.close(fd)
     try:
-        df.to_parquet(temp_path, index=False)
+        df.to_parquet(temp_path, index=index)
         os.replace(temp_path, path)
     finally:
         if os.path.exists(temp_path):
@@ -37,3 +37,11 @@ def atomic_write_json(value: Any, path: str) -> None:
     finally:
         if os.path.exists(temp_path):
             os.unlink(temp_path)
+
+
+def parquet_row_count(path: str) -> int:
+    """从 Parquet 元数据读取行数，不加载数据列。"""
+    if not os.path.exists(path):
+        return 0
+    import pyarrow.parquet as parquet
+    return int(parquet.ParquetFile(path).metadata.num_rows)

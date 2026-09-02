@@ -47,18 +47,26 @@ PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_DIR)
 
 from data.storage import atomic_write_parquet
+from data.schema import (
+    DAILY_BAR_COLUMNS,
+    codes_missing_field_history,
+    empty_daily_bars,
+    ensure_daily_bar_schema,
+)
+from data.sources import normalize_source_daily_bars
 
 CACHE_FILE = os.path.join(PROJECT_DIR, "cache", "etf_kline_cache.parquet")
 
 THREADS = 8
 DELAY = 0.05
-COLUMNS = ["日期", "开盘", "最高", "最低", "收盘", "成交额"]
+COLUMNS = [column for column in DAILY_BAR_COLUMNS if column != "代码"]
 
 
 class ETFData:
     """ETF 数据管理器"""
 
-    def __init__(self):
+    def __init__(self, cache_file: str = CACHE_FILE):
+        self.cache_file = cache_file
         self._list: Optional[pd.DataFrame] = None
         self.last_failed: List[str] = []
 
@@ -67,26 +75,27 @@ class ETFData:
     @property
     def cache(self) -> pd.DataFrame:
         """读取 ETF 缓存"""
-        if os.path.exists(CACHE_FILE):
-            df = pd.read_parquet(CACHE_FILE)
+        if os.path.exists(self.cache_file):
+            df = pd.read_parquet(self.cache_file)
             df["日期"] = pd.to_datetime(df["日期"])
             return df
-        return pd.DataFrame(columns=["代码"] + COLUMNS)
+        return empty_daily_bars()
 
     def _save(self, df: pd.DataFrame):
-        atomic_write_parquet(df, CACHE_FILE)
+        atomic_write_parquet(df, self.cache_file)
 
     def upsert(self, rows: pd.DataFrame) -> int:
         """按 ``代码+日期`` 合并一批 ETF 日 K 数据并安全落盘。"""
         if rows is None or len(rows) == 0:
             return 0
-        rows = rows.copy()
-        rows["日期"] = pd.to_datetime(rows["日期"])
+        rows = ensure_daily_bar_schema(rows)
         cache = self.cache
         before = len(cache)
-        cache = pd.concat([cache, rows], ignore_index=True)
-        cache = cache.drop_duplicates(
-            subset=["代码", "日期"], keep="last"
+        cache = rows.copy() if before == 0 else pd.concat(
+            [cache, rows], ignore_index=True
+        )
+        cache = ensure_daily_bar_schema(
+            cache.drop_duplicates(subset=["代码", "日期"], keep="last")
         ).sort_values(["代码", "日期"]).reset_index(drop=True)
         self._save(cache)
         return len(cache) - before
@@ -104,6 +113,123 @@ class ETFData:
         return self._list
 
     # ========== 更新 ==========
+
+    @staticmethod
+    def _fetch_kline(code: str, start: str, end: str):
+        prefix = "sh" if code.startswith(("5", "56", "58")) else "sz"
+        symbol = prefix + code
+        for attempt in range(3):
+            try:
+                time.sleep(DELAY)
+                df = ak.stock_zh_a_hist_tx(
+                    symbol=symbol, start_date=start, end_date=end,
+                    adjust="", timeout=15,
+                )
+                if len(df) == 0:
+                    return pd.DataFrame(columns=["代码"] + COLUMNS)
+                return normalize_source_daily_bars(df, code, turnover_scale=100.0)
+            except Exception:
+                if attempt < 2:
+                    time.sleep(2)
+        return None
+
+    @staticmethod
+    def _fetch_field_history(code: str, start: str, end: str):
+        """新浪 ETF 全历史接口；单次请求返回完整区间，适合字段迁移。"""
+        prefix = "sh" if code.startswith(("5", "56", "58")) else "sz"
+        for attempt in range(3):
+            try:
+                frame = ak.fund_etf_hist_sina(symbol=prefix + code)
+                if len(frame) == 0:
+                    return pd.DataFrame(columns=["代码"] + COLUMNS)
+                dates = pd.to_datetime(frame["date"], errors="coerce")
+                start_date = pd.Timestamp(start)
+                end_date = pd.Timestamp(end)
+                frame = frame.loc[dates.between(start_date, end_date)].copy()
+                return normalize_source_daily_bars(frame, code)
+            except Exception:
+                if attempt < 2:
+                    time.sleep(1 + attempt)
+        return None
+
+    def _update_existing_fields(self, rows: pd.DataFrame, fields: List[str]) -> int:
+        """按键更新非空字段，不改写同日 OHLC，也不创建日期。"""
+        if rows is None or len(rows) == 0:
+            return 0
+        cache = ensure_daily_bar_schema(self.cache)
+        incoming = ensure_daily_bar_schema(rows).drop_duplicates(
+            ["代码", "日期"], keep="last"
+        )
+        incoming_index = incoming.set_index(["代码", "日期"])
+        cache_keys = pd.MultiIndex.from_arrays([cache["代码"], cache["日期"]])
+        changed = 0
+        for field in fields:
+            if field not in incoming_index:
+                continue
+            values = incoming_index[field].reindex(cache_keys).to_numpy()
+            mask = pd.notna(values)
+            changed += int(mask.sum())
+            cache.loc[mask, field] = values[mask]
+        if changed:
+            self._save(cache)
+        return changed
+
+    def codes_missing_history(
+        self,
+        codes: List[str],
+        field: str,
+        target_date,
+        periods: int = 21,
+    ) -> List[str]:
+        return codes_missing_field_history(
+            self.cache, codes, field, target_date, periods=periods
+        )
+
+    def backfill_fields(
+        self,
+        codes: List[str],
+        start_date,
+        end_date,
+        *,
+        threads: int = THREADS,
+        progress: bool = True,
+        checkpoint_codes: int = 100,
+    ) -> "ETFData":
+        """强制回填新增历史字段，不受缓存最新日期短路逻辑影响。"""
+        self.last_failed = []
+        requested = list(dict.fromkeys(str(code) for code in codes))
+        if not requested:
+            return self
+        start = pd.Timestamp(start_date).strftime("%Y%m%d")
+        end = pd.Timestamp(end_date).strftime("%Y%m%d")
+        frames = []
+
+        def _flush():
+            if frames:
+                self._update_existing_fields(
+                    pd.concat(frames, ignore_index=True),
+                    ["成交量", "换手率%"],
+                )
+                frames.clear()
+
+        with ThreadPoolExecutor(max_workers=threads) as executor:
+            tasks = {
+                executor.submit(self._fetch_field_history, code, start, end): code
+                for code in requested
+            }
+            iterator = as_completed(tasks)
+            if progress:
+                iterator = tqdm(iterator, total=len(tasks), desc="ETF字段回填")
+            for future in iterator:
+                result = future.result()
+                if result is None:
+                    self.last_failed.append(tasks[future])
+                elif len(result):
+                    frames.append(result)
+                    if len(frames) >= checkpoint_codes:
+                        _flush()
+        _flush()
+        return self
 
     def update(self, start_date: str = "20240101", codes: List[str] = None,
                target_date=None) -> "ETFData":
@@ -151,32 +277,7 @@ class ETFData:
         new_data = []
 
         def _fetch(code, start):
-            # ETF 用股票API: 5xxxxx→sh, 1xxxxx→sz
-            prefix = "sh" if code.startswith(("5", "56", "58")) else "sz"
-            symbol = prefix + code
-            for attempt in range(3):
-                try:
-                    time.sleep(DELAY)
-                    df = ak.stock_zh_a_hist_tx(
-                        symbol=symbol, start_date=start, end_date=end_date,
-                        adjust="", timeout=15,
-                    )
-                    if len(df) == 0:
-                        return None
-                    df = df.rename(columns={
-                        "date": "日期", "open": "开盘", "high": "最高",
-                        "low": "最低", "close": "收盘", "amount": "成交额",
-                    })
-                    df = df[["日期", "开盘", "最高", "最低", "收盘", "成交额"]].copy()
-                    df["代码"] = code
-                    df["日期"] = pd.to_datetime(df["日期"])
-                    for c in ["开盘", "最高", "最低", "收盘", "成交额"]:
-                        df[c] = pd.to_numeric(df[c], errors="coerce")
-                    return df
-                except Exception:
-                    if attempt < 2:
-                        time.sleep(2)
-            return None
+            return self._fetch_kline(code, start, end_date)
 
         with ThreadPoolExecutor(max_workers=THREADS) as executor:
             tasks = {executor.submit(_fetch, c, s): c for c, s in to_fetch}
@@ -190,8 +291,9 @@ class ETFData:
         if new_data:
             ndf = pd.concat(new_data, ignore_index=True)
             cache = pd.concat([cache, ndf], ignore_index=True)
-            cache = cache.drop_duplicates(subset=["代码", "日期"], keep="last")
-            cache = cache.sort_values(["代码", "日期"]).reset_index(drop=True)
+            cache = ensure_daily_bar_schema(
+                cache.drop_duplicates(subset=["代码", "日期"], keep="last")
+            ).sort_values(["代码", "日期"]).reset_index(drop=True)
             self._save(cache)
             print(f"✓ 新增 {len(ndf)} 条, 缓存共 {len(cache)} 条, {cache['代码'].nunique()} 只")
         else:
@@ -206,7 +308,8 @@ class ETFData:
         raw = code[2:] if code.startswith(("sh", "sz")) else code
         cache = self.cache
         df = cache[cache["代码"] == raw].sort_values("日期").tail(days)
-        return df[COLUMNS].reset_index(drop=True)
+        columns = [column for column in COLUMNS if column in df.columns]
+        return df[columns].reset_index(drop=True)
 
     @property
     def cache_with_prefix(self) -> "pd.DataFrame":
