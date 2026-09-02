@@ -31,6 +31,7 @@ stock/
 │   ├── execution.py              # 费用、滑点、整手、容量与涨跌停执行模型
 │   ├── rebalance.py              # 周期轮动、前一日信号和逐日盯市
 │   ├── validation.py             # 时间留出、隔离期与滚动前推切分
+│   ├── trading_trainer.py        # 无未来数据的 T+1 手动交易状态机
 │   ├── sim_core.py               # 费用、手数、盯市、平仓公共规则
 │   ├── sim_types.py              # Signal/Position/Trade/SimulationResult
 │   └── metrics.py                # 统一收益与风险指标
@@ -46,11 +47,12 @@ stock/
 │   ├── screen.py                 # 选股管线 → dashboard.html
 │   ├── backtest.py               # 回测管线 → stats_report.html
 │   ├── run_all_strategies.py     # 独立策略研究的总编排
+│   ├── serve.py                   # HTTP 服务统一启停、状态与健康检查
 │   ├── strategies/               # 单项策略 strategy_01 ~ strategy_14
 │   ├── simulations/              # 资金与交易流程模拟
 │   ├── research/                 # 市场统计与专题回测
 │   ├── reports/                  # HTML 报告与导航生成
-│   ├── services/                 # 分时行情查询服务
+│   ├── services/                 # 分时、网格回放与 T+1 训练服务
 │   └── tools/                    # 调试与参数扫描工具
 │
 ├── output/                       # 生成输出（HTML、CSV等）

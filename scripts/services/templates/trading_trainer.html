@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>T+1 无剧透交易训练</title>
+<style>
+:root{--bg:#f3f5f8;--panel:#fff;--text:#172033;--muted:#778196;--border:#e0e5ed;--blue:#3478f6;--red:#e5484d;--green:#159568;--sell:#3979bf;--gold:#d99200;--soft:#f6f8fb;--shadow:0 18px 55px rgba(17,27,46,.22)}
+*{box-sizing:border-box}html,body{min-height:100%}body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;font-size:14px}.page{max-width:1480px;margin:auto;padding:14px}.top{display:flex;align-items:center;gap:12px;margin-bottom:10px}.top h1{font-size:20px;margin:0}.top .links{margin-left:auto;display:flex;gap:14px}.top a{color:var(--blue);text-decoration:none}.panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;box-shadow:0 2px 8px rgba(30,45,75,.04)}
+.setup{padding:13px;margin-bottom:10px}.setup-grid{display:grid;grid-template-columns:minmax(220px,1.7fr) repeat(5,minmax(110px,1fr)) auto;gap:8px;align-items:end}.field{display:flex;flex-direction:column;gap:6px;min-width:0}.field>label{color:var(--muted);font-size:11px;font-weight:600;letter-spacing:.04em;line-height:1.35}.field input,.field select,.field textarea,button{border:1px solid #cbd3df;border-radius:8px;background:#fff;color:var(--text);font:inherit}.field input,.field select{height:40px;padding:0 11px;font-weight:600}.field textarea{min-height:74px;padding:10px 11px;resize:vertical;line-height:1.55}.field input:focus,.field select:focus,.field textarea:focus{outline:2px solid rgba(52,120,246,.16);border-color:var(--blue)}button{height:40px;padding:0 11px;cursor:pointer;font-weight:600}button.primary{background:var(--blue);border-color:var(--blue);color:#fff}button:disabled{opacity:.4;cursor:not-allowed}.search{position:relative}.results{position:absolute;top:64px;left:0;right:0;z-index:30;display:none;max-height:260px;overflow:auto;background:#fff;border:1px solid var(--border);border-radius:8px;box-shadow:0 12px 28px rgba(20,30,50,.16)}.result{display:flex;justify-content:space-between;padding:10px;border-bottom:1px solid #eef1f5;cursor:pointer}.result:hover{background:#eef4ff}.result span:last-child{color:var(--muted);font-size:11px}
+.notice{display:none;padding:9px 12px;margin-bottom:10px;background:#fff4d8;color:#775600;border-radius:8px}.metrics{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;background:var(--border);margin-bottom:10px;overflow:hidden}.metric{background:#fff;padding:10px 12px;min-width:0}.metric .label{display:block;color:var(--muted);font-size:10px;font-weight:600;letter-spacing:.04em;margin-bottom:4px}.metric .value{display:block;color:var(--text);font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.metric .context{display:block;color:var(--muted);font-size:10px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.up{color:var(--red)!important}.down{color:var(--green)!important}.factor-panel{margin-bottom:10px;overflow:hidden}.factor-head{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid var(--border);font-size:11px;font-weight:700}.factor-head span{color:var(--muted);font-size:9px;font-weight:500}.factor-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;background:var(--border)}.factor{background:#fff;padding:8px 10px;min-width:0}.factor .label{display:block;color:var(--muted);font-size:9px;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.factor .value{font-size:14px;font-weight:700;font-variant-numeric:tabular-nums}.factor .context{display:block;color:#929bad;font-size:8px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.factor.hot .value{color:var(--gold)}.factor.strong .value{color:var(--red)}.factor.weak .value{color:var(--green)}
+.playbar{display:flex;align-items:center;gap:8px;padding:9px 12px;margin-bottom:10px}.playbar .identity{font-weight:700;margin-right:auto}.playbar .clock{color:var(--blue);font-variant-numeric:tabular-nums;font-weight:700}.playbar .progress{color:var(--muted);font-size:11px}.playbar select{height:40px;border:1px solid #cbd3df;border-radius:8px;padding:0 8px;background:#fff}.main{display:grid;grid-template-columns:minmax(0,1fr) 370px;gap:10px}.charts{display:grid;grid-template-rows:430px 390px;overflow:hidden}.chart-block{min-width:0;position:relative}.chart-block:first-child{border-bottom:1px solid var(--border)}.chart-title{position:absolute;left:14px;top:10px;z-index:2;font-size:12px;font-weight:700}.chart-title small{color:var(--muted);font-weight:400;margin-left:7px}.chart{height:100%;width:100%}
+.side{display:flex;flex-direction:column;gap:10px}.trade-box{padding:12px}.trade-box h2,.records h2{font-size:14px;margin:0 0 11px}.account-line{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}.account-item{background:var(--soft);padding:9px 10px;border-radius:8px;min-width:0}.account-item .label{display:block;color:var(--muted);font-size:10px;line-height:1.35;margin-bottom:4px}.account-item .value{display:block;font-size:14px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.35;overflow-wrap:anywhere}.trade-launch{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.trade-launch button{height:62px;padding:7px 4px;color:#fff;border:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;white-space:nowrap}.trade-launch b{font-size:15px}.trade-launch small{font-size:9px;font-weight:500;opacity:.84;max-width:100%;overflow:hidden;text-overflow:ellipsis}.launch-buy{background:var(--red)}.launch-sell{background:var(--sell)}.launch-condition{background:#6a5bb4}.badge{display:inline-flex;min-width:17px;height:17px;padding:0 5px;margin-left:3px;border-radius:9px;align-items:center;justify-content:center;background:rgba(255,255,255,.22);font-size:10px}.manage-launch{width:100%;height:38px;margin-top:8px;background:#fff;color:#43516a;border-color:#ccd5e2}.manage-launch .badge{background:#eaf1ff;color:var(--blue);vertical-align:middle}.rule{margin-top:10px;padding:8px 9px;background:#eef4ff;color:#34517b;border-radius:7px;font-size:11px;line-height:1.55}.records{overflow:hidden}.record-list{max-height:520px;overflow:auto}.record-section-title{display:flex;align-items:center;justify-content:space-between;padding:9px 11px 6px;color:#566176;font-size:10px;font-weight:700;letter-spacing:.08em;background:#fafbfc;border-top:1px solid #eef1f5}.record-section-title span{font-weight:500;letter-spacing:0;color:var(--muted)}.order,.condition-card{padding:9px 11px;border-top:1px solid #eef1f5}.order-head,.condition-head{display:flex;justify-content:space-between;gap:8px;font-size:12px;align-items:center}.order-head span,.condition-head span{color:var(--muted);font-size:10px}.buy-text{color:var(--red)}.sell-text{color:var(--sell)}.condition-detail,.order-detail{color:var(--muted);font-size:11px;line-height:1.55;margin-top:4px}.condition-meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:6px}.status{padding:2px 6px;border-radius:10px;font-size:9px;font-weight:700}.status-active,.status-pending{background:#eef4ff;color:var(--blue)}.status-triggered,.status-filled,.status-partial{background:#eaf8f1;color:var(--green)}.status-failed{background:#fff0ee;color:#b73b35}.status-cancelled,.status-expired{background:#f0f2f5;color:#7a8393}.cancel-condition{height:26px;padding:0 8px;color:var(--blue);border-color:#bfd1f5;background:#f7faff;font-size:10px}.empty{padding:28px 12px;color:var(--muted);text-align:center}
+.modal{position:fixed;inset:0;z-index:90;display:flex;align-items:flex-end;justify-content:center}.modal[hidden]{display:none}.modal-backdrop{position:absolute;inset:0;background:rgba(9,14,24,.58);backdrop-filter:blur(2px)}.sheet{position:relative;width:min(720px,100%);max-height:min(88vh,820px);overflow:auto;overscroll-behavior:contain;background:#fff;border-radius:18px 18px 0 0;box-shadow:var(--shadow);animation:sheet-up .18s ease-out}.modal.manage-mode{align-items:center;padding:24px 12px}.modal.manage-mode .sheet{max-height:min(760px,calc(100vh - 48px));max-height:min(760px,calc(100dvh - 48px));border-radius:18px}.sheet-handle{width:46px;height:5px;margin:9px auto 2px;border-radius:3px;background:#c9cfda}.sheet-head{display:flex;align-items:center;gap:10px;padding:9px 18px 5px}.sheet-symbol{min-width:0}.sheet-symbol b{display:block;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.sheet-symbol span{display:block;color:var(--muted);font-size:10px;margin-top:2px}.sheet-quote{margin-left:auto;text-align:right}.sheet-quote strong{display:block;font-size:19px;font-variant-numeric:tabular-nums}.sheet-quote small{color:var(--muted)}.close-modal{height:34px;width:34px;padding:0;border:0;background:#f1f3f6;border-radius:50%;font-size:20px;color:#667085}.trade-tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:9px 18px 10px;border-bottom:1px solid var(--border)}.trade-tabs[hidden]{display:none}.trade-tabs button{height:42px;background:#f4f6f9;border-color:transparent;color:#626d80}.trade-tabs button.active-buy{background:#fff0ef;color:var(--red);border-color:#f3b5b0}.trade-tabs button.active-sell{background:#edf4fc;color:var(--sell);border-color:#b9d0ec}.trade-tabs button.active-condition{background:#f1effb;color:#6253a9;border-color:#c9c1eb}.sheet-body{padding:15px 18px 20px}.sheet-body[hidden]{display:none}.modal-account{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin-bottom:14px}.modal-account .account-item{border:1px solid #edf0f4}.modal-account .value{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.section-label{font-size:11px;color:#5f6a7c;font-weight:700;margin:0 0 8px}.manual-order-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}.quick-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin:9px 0 14px}.quick-grid button{height:34px;padding:0 4px;white-space:nowrap;font-size:11px;color:#42506a;background:#fff}.quick-grid button:hover{border-color:var(--blue);color:var(--blue)}.reason-field{margin-top:2px}.order-hint,.manage-intro{margin:0 0 12px;padding:8px 9px;border-radius:7px;background:#f6f7fb;color:#687386;font-size:10px;line-height:1.55}.submit-order{width:100%;height:46px;margin-top:14px;border:0;color:#fff;font-size:15px}.submit-buy{background:var(--red)}.submit-sell{background:var(--sell)}.condition-side{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:13px}.condition-side button{background:#f4f6f9;border-color:transparent}.condition-side .selected-buy{background:#fff0ef;color:var(--red);border-color:#efb0ac}.condition-side .selected-sell{background:#edf4fc;color:var(--sell);border-color:#b6cce8}.condition-grid{display:grid;grid-template-columns:1.25fr 1fr;gap:10px}.trigger-wrap{position:relative}.trigger-wrap input{padding-right:42px}.trigger-unit{position:absolute;right:12px;bottom:11px;color:var(--muted);font-size:11px}.condition-help{grid-column:1/-1;margin-top:-2px;padding:8px 9px;background:#f6f7fb;border-radius:7px;color:#687386;font-size:10px;line-height:1.5}.condition-preview{grid-column:1/-1;margin-top:-2px;padding:8px 9px;background:#eef4ff;border-radius:7px;color:#34517b;font-size:10px;font-weight:600;line-height:1.55}.condition-note{grid-column:1/-1}.condition-submit{background:#6556ad}.manage-list{border:1px solid var(--border);border-radius:10px;overflow:hidden}.manage-list+.manage-list{margin-top:12px}.status-waiting_execution{background:#fff4d8;color:#8a5b00}.body-modal-open{overflow:hidden}@keyframes sheet-up{from{transform:translateY(24px);opacity:.65}to{transform:none;opacity:1}}
+.loading{position:fixed;inset:0;z-index:110;display:none;align-items:center;justify-content:center;background:rgba(243,245,248,.65)}.loading span{background:#172033;color:#fff;padding:10px 16px;border-radius:8px}
+@media(max-width:1100px){.setup-grid{grid-template-columns:repeat(4,1fr)}.search{grid-column:span 2}.metrics,.factor-grid{grid-template-columns:repeat(4,1fr)}.main{grid-template-columns:1fr}.side{display:grid;grid-template-columns:1fr 1fr}.records{min-height:300px}}
+@media(max-width:680px){.page{padding:8px}.top h1{font-size:16px}.setup-grid{grid-template-columns:1fr 1fr}.search{grid-column:1/-1}.metrics,.factor-grid{grid-template-columns:1fr 1fr}.playbar{flex-wrap:wrap}.playbar .identity{width:100%}.main{display:block}.charts{grid-template-rows:380px 340px}.side{display:block}.trade-box,.records{margin-top:10px}.field input,.field select,.field textarea{font-size:16px}.top .links{gap:8px}.sheet{max-height:92vh}.modal.manage-mode{padding:12px 8px max(16px,env(safe-area-inset-bottom))}.modal.manage-mode .sheet{max-height:calc(100vh - 28px);max-height:calc(100dvh - 28px)}.sheet-head{padding-left:12px;padding-right:12px}.trade-tabs,.sheet-body{padding-left:12px;padding-right:12px}.modal-account{grid-template-columns:1fr 1fr}.condition-grid{grid-template-columns:1fr}.condition-help,.condition-note{grid-column:auto}.quick-grid{gap:5px}.quick-grid button{font-size:10px}.trade-launch small{display:none}}
+</style>
+</head>
+<body>
+<div class="loading" id="loading"><span>正在建立无剧透训练会话…</span></div>
+<main class="page">
+  <div class="top"><h1>🎯 T+1 无剧透交易训练</h1><div class="links"><a id="journalLink" href="stock_journal.html?code=sh600000">记录决策</a><a href="minute_view.html">分时查询</a><a href="index.html">返回导航</a></div></div>
+  <div class="notice" id="notice"></div>
+  <section class="panel setup" id="setup"><div class="setup-grid">
+    <div class="field search"><label>标的代码或名称</label><input id="code" value="600000" autocomplete="off" placeholder="例如 浦发银行 / 600000"><div class="results" id="results"></div></div>
+    <div class="field"><label>起始交易日</label><select id="startDate"><option value="random">随机挑战</option></select></div>
+    <div class="field"><label>初始资金</label><input id="capital" type="number" value="100000" min="1" step="10000"></div>
+    <div class="field"><label>佣金（bp）</label><input id="commission" type="number" value="3" min="0" step="0.1"></div>
+    <div class="field"><label>最低佣金</label><input id="minCommission" type="number" value="5" min="0" step="1"></div>
+    <div class="field"><label>卖出税费（bp）</label><input id="sellTax" type="number" value="5" min="0" step="0.1"></div>
+    <button class="primary" id="start">开始训练</button>
+  </div></section>
+
+  <section id="game" hidden>
+    <section class="panel metrics">
+      <div class="metric"><span class="label">当前价 · 较昨收</span><span class="value" id="mPrice">—</span><span class="context" id="mChange">—</span></div>
+      <div class="metric"><span class="label">可用现金</span><span class="value" id="mCash">—</span><span class="context" id="mCashContext">—</span></div>
+      <div class="metric"><span class="label">持仓</span><span class="value" id="mShares">—</span><span class="context" id="mAvailable">—</span></div>
+      <div class="metric"><span class="label">账户净值</span><span class="value" id="mEquity">—</span><span class="context">现金 + 持仓市值</span></div>
+      <div class="metric"><span class="label">总盈亏</span><span class="value" id="mPnl">—</span><span class="context" id="mReturn">—</span></div>
+      <div class="metric"><span class="label">已实现</span><span class="value" id="mRealized">—</span><span class="context">已卖出交易</span></div>
+      <div class="metric"><span class="label">未实现</span><span class="value" id="mUnrealized">—</span><span class="context" id="mFees">—</span></div>
+    </section>
+    <section class="panel factor-panel">
+      <div class="factor-head">当前可见行情指标 <span>只使用当前模拟分钟及此前数据，数值随播放变化</span></div>
+      <div class="factor-grid">
+        <div class="factor" id="factorVolume" title="当日截至当前分钟累计成交量 ÷ 前5日同一分钟平均累计成交量"><span class="label">盘中量比（5日同分钟）</span><span class="value" id="fVolumeRatio">—</span><span class="context">量能节奏</span></div>
+        <div class="factor" id="factorVwap" title="当前价格相对当日已揭示成交均价的偏离"><span class="label">价格 / 已揭示均价</span><span class="value" id="fVwapDeviation">—</span><span class="context" id="fVwap">均价 —</span></div>
+        <div class="factor" title="当前价格相对20个交易日前收盘价的涨跌幅"><span class="label">20日动量</span><span class="value" id="fMomentum">—</span><span class="context">趋势强弱</span></div>
+        <div class="factor" title="含当前已揭示日内波幅的14日真实波幅均值，占当前价格比例"><span class="label">ATR14</span><span class="value" id="fAtr">—</span><span class="context">波动尺度</span></div>
+        <div class="factor" title="含当前已揭示价格的20日收益率标准差，按252个交易日年化"><span class="label">20日年化波动</span><span class="value" id="fVolatility">—</span><span class="context">风险幅度</span></div>
+        <div class="factor" title="当前价格相对最近60个已知交易日最高收盘价的回撤"><span class="label">距60日高点</span><span class="value" id="fDrawdown">—</span><span class="context">所处位置</span></div>
+        <div class="factor" title="当前模拟日前20个完整交易日的平均换手率；不使用当日未来换手"><span class="label">此前20日均换手</span><span class="value" id="fTurnover">—</span><span class="context" id="fDayPosition">日内位置 —</span></div>
+      </div>
+    </section>
+    <section class="panel playbar">
+      <span class="identity" id="identity">—</span><span class="clock" id="clock">—</span><span class="progress" id="progress">—</span>
+      <select id="speed"><option value="1">慢速 · 1分钟/拍</option><option value="5" selected>正常 · 5分钟/拍</option><option value="15">快速 · 15分钟/拍</option></select>
+      <button id="step">推进一格</button><button class="primary" id="play">▶ 动态分时</button><button id="closeDay">直达收盘</button><button id="nextDay" disabled>下一交易日</button><button id="newGame">新训练</button>
+    </section>
+    <div class="main">
+      <section class="panel charts">
+        <div class="chart-block"><div class="chart-title">日 K <small>仅显示到当前模拟分钟</small></div><div class="chart" id="dailyChart"></div></div>
+        <div class="chart-block"><div class="chart-title">当日分时 <small>曲线随播放向右出现</small></div><div class="chart" id="minuteChart"></div></div>
+      </section>
+      <aside class="side">
+        <section class="panel trade-box">
+          <h2>交易操作</h2>
+          <div class="account-line">
+            <div class="account-item"><span class="label">持仓均价</span><span class="value" id="avgCost">—</span></div>
+            <div class="account-item"><span class="label">T+1 持仓状态</span><span class="value" id="availableDetail">—</span></div>
+          </div>
+          <div class="trade-launch">
+            <button class="launch-buy" id="openBuy"><b>买入</b><small>立即 / 限价</small></button>
+            <button class="launch-sell" id="openSell"><b>卖出</b><small>立即 / 限价</small></button>
+            <button class="launch-condition" id="openCondition"><b>条件单 <span class="badge" id="conditionCount">0</span></b><small>监控后触发</small></button>
+          </div>
+          <button class="manage-launch" id="openManage">撤单管理 <span class="badge" id="cancelCount">0</span></button>
+          <div class="rule">立即成交单完成后不可撤；未成交限价单可撤，并冻结对应资金或可卖持仓。条件单监控期间可撤，触发时仍遵守 T+1。</div>
+        </section>
+        <section class="panel records">
+          <h2 style="padding:12px 12px 0">委托与条件单</h2>
+          <div class="record-list" id="records"><div class="empty">尚无委托</div></div>
+        </section>
+      </aside>
+    </div>
+  </section>
+</main>
+
+<div class="modal" id="tradeModal" hidden aria-hidden="true">
+  <div class="modal-backdrop" id="modalBackdrop"></div>
+  <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="sheet-handle"></div>
+    <header class="sheet-head">
+      <div class="sheet-symbol"><b id="modalIdentity">—</b><span id="modalAccountHint">T+1 模拟账户</span></div>
+      <div class="sheet-quote"><strong id="modalPrice">—</strong><small id="modalChange">—</small></div>
+      <button class="close-modal" id="closeModal" aria-label="关闭">×</button>
+    </header>
+    <nav class="trade-tabs" id="tradeTabs" aria-label="交易类型">
+      <button data-trade-tab="buy">买入</button>
+      <button data-trade-tab="sell">卖出</button>
+      <button data-trade-tab="condition">条件单</button>
+    </nav>
+
+    <div class="sheet-body" id="manualPane">
+      <div class="modal-account">
+        <div class="account-item"><span class="label">可用现金</span><span class="value" id="modalCash">—</span></div>
+        <div class="account-item"><span class="label">总持仓</span><span class="value" id="modalPosition">—</span></div>
+        <div class="account-item"><span class="label">可卖 / 锁定</span><span class="value" id="modalTradable">—</span></div>
+        <div class="account-item"><span class="label">持仓均价</span><span class="value" id="modalAvg">—</span></div>
+      </div>
+      <div class="manual-order-grid">
+        <div class="field"><label>委托方式</label><select id="manualOrderType"><option value="market">立即成交</option><option value="limit">限价委托</option></select></div>
+        <div class="field" id="limitPriceField" hidden><label>委托价格</label><input id="manualLimitPrice" type="number" min="0.001" step="0.01"></div>
+        <div class="field" id="limitValidityField" hidden><label>有效期</label><select id="manualValidity"><option value="day">当日有效</option><option value="session">本次训练持续有效</option></select></div>
+      </div>
+      <p class="order-hint" id="manualOrderHint">立即按当前已显示分钟价撮合，提交后不可撤销。</p>
+      <div class="field"><label id="manualQuantityLabel">委托数量（100 股整数倍）</label><input id="manualShares" type="number" value="100" min="100" step="100"></div>
+      <div class="quick-grid">
+        <button data-manual-ratio="0.25">1/4 仓</button><button data-manual-ratio="0.5">1/2 仓</button><button data-manual-ratio="0.75">3/4 仓</button><button id="manualAll">全量</button>
+      </div>
+      <div class="field reason-field"><label>交易理由（复盘用）</label><textarea id="manualNote" maxlength="200" placeholder="例如：缩量回踩支撑，等待放量确认"></textarea></div>
+      <button class="submit-order" id="manualSubmit">确认买入</button>
+    </div>
+
+    <div class="sheet-body" id="conditionPane" hidden>
+      <p class="section-label">触发后执行方向</p>
+      <div class="condition-side"><button data-condition-side="buy">买入</button><button data-condition-side="sell">卖出</button></div>
+      <div class="condition-grid">
+        <div class="field"><label>监控条件</label><select id="conditionType"></select></div>
+        <div class="field trigger-wrap"><label id="triggerLabel">触发值</label><input id="triggerValue" type="number" min="0.001" step="0.01"><span class="trigger-unit" id="triggerUnit">元</span></div>
+        <div class="field trigger-wrap" id="secondaryTriggerField" hidden><label id="secondaryTriggerLabel">第二阶段比例</label><input id="secondaryTriggerValue" type="number" min="0.1" max="100" step="0.1"><span class="trigger-unit">%</span></div>
+        <div class="condition-help" id="conditionHelp">—</div>
+        <div class="condition-preview" id="conditionPreview">—</div>
+        <div class="field"><label>委托数量（100 股整数倍）</label><input id="conditionShares" type="number" value="100" min="100" step="100"></div>
+        <div class="field"><label>有效期</label><select id="conditionValidity"><option value="day">当日有效</option><option value="session">本次训练持续有效</option></select></div>
+        <div class="condition-note field"><label>触发计划 / 交易理由</label><textarea id="conditionNote" maxlength="200" placeholder="例如：突破前高后跟进，跌回突破位则次日退出"></textarea></div>
+      </div>
+      <div class="quick-grid">
+        <button data-condition-ratio="0.25">1/4 仓</button><button data-condition-ratio="0.5">1/2 仓</button><button data-condition-ratio="0.75">3/4 仓</button><button id="conditionAll">全量</button>
+      </div>
+      <button class="submit-order condition-submit" id="conditionSubmit">提交买入条件单</button>
+    </div>
+
+    <div class="sheet-body" id="managePane" hidden>
+      <p class="manage-intro" id="manageIntro">仅待成交限价委托和监控中的条件单可撤。撤单后，冻结资金或持仓会立即释放。</p>
+      <section class="manage-list" id="pendingManage"></section>
+      <section class="manage-list" id="conditionManage"></section>
+    </div>
+  </section>
+</div>
+
+<script src="vendor/echarts.min.js"></script><script>window.echarts||document.write(`<script src='https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js'><\/script>`);</script>
+<script>
+const $=id=>document.getElementById(id);
+let state=null,sessionId=null,timer=null,busy=false,searchTimer=null,tradeTab='buy',conditionSide='buy';
+const dailyChart=echarts.init($('dailyChart')),minuteChart=echarts.init($('minuteChart'));
+const conditionOptions={
+  buy:[
+    ['price_below','股价回落到','价格低于或触及指定价格时触发买入','元'],
+    ['price_above','股价突破','价格高于或触及指定价格时触发买入','元'],
+    ['day_loss','日跌幅达到','分钟最低价相对昨收的跌幅达到设定值时触发','%'],
+    ['day_gain','日涨幅达到','分钟最高价相对昨收的涨幅达到设定值时触发','%'],
+    ['rebound_buy','反弹买入','先从创建参考价下跌达到设定幅度，再跟踪新低；之后从最低点反弹达到设定幅度时买入','%','rebound']
+  ],
+  sell:[
+    ['price_above','股价上涨到','价格高于或触及指定价格时触发卖出','元'],
+    ['price_below','股价跌破','价格低于或触及指定价格时触发卖出','元'],
+    ['day_gain','日涨幅达到','分钟最高价相对昨收的涨幅达到设定值时触发','%'],
+    ['day_loss','日跌幅达到','分钟最低价相对昨收的跌幅达到设定值时触发','%'],
+    ['take_profit_stop_loss','止盈止损（双条件）','相对持仓均价，止盈或止损任一条件先满足就卖出；同一分钟同时满足时按止损优先','%','risk'],
+    ['take_profit','仅止盈','价格相对当前持仓均价的盈利比例达到设定值时触发','%'],
+    ['stop_loss','仅止损','价格相对当前持仓均价的亏损比例达到设定值时触发','%'],
+    ['pullback_sell','回落卖出','先从创建参考价上涨达到设定幅度，再跟踪新高；之后从最高点回落达到设定幅度时卖出','%','pullback']
+  ]
+};
+const statusNames={active:'监控中',waiting_execution:'已触发，等待执行',pending:'待成交',triggered:'已触发成交',filled:'已成交',partial:'部分成交',failed:'触发未成交',cancelled:'已撤销',expired:'已过期'};
+const reasonText={t_plus_one_locked:'T+1锁定，当日买入不可卖',insufficient_cash:'现金不足',insufficient_position:'可卖持仓不足',below_lot_size:'不足100股',invalid_quantity:'数量无效',cash_limit:'现金限制',position_limit:'持仓限制',filled:'已成交'};
+function money(v){return'¥'+(+v||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}
+function price(v){if(v===null||v===undefined)return'—';return(+v)<10?(+v).toFixed(3):(+v).toFixed(2)}
+function signed(v,suffix=''){if(v===null||v===undefined||v===''||!Number.isFinite(+v))return'—';return`${+v>=0?'+':''}${(+v).toFixed(2)}${suffix}`}
+function pnlClass(v){return+v>0?'up':+v<0?'down':''}
+function optional(v,digits=2,suffix=''){return v===null||v===undefined||!Number.isFinite(+v)?'—':(+v).toFixed(digits)+suffix}
+function escapeHtml(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function dailyChangePct(bars,index){const bar=bars[index],close=+bar?.close,direct=bar?.change_pct;if(direct!==null&&direct!==undefined&&direct!==''&&Number.isFinite(+direct))return+direct;const previous=bar?.pre_close??bars[index-1]?.close,base=+previous;return Number.isFinite(close)&&Number.isFinite(base)&&base>0?(close/base-1)*100:null}
+function klineIntervalHtml(bars,index){const start=bars[index],end=bars[bars.length-1],startPrice=+start?.open,endPrice=+end?.close;if(!start||!end||!Number.isFinite(startPrice)||startPrice<=0||!Number.isFinite(endPrice))return'';const delta=endPrice-startPrice,pct=delta/startPrice*100,color=delta>0?'#e5484d':delta<0?'#159568':'#758096',endLabel=end.partial?'当前可见收':'最新可见收';return`<div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(128,128,128,.35)">区间涨跌 <b style="color:${color}">${delta>=0?'+':''}${delta.toFixed(startPrice<10?3:2)}（${pct>=0?'+':''}${pct.toFixed(2)}%）</b><br><span style="color:#8a94a6">${start.date} 开 ${price(startPrice)} → ${end.date} ${endLabel} ${price(endPrice)} · ${bars.length-index}根K线</span></div>`}
+function notice(msg,sticky=false){$('notice').textContent=msg;$('notice').style.display=msg?'block':'none';if(msg&&!sticky)setTimeout(()=>{$('notice').style.display='none'},3500)}
+function loading(on){$('loading').style.display=on?'flex':'none'}
+async function request(path,method='GET',body=null){const options={method,cache:'no-store',headers:{}};if(body){options.headers['Content-Type']='application/json';options.body=JSON.stringify(body)}const response=await fetch(path,options);let payload={};try{payload=await response.json()}catch(e){}if(!response.ok)throw new Error(payload.error||`HTTP ${response.status}`);return payload}
+function tradingTimes(){const out=[];for(let h=9,m=31;h<12;){out.push(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);m++;if(m===60){h++;m=0}if(h===11&&m===31)break}for(let h=13,m=1;h<16;){out.push(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);m++;if(m===60){h++;m=0}if(h===15&&m===1)break}return out}
+
+function render(next){
+  state=next;sessionId=next.session_id;sessionStorage.setItem('tradingTrainerSession',sessionId);
+  $('journalLink').href='stock_journal.html?code='+encodeURIComponent(next.code);
+  const a=next.account,m=next.market,p=next.progress;
+  $('identity').textContent=`${next.name} ${next.code} · ${next.date}`;$('clock').textContent=next.time;$('progress').textContent=`已显示 ${p.revealed}/${p.total} 分钟`;
+  $('mPrice').textContent=price(m.price);$('mPrice').className='value '+pnlClass(m.change_pct);$('mChange').textContent=`较昨收 ${signed(m.change_pct,'%')}`;$('mChange').className='context '+pnlClass(m.change_pct);
+  $('mCash').textContent=money(a.available_cash);$('mCashContext').textContent=`总额 ${money(a.cash)} · 冻结 ${money(a.reserved_cash)}`;$('mShares').textContent=`${a.total_shares.toLocaleString()} 股`;$('mAvailable').textContent=`可卖 ${a.available_shares.toLocaleString()} · 委托冻结 ${a.reserved_shares.toLocaleString()} · T+1锁定 ${a.locked_shares.toLocaleString()}`;
+  $('mEquity').textContent=money(a.equity);$('mPnl').textContent=money(a.total_pnl);$('mPnl').className='value '+pnlClass(a.total_pnl);$('mReturn').textContent=signed(a.return_pct,'%');$('mReturn').className='context '+pnlClass(a.return_pct);
+  $('mRealized').textContent=money(a.realized_pnl);$('mRealized').className='value '+pnlClass(a.realized_pnl);$('mUnrealized').textContent=money(a.unrealized_pnl);$('mUnrealized').className='value '+pnlClass(a.unrealized_pnl);$('mFees').textContent=`累计费用 ${money(a.total_fees)}`;
+  renderMarketIndicators(m.indicators||{});
+  $('avgCost').textContent=price(a.average_cost);$('availableDetail').textContent=`可卖 ${a.available_shares.toLocaleString()} · 冻结 ${a.reserved_shares.toLocaleString()} · T+1锁定 ${a.locked_shares.toLocaleString()}`;$('conditionCount').textContent=p.active_condition_count||0;$('cancelCount').textContent=(p.pending_order_count||0)+(p.active_condition_count||0);
+  $('nextDay').disabled=!p.day_complete||!p.has_next_day;$('step').disabled=p.day_complete;$('closeDay').disabled=p.day_complete;$('play').disabled=p.day_complete;$('play').textContent=timer?'Ⅱ 暂停':'▶ 动态分时';
+  renderModalAccount();renderDaily();renderMinute();renderRecords();renderCancelManager();
+}
+
+function renderMarketIndicators(x){
+  $('fVolumeRatio').textContent=optional(x.intraday_volume_ratio,2,'×');$('factorVolume').className='factor '+(x.intraday_volume_ratio>=1.5?'hot':'');
+  $('fVwapDeviation').textContent=optional(x.vwap_deviation_pct,2,'%');$('factorVwap').className='factor '+pnlClass(x.vwap_deviation_pct);$('fVwap').textContent=`均价 ${optional(x.vwap,3)}`;
+  $('fMomentum').textContent=optional(x.momentum_20_pct,2,'%');$('fMomentum').className='value '+pnlClass(x.momentum_20_pct);
+  $('fAtr').textContent=optional(x.atr14_pct,2,'%');$('fVolatility').textContent=optional(x.volatility_20_ann_pct,2,'%');
+  $('fDrawdown').textContent=optional(x.drawdown_from_high_60_pct,2,'%');$('fDrawdown').className='value '+pnlClass(x.drawdown_from_high_60_pct);
+  $('fTurnover').textContent=optional(x.turnover_ma20_pct,2,'%');$('fDayPosition').textContent=`日内位置 ${optional(x.day_position_pct,0,'%')}`;
+}
+
+function renderModalAccount(){
+  if(!state)return;const a=state.account,m=state.market;
+  $('modalIdentity').textContent=`${state.name} ${state.code} · ${state.date} ${state.time}`;$('modalPrice').textContent=price(m.price);$('modalChange').textContent=`较昨收 ${signed(m.change_pct,'%')}`;$('modalChange').className=pnlClass(m.change_pct);
+  $('modalCash').textContent=money(a.available_cash);$('modalPosition').textContent=`${a.total_shares.toLocaleString()} 股`;$('modalTradable').textContent=`${a.available_shares.toLocaleString()} / ${a.locked_shares.toLocaleString()}`;$('modalAvg').textContent=price(a.average_cost);
+  if(tradeTab==='manage'){$('modalAccountHint').textContent=`待成交 ${state.progress.pending_order_count||0} 笔 · 条件监控 ${state.progress.active_condition_count||0} 笔`}else if(tradeTab==='sell'){$('modalAccountHint').textContent=`可卖 ${a.available_shares.toLocaleString()} 股 · 委托冻结 ${a.reserved_shares.toLocaleString()} 股 · T+1锁定 ${a.locked_shares.toLocaleString()} 股`;$('manualSubmit').disabled=a.available_shares<=0}else{$('modalAccountHint').textContent=`可用 ${money(a.available_cash)} · 委托冻结 ${money(a.reserved_cash)}`;$('manualSubmit').disabled=false}
+  $('conditionSubmit').disabled=conditionSide==='sell'&&a.total_shares<=0;
+}
+
+function renderDaily(){
+  const bars=state.daily_bars,dates=bars.map(x=>x.date),orders=state.orders.filter(x=>x.filled_shares>0),buys=orders.filter(x=>x.side==='buy').map(x=>[x.date,x.fill_price]),sells=orders.filter(x=>x.side==='sell').map(x=>[x.date,x.fill_price]);
+  dailyChart.setOption({animation:false,grid:[{left:62,right:22,top:42,height:'64%'},{left:62,right:22,top:'78%',height:'14%'}],tooltip:{trigger:'axis',axisPointer:{type:'cross'},formatter:ps=>{const i=ps.find(p=>p.seriesName==='日K')?.dataIndex??ps[0]?.dataIndex??0,b=bars[i],change=dailyChangePct(bars,i);return`${b.date}${b.partial?'（进行中）':''}<br>开 ${price(b.open)}　高 ${price(b.high)}<br>低 ${price(b.low)}　收 ${price(b.close)}　<span class="${pnlClass(change)}">当日涨跌 ${signed(change,'%')}</span><br>成交额 ${money(b.amount)}${klineIntervalHtml(bars,i)}`}},xAxis:[{type:'category',data:dates,boundaryGap:true,axisLabel:{show:false}},{type:'category',gridIndex:1,data:dates,boundaryGap:true,axisLabel:{interval:Math.max(0,Math.floor(dates.length/6)-1)}}],yAxis:[{scale:true,splitLine:{lineStyle:{color:'#edf0f5'}}},{gridIndex:1,axisLabel:{formatter:v=>v>=1e8?(v/1e8).toFixed(1)+'亿':(v/1e4).toFixed(0)+'万'},splitLine:{show:false}}],series:[{name:'日K',type:'candlestick',data:bars.map(x=>[x.open,x.close,x.low,x.high]),itemStyle:{color:'#e5484d',color0:'#159568',borderColor:'#e5484d',borderColor0:'#159568'}},{name:'买入',type:'scatter',data:buys,symbol:'triangle',symbolSize:11,itemStyle:{color:'#e5484d'}},{name:'卖出',type:'scatter',data:sells,symbol:'triangle',symbolRotate:180,symbolSize:11,itemStyle:{color:'#159568'}},{name:'成交额',type:'bar',xAxisIndex:1,yAxisIndex:1,data:bars.map(x=>x.amount),itemStyle:{color:p=>bars[p.dataIndex].close>=bars[p.dataIndex].open?'#e98a8d':'#72bea2'}}]},true);
+}
+
+function renderMinute(){
+  const slots=tradingTimes(),map=new Map(state.minute_points.map(x=>[x.time,x])),orders=state.orders.filter(x=>x.date===state.date&&x.filled_shares>0),buys=orders.filter(x=>x.side==='buy').map(x=>[x.time,x.fill_price]),sells=orders.filter(x=>x.side==='sell').map(x=>[x.time,x.fill_price]),closes=slots.map(t=>map.get(t)?.close??null),amounts=slots.map(t=>map.get(t)?.amount??null),base=state.prev_close;
+  minuteChart.setOption({animation:false,grid:[{left:62,right:62,top:42,height:'60%'},{left:62,right:62,top:'76%',height:'14%'}],tooltip:{trigger:'axis',axisPointer:{type:'cross'},formatter:ps=>{const t=slots[ps[0]?.dataIndex??0],x=map.get(t);if(!x)return`${t}<br>尚未播放`;return`${state.date} ${t}<br><b>${price(x.close)}　${signed((x.close/base-1)*100,'%')}</b><br>开 ${price(x.open)}　高 ${price(x.high)}<br>低 ${price(x.low)}　均价 ${price(x.vwap)}<br>成交量 ${(+x.volume||0).toLocaleString()}　量比 ${optional(x.intraday_volume_ratio,2,'×')}<br>成交额 ${money(x.amount)}`}},xAxis:[{type:'category',data:slots,boundaryGap:false,axisLabel:{show:false}},{type:'category',gridIndex:1,data:slots,boundaryGap:true,axisLabel:{formatter:(v,i)=>i%40===0?v:''}}],yAxis:[{scale:true,splitLine:{lineStyle:{color:'#edf0f5',type:'dashed'}}},{position:'right',scale:true,axisLabel:{formatter:v=>signed((v/base-1)*100,'%')},splitLine:{show:false}},{gridIndex:1,axisLabel:{formatter:v=>v>=1e6?(v/1e6).toFixed(0)+'百万':(v/1e4).toFixed(0)+'万'},splitLine:{show:false}}],series:[{name:'价格',type:'line',data:closes,showSymbol:false,connectNulls:false,lineStyle:{width:1.6,color:'#3478f6'},areaStyle:{color:'rgba(52,120,246,.08)'},markLine:{silent:true,symbol:'none',label:{formatter:`昨收 ${price(base)}`},lineStyle:{color:'#9aa3b2',type:'dashed'},data:[{yAxis:base}]}},{name:'涨跌幅',type:'line',yAxisIndex:1,data:closes,showSymbol:false,lineStyle:{opacity:0}},{name:'买入',type:'scatter',data:buys,symbol:'triangle',symbolSize:12,itemStyle:{color:'#e5484d'}},{name:'卖出',type:'scatter',data:sells,symbol:'triangle',symbolRotate:180,symbolSize:12,itemStyle:{color:'#159568'}},{name:'成交额',type:'bar',xAxisIndex:1,yAxisIndex:2,data:amounts,itemStyle:{color:p=>{const x=map.get(slots[p.dataIndex]);return x&&x.close>=x.open?'#e98a8d':'#72bea2'}}}]},true);
+}
+
+function conditionDescription(x){
+  if(x.condition_type==='rebound_buy')return`先跌 ${x.trigger_value}%，再反弹 ${x.secondary_trigger_value}%`;
+  if(x.condition_type==='pullback_sell')return`先涨 ${x.trigger_value}%，再回落 ${x.secondary_trigger_value}%`;
+  if(x.condition_type==='take_profit_stop_loss')return`止盈 ${x.trigger_value}% / 止损 ${x.secondary_trigger_value}%`;
+  const unit=['price_above','price_below'].includes(x.condition_type)?'元':'%',option=conditionOptions[x.side].find(item=>item[0]===x.condition_type),name=option?option[1]:x.condition_type;let relation='达到';
+  if(x.condition_type==='price_above')relation='≥';if(x.condition_type==='price_below')relation='≤';
+  if(x.condition_type==='day_gain'||x.condition_type==='take_profit')relation='≥';if(x.condition_type==='day_loss'||x.condition_type==='stop_loss')relation='≥';
+  return`${name} ${relation} ${x.trigger_value}${unit}`;
+}
+function isConditionLive(x){return x.status==='active'||x.status==='waiting_execution'}
+function conditionStageDescription(x){const triggeredAt=x.triggered_date?`${x.triggered_date} ${x.triggered_time} @ ${price(x.triggered_price)}`:'';if(x.status==='waiting_execution')return`${triggeredAt} 已触发；${reasonText[x.result_reason]||x.result_reason||'等待账户满足执行条件'}`;if(x.status==='triggered'){if(x.condition_type==='rebound_buy')return`${triggeredAt} 从最低 ${price(x.extreme_price)} 反弹后成交`;if(x.condition_type==='pullback_sell')return`${triggeredAt} 从最高 ${price(x.extreme_price)} 回落后成交`;if(x.condition_type==='take_profit_stop_loss')return`${triggeredAt} · ${x.matched_branch==='stop_loss'?'止损':'止盈'}分支成交`;return`${triggeredAt} 已成交`}if(x.status==='failed')return`${triggeredAt} 触发但未成交`;if(x.condition_type==='rebound_buy'){if(x.stage==='waiting_activation')return`阶段1：等待相对参考价 ${price(x.reference_price)} 下跌 ${x.trigger_value}%`;return`阶段2：已达到跌幅，当前最低 ${price(x.extreme_price)}，等待反弹 ${x.secondary_trigger_value}%`}if(x.condition_type==='pullback_sell'){if(x.stage==='waiting_activation')return`阶段1：等待相对参考价 ${price(x.reference_price)} 上涨 ${x.trigger_value}%`;return`阶段2：已达到涨幅，当前最高 ${price(x.extreme_price)}，等待回落 ${x.secondary_trigger_value}%`}return''}
+function renderRecords(){
+  const pending=[...(state.pending_orders||[])].reverse(),conditions=[...(state.conditional_orders||[])].reverse(),orders=[...state.orders].reverse();let html='';
+  html+=`<div class="record-section-title">普通限价委托 <span>${pending.filter(x=>x.status==='pending').length} 笔待成交</span></div>`;
+  html+=pending.length?pending.map(x=>pendingCard(x,true)).join(''):'<div class="empty">尚无限价委托</div>';
+  html+=`<div class="record-section-title">条件单 <span>${conditions.filter(x=>x.status==='active').length} 笔监控中</span></div>`;
+  html+=conditions.length?conditions.map(x=>{const side=x.side==='buy'?'买入':'卖出',status=statusNames[x.status]||x.status,stage=conditionStageDescription(x),result=x.result_reason&&x.status!=='waiting_execution'?` · ${reasonText[x.result_reason]||x.result_reason}`:'';return`<div class="condition-card"><div class="condition-head"><b class="${x.side==='buy'?'buy-text':'sell-text'}">${side} · ${conditionDescription(x)}</b><span>${x.created_date} ${x.created_time}</span></div><div class="condition-detail">${x.shares} 股 · ${x.validity==='day'?'当日有效':'本次训练有效'}${stage?`<br>${stage}`:''}${x.note?`<br>计划：${escapeHtml(x.note)}`:''}</div><div class="condition-meta"><span class="status status-${x.status}">${status}${result}</span>${isConditionLive(x)?`<button class="cancel-condition" data-cancel-condition="${x.id}">撤销</button>`:''}</div></div>`}).join(''):'<div class="empty">尚无条件单</div>';
+  html+=`<div class="record-section-title">成交与拒单 <span>${orders.length} 条</span></div>`;
+  html+=orders.length?orders.map(x=>{const ok=x.filled_shares>0,side=x.side==='buy'?'买入':'卖出',source=x.source==='conditional'?'条件触发':x.source==='limit'?'限价触发':'立即',detail=ok?`${x.filled_shares}股 @ ${price(x.fill_price)} · 佣金 ${money(x.commission)}${x.stamp_tax?` · 税费 ${money(x.stamp_tax)}`:''}`:`未成交 · ${reasonText[x.reason]||x.reason}`;return`<div class="order"><div class="order-head"><b class="${x.side==='buy'?'buy-text':'sell-text'}">${source}${side} · ${ok?'成交':'拒绝'}</b><span>${x.date} ${x.time}</span></div><div class="order-detail">${detail}${x.realized_pnl!==null&&x.realized_pnl!==undefined?` · 本笔盈亏 ${money(x.realized_pnl)}`:''}${x.note?`<br>理由：${escapeHtml(x.note)}`:''}</div></div>`}).join(''):'<div class="empty">尚无成交或拒单</div>';
+  $('records').innerHTML=html;
+}
+
+function pendingCard(x,cancellable=false){const side=x.side==='buy'?'买入':'卖出',status=statusNames[x.status]||x.status,result=x.result_reason?` · ${reasonText[x.result_reason]||x.result_reason}`:'',frozen=x.side==='buy'?`冻结 ${money(x.reserved_cash)}`:`冻结 ${x.reserved_shares.toLocaleString()} 股`,filled=x.filled_shares?` · 成交 ${x.filled_shares} 股 @ ${price(x.filled_price)}`:'';return`<div class="condition-card"><div class="condition-head"><b class="${x.side==='buy'?'buy-text':'sell-text'}">${side}限价 ${price(x.limit_price)} × ${x.shares}</b><span>${x.created_date} ${x.created_time}</span></div><div class="condition-detail">${x.validity==='day'?'当日有效':'本次训练有效'} · ${frozen}${filled}${x.note?`<br>理由：${escapeHtml(x.note)}`:''}</div><div class="condition-meta"><span class="status status-${x.status}">${status}${result}</span>${cancellable&&x.status==='pending'?`<button class="cancel-condition" data-cancel-order="${x.id}">撤单</button>`:''}</div></div>`}
+function activeConditionCard(x){const side=x.side==='buy'?'买入':'卖出',stage=conditionStageDescription(x),status=statusNames[x.status]||x.status;return`<div class="condition-card"><div class="condition-head"><b class="${x.side==='buy'?'buy-text':'sell-text'}">${side} · ${conditionDescription(x)}</b><span>${x.created_date} ${x.created_time}</span></div><div class="condition-detail">${x.shares} 股 · ${x.validity==='day'?'当日有效':'本次训练有效'}${stage?`<br>${stage}`:''}${x.note?`<br>计划：${escapeHtml(x.note)}`:''}</div><div class="condition-meta"><span class="status status-${x.status}">${status}</span><button class="cancel-condition" data-cancel-condition="${x.id}">撤销条件单</button></div></div>`}
+function renderCancelManager(){if(!state)return;const pending=(state.pending_orders||[]).filter(x=>x.status==='pending'),conditions=(state.conditional_orders||[]).filter(isConditionLive);$('manageIntro').textContent=`当前可撤 ${pending.length+conditions.length} 笔：普通限价 ${pending.length} 笔、条件单 ${conditions.length} 笔。立即成交单以及已经成交、触发、拒绝、过期的记录不可撤。`;$('pendingManage').innerHTML=`<div class="record-section-title">待成交限价委托 <span>${pending.length} 笔</span></div>`+(pending.length?pending.map(x=>pendingCard(x,true)).join(''):'<div class="empty">当前没有可撤的普通委托</div>');$('conditionManage').innerHTML=`<div class="record-section-title">可撤条件单 <span>${conditions.length} 笔</span></div>`+(conditions.length?conditions.map(activeConditionCard).join(''):'<div class="empty">当前没有可撤的条件单</div>')}
+
+function maxQuantity(side,useManualPrice=false){if(!state)return 0;if(side==='sell')return state.account.available_shares;const inputPrice=useManualPrice&&$('manualOrderType').value==='limit'&&+$('manualLimitPrice').value>0?+$('manualLimitPrice').value:state.market.price*1.002;return Math.max(0,Math.floor(state.account.available_cash/inputPrice/100)*100)}
+function setQuantity(inputId,side,ratio){const max=maxQuantity(side,inputId==='manualShares');$(inputId).value=Math.floor(max*ratio/100)*100}
+function showModal(){stop();$('tradeModal').hidden=false;$('tradeModal').setAttribute('aria-hidden','false');document.body.classList.add('body-modal-open')}
+function openTradeModal(tab){if(!state)return;$('tradeModal').classList.remove('manage-mode');showModal();$('tradeTabs').hidden=false;selectTradeTab(tab);setTimeout(()=>$(tab==='condition'?'conditionShares':'manualShares').focus(),50)}
+function openManageModal(){if(!state)return;tradeTab='manage';$('tradeModal').classList.add('manage-mode');showModal();$('tradeTabs').hidden=true;$('manualPane').hidden=true;$('conditionPane').hidden=true;$('managePane').hidden=false;renderModalAccount();renderCancelManager()}
+function closeTradeModal(){$('tradeModal').hidden=true;$('tradeModal').classList.remove('manage-mode');$('tradeModal').setAttribute('aria-hidden','true');document.body.classList.remove('body-modal-open')}
+function selectTradeTab(tab){tradeTab=tab;$('managePane').hidden=true;document.querySelectorAll('[data-trade-tab]').forEach(b=>{b.className=b.dataset.tradeTab===tab?`active-${tab}`:''});$('manualPane').hidden=tab==='condition';$('conditionPane').hidden=tab!=='condition';if(tab!=='condition'){$('manualSubmit').className=`submit-order ${tab==='buy'?'submit-buy':'submit-sell'}`;$('manualQuantityLabel').textContent=tab==='buy'?'买入数量（100 股整数倍）':'卖出数量（不超过 T+1 可卖）';updateManualOrderType()}else if(!$('triggerValue').value&&state){updateConditionType(true)}renderModalAccount()}
+function updateManualOrderType(reset=false){const limit=$('manualOrderType').value==='limit';$('limitPriceField').hidden=!limit;$('limitValidityField').hidden=!limit;if(state)$('manualLimitPrice').step=state.code.slice(2).match(/^[15]/)?'0.001':'0.01';if(limit&&state&&(reset||!$('manualLimitPrice').value))$('manualLimitPrice').value=price(state.market.price);$('manualOrderHint').textContent=limit?'价格未到时进入待成交并冻结对应资源，可在“撤单管理”中撤销；触价成交后不可撤。':'立即按当前已显示分钟价撮合，提交后不可撤销。';$('manualSubmit').textContent=limit?`提交${tradeTab==='buy'?'买入':'卖出'}限价单`:`确认${tradeTab==='buy'?'买入':'卖出'}`}
+function selectConditionSide(side){conditionSide=side;document.querySelectorAll('[data-condition-side]').forEach(b=>{b.className=b.dataset.conditionSide===side?`selected-${side}`:''});$('conditionType').innerHTML=conditionOptions[side].map(x=>`<option value="${x[0]}">${x[1]}</option>`).join('');$('conditionSubmit').textContent=`提交${side==='buy'?'买入':'卖出'}条件单`;updateConditionType(true);renderModalAccount()}
+function updateConditionType(reset=false){const item=conditionOptions[conditionSide].find(x=>x[0]===$('conditionType').value)||conditionOptions[conditionSide][0],kind=item[0],unit=item[3],mode=item[4]||'',dual=!!mode;$('triggerUnit').textContent=unit;$('secondaryTriggerField').hidden=!dual;$('triggerLabel').textContent=mode==='rebound'?'触发跌幅':mode==='pullback'?'触发涨幅':mode==='risk'?'止盈比例':kind==='stop_loss'?'止损比例':kind==='take_profit'?'止盈比例':unit==='元'?'触发价格':'触发比例';$('secondaryTriggerLabel').textContent=mode==='rebound'?'反弹幅度':mode==='pullback'?'回落幅度':'止损比例';const t1Hint=conditionSide==='sell'?' 卖出条件触发时若持仓仍受 T+1 限制，将保留为“已触发待执行”；选择“本次训练有效”后可在下一交易日继续执行。':'';$('conditionHelp').textContent=item[2]+'。触发判断只使用新揭示的分钟行情。'+t1Hint;$('triggerValue').step=unit==='元'?(state&&state.code.slice(2).match(/^[15]/)?'0.001':'0.01'):'0.1';if(reset){$('triggerValue').value=unit==='元'?(state?state.market.price:''):3;$('secondaryTriggerValue').value=mode==='risk'?3:1;if(conditionSide==='sell'&&['stop_loss','take_profit_stop_loss','pullback_sell'].includes(kind))$('conditionValidity').value='session'}updateConditionPreview()}
+function updateConditionPreview(){if(!state)return;const kind=$('conditionType').value,v1=+$('triggerValue').value,v2=+$('secondaryTriggerValue').value,ref=+state.market.price,avg=state.account.average_cost===null?null:+state.account.average_cost;let text='';if(kind==='rebound_buy')text=`提交参考价 ${price(ref)}；先跌至 ${price(ref*(1-v1/100))} 或以下开始跟踪最低点，再从实际最低点反弹 ${v2}% 买入。`;else if(kind==='pullback_sell')text=`提交参考价 ${price(ref)}；先涨至 ${price(ref*(1+v1/100))} 或以上开始跟踪最高点，再从实际最高点回落 ${v2}% 卖出。`;else if(kind==='take_profit_stop_loss')text=avg===null?'当前没有持仓，买入后才能创建止盈止损。':`当前持仓均价 ${price(avg)}；止盈价约 ${price(avg*(1+v1/100))}，止损价约 ${price(avg*(1-v2/100))}。`;else if(kind==='take_profit')text=avg===null?'当前没有持仓，买入后才能创建止盈条件。':`当前持仓均价 ${price(avg)}；止盈触发价约 ${price(avg*(1+v1/100))}。`;else if(kind==='stop_loss')text=avg===null?'当前没有持仓，买入后才能创建止损条件。':`当前持仓均价 ${price(avg)}；止损触发价约 ${price(avg*(1-v1/100))}。`;else if(['price_above','price_below'].includes(kind))text=`明确触发价格：${price(v1)}。`;else text=`以昨收 ${price(state.prev_close)} 为基准，触发幅度 ${v1}%。`;$('conditionPreview').textContent=text}
+
+async function mutate(path,body={}){if(busy)return false;busy=true;try{render(await request(path,'POST',{session_id:sessionId,...body}));return true}catch(e){notice(e.message,true);stop();return false}finally{busy=false}}
+async function advance(steps){await mutate('/api/trainer/advance',{steps});if(state?.progress.day_complete)stop()}
+function play(){if(timer){stop();return}if(state.progress.day_complete)return;$('play').textContent='暂停';const loop=async()=>{if(!timer)return;await advance(+$('speed').value);if(timer)timer=setTimeout(loop,500)};timer=setTimeout(loop,0)}
+function stop(){if(timer)clearTimeout(timer);timer=null;$('play').textContent='▶ 动态分时'}
+async function placeManual(){stop();const orderType=$('manualOrderType').value,ok=await mutate('/api/trainer/order',{side:tradeTab,shares:$('manualShares').value,note:$('manualNote').value,order_type:orderType,limit_price:orderType==='limit'?$('manualLimitPrice').value:null,validity:$('manualValidity').value});if(ok){$('manualNote').value='';closeTradeModal()}}
+async function submitCondition(){stop();const ok=await mutate('/api/trainer/condition',{side:conditionSide,condition_type:$('conditionType').value,trigger_value:$('triggerValue').value,secondary_trigger_value:$('secondaryTriggerField').hidden?null:$('secondaryTriggerValue').value,shares:$('conditionShares').value,note:$('conditionNote').value,validity:$('conditionValidity').value});if(ok){$('conditionNote').value='';closeTradeModal()}}
+
+async function loadDates(code){try{const meta=await request('/api/trainer/dates?code='+encodeURIComponent(code));$('code').value=`${meta.name} ${meta.code}`;$('sellTax').value=meta.code.slice(2).match(/^[15]/)?0:5;$('startDate').innerHTML='<option value="random">随机挑战（保留后续交易日）</option>'+meta.dates.map(d=>`<option value="${d}">${d}</option>`).join('')}catch(e){notice(e.message,true)}}
+async function startGame(){stop();loading(true);try{const payload={code:$('code').value,start_date:$('startDate').value,capital:$('capital').value,commission_bps:$('commission').value,min_commission:$('minCommission').value,sell_tax_bps:$('sellTax').value};render(await request('/api/trainer/session','POST',payload));$('setup').hidden=true;$('game').hidden=false;setTimeout(()=>{dailyChart.resize();minuteChart.resize()},20)}catch(e){notice(e.message,true)}finally{loading(false)}}
+
+$('start').onclick=startGame;$('play').onclick=play;$('step').onclick=()=>advance(1);$('closeDay').onclick=()=>advance(10000);$('nextDay').onclick=async()=>{stop();await mutate('/api/trainer/next-day')};
+$('newGame').onclick=()=>{stop();closeTradeModal();sessionStorage.removeItem('tradingTrainerSession');sessionId=null;state=null;$('game').hidden=true;$('setup').hidden=false};
+$('openBuy').onclick=()=>openTradeModal('buy');$('openSell').onclick=()=>openTradeModal('sell');$('openCondition').onclick=()=>openTradeModal('condition');$('openManage').onclick=openManageModal;$('closeModal').onclick=closeTradeModal;$('modalBackdrop').onclick=closeTradeModal;
+document.querySelectorAll('[data-trade-tab]').forEach(b=>b.onclick=()=>selectTradeTab(b.dataset.tradeTab));document.querySelectorAll('[data-condition-side]').forEach(b=>b.onclick=()=>selectConditionSide(b.dataset.conditionSide));
+document.querySelectorAll('[data-manual-ratio]').forEach(b=>b.onclick=()=>setQuantity('manualShares',tradeTab,+b.dataset.manualRatio));$('manualAll').onclick=()=>setQuantity('manualShares',tradeTab,1);
+document.querySelectorAll('[data-condition-ratio]').forEach(b=>b.onclick=()=>setQuantity('conditionShares',conditionSide,+b.dataset.conditionRatio));$('conditionAll').onclick=()=>setQuantity('conditionShares',conditionSide,1);
+$('manualSubmit').onclick=placeManual;$('conditionSubmit').onclick=submitCondition;$('conditionType').onchange=()=>updateConditionType(true);$('triggerValue').oninput=updateConditionPreview;$('secondaryTriggerValue').oninput=updateConditionPreview;$('manualOrderType').onchange=()=>updateManualOrderType(true);
+async function cancelFromClick(e){const normal=e.target.closest('[data-cancel-order]'),condition=e.target.closest('[data-cancel-condition]');if(normal&&confirm('确认撤销这笔待成交限价委托？'))await mutate('/api/trainer/order/cancel',{order_id:normal.dataset.cancelOrder});if(condition&&confirm('确认撤销这笔监控中的条件单？'))await mutate('/api/trainer/condition/cancel',{condition_id:condition.dataset.cancelCondition})}
+$('records').onclick=cancelFromClick;$('pendingManage').onclick=cancelFromClick;$('conditionManage').onclick=cancelFromClick;
+$('code').addEventListener('input',()=>{clearTimeout(searchTimer);const q=$('code').value.trim();if(q.length<2){$('results').style.display='none';return}searchTimer=setTimeout(async()=>{try{const rows=await request('/api/minute/search?q='+encodeURIComponent(q));$('results').innerHTML=rows.map(r=>`<div class="result" data-code="${r.code}"><b>${escapeHtml(r.name)} ${r.code}</b><span>${r.latest_date}</span></div>`).join('')||'<div class="result">未找到分钟缓存标的</div>';$('results').style.display='block'}catch(e){}},220)});
+$('results').onclick=e=>{const row=e.target.closest('[data-code]');if(row){$('results').style.display='none';loadDates(row.dataset.code)}};$('code').addEventListener('keydown',e=>{if(e.key==='Enter')loadDates($('code').value)});document.addEventListener('click',e=>{if(!e.target.closest('.search'))$('results').style.display='none'});document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('tradeModal').hidden)closeTradeModal()});window.addEventListener('resize',()=>{dailyChart.resize();minuteChart.resize()});
+async function init(){selectConditionSide('buy');const saved=sessionStorage.getItem('tradingTrainerSession');if(saved){try{render(await request('/api/trainer/state?session_id='+encodeURIComponent(saved)));$('setup').hidden=true;$('game').hidden=false;setTimeout(()=>{dailyChart.resize();minuteChart.resize()},20);return}catch(e){sessionStorage.removeItem('tradingTrainerSession')}}loadDates('600000')}
+init();
+</script>
+</body>
+</html>

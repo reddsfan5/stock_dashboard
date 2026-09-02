@@ -93,7 +93,7 @@ def build_html() -> str:
     </div></details>
     <div class="warning" id="modeHelp"></div>
   </section>
-  <section class="panel playbar"><button id="reset">回到开盘</button><button id="play">▶ 播放</button><select id="speed" aria-label="播放速度"><option value="1">1×</option><option value="2">2×</option><option value="5" selected>5×</option><option value="10">10×</option></select><span class="time" id="time">--:--</span><input id="cursor" type="range" min="0" max="0" value="0" aria-label="分钟进度"><span id="progress">0/0</span></section>
+  <section class="panel playbar"><button id="reset">回到开盘</button><button id="play">▶ 动态分时</button><select id="speed" aria-label="播放速度"><option value="1">1×</option><option value="2">2×</option><option value="5" selected>5×</option><option value="10">10×</option></select><span class="time" id="time">--:--</span><input id="cursor" type="range" min="0" max="0" value="0" aria-label="分钟进度"><span id="progress">0/0</span></section>
   <section class="panel chart-panel">
     <div class="metrics">
       <div class="metric"><span class="label">当前价 · 较昨收</span><span class="quote"><span class="value" id="mPrice">—</span><span class="delta" id="mChangePct">—</span></span></div>
@@ -143,7 +143,7 @@ function query(){
   if($('basePrice').value)p.set('base_price',$('basePrice').value);if($('date').value)p.set('date',$('date').value);return p;
 }
 async function runSimulation(){stop();loading(true);notice('');try{result=await api('/api/grid/simulate?'+query());$('code').value=result.code;const selected=result.date;$('date').innerHTML=result.dates.map(d=>`<option value="${d}" ${d===selected?'selected':''}>${d}</option>`).join('');$('cursor').max=result.timeline.length-1;index=0;$('cursor').value=0;$('assumptions').innerHTML=result.assumptions.map(x=>`• ${x}`).join('<br>');const u=new URL(location.href);u.searchParams.set('code',result.code);u.searchParams.set('date',result.date);u.searchParams.set('mode',result.config.mode);history.replaceState(null,'',u);render()}catch(e){notice(e.message)}finally{loading(false)}}
-function stop(){if(timer){clearInterval(timer);timer=null}$('play').textContent='▶ 播放'}
+function stop(){if(timer){clearInterval(timer);timer=null}$('play').textContent='▶ 动态分时'}
 function play(){if(!result)return;if(timer){stop();return}if(index>=result.timeline.length-1)index=0;$('play').textContent='Ⅱ 暂停';timer=setInterval(()=>{index=Math.min(index+(+$('speed').value),result.timeline.length-1);$('cursor').value=index;render();if(index>=result.timeline.length-1)stop()},140)}
 function visibleTrades(){return result.trades.filter(t=>t.index<=index)}
 function visibleEvents(){return (result.events||[]).filter(e=>e.index<=index)}
@@ -195,4 +195,4 @@ def write_app(path: str = OUT_HTML) -> str:
 if __name__ == "__main__":
     path = write_app()
     print(f"✓ 页面: {path}")
-    print("  动态模拟需要服务: python -m scripts.services.minute_viewer --serve")
+    print("  动态模拟需要服务: python -m scripts.serve start grid")

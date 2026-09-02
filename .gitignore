@@ -35,6 +35,14 @@ dashboard.py
 cache/*.parquet
 cache/daily_update_status.json
 cache/.daily_update.lock
+cache/services/
+cache/features/
+cache/recovery/
+
+# 用户持久数据（不可由行情重建；请单独备份）
+state/*.sqlite3
+state/*.sqlite3-*
+state/backups/
 
 # vectorbt 专属虚拟环境
 .venv/

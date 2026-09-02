@@ -3,7 +3,7 @@
 """
 分时图查询器 — 从分钟线 Parquet 按代码/名称和日期查询展示
 
-推荐运行：python -m scripts.services.minute_viewer --serve
+推荐运行：python -m scripts.serve start web
 浏览器打开：http://127.0.0.1:8765/minute_view.html
 
 不加 --serve 时生成指定标的的静态快照，可直接 file:// 打开：
@@ -29,6 +29,8 @@ sys.path.insert(0, PROJECT_DIR)
 
 from data.minute import CACHE_FILE as MINUTE_CACHE_FILE
 from data.minute import MinuteData
+from features.intraday import add_intraday_volume_ratio
+from scripts.services.intraday_replay import inject_intraday_replay
 
 OUT_HTML = os.path.join(PROJECT_DIR, "output", "minute_view.html")
 DEFAULT_CODE = "sh600519"
@@ -262,6 +264,24 @@ class MinuteRepository:
             return []
         return sorted(pd.to_datetime(df["时间"]).dt.strftime("%Y-%m-%d").unique().tolist())
 
+    def availability(self, code: str, selected_date: str) -> dict:
+        """轻量检查某个交易日是否存在分钟缓存。"""
+        code = normalize_code(code)
+        selected_date = str(selected_date or "").strip()
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", selected_date):
+            raise ValueError("交易日必须是 YYYY-MM-DD")
+        try:
+            pd.Timestamp(selected_date)
+        except (TypeError, ValueError):
+            raise ValueError("交易日不合法")
+        dates = self.available_dates(code)
+        return {
+            "code": code,
+            "date": selected_date,
+            "available": selected_date in dates,
+            "latest_date": dates[-1] if dates else None,
+        }
+
     def payload(self, code: str, date: str = None):
         code = normalize_code(code)
         if not re.fullmatch(r"(sh|sz)\d{6}", code):
@@ -277,6 +297,13 @@ class MinuteRepository:
         df = self.minute.get_minute(code, selected).sort_values("时间").reset_index(drop=True)
         if not len(df):
             raise LookupError(f"{code} 在 {selected} 没有分钟数据")
+
+        history = self.minute.get_history(code, end_date=selected, days=6)
+        featured = add_intraday_volume_ratio(history, lookback=5, min_periods=3)
+        selected_date = pd.Timestamp(selected).normalize()
+        featured = featured[featured["时间"].dt.normalize() == selected_date]
+        ratio_by_time = featured.set_index("时间")["盘中量比"]
+        intraday_ratio = df["时间"].map(ratio_by_time)
 
         prev_close = _previous_close(code, selected)
         fallback = float(df["开盘"].iloc[0])
@@ -300,6 +327,10 @@ class MinuteRepository:
                 "change_pct": round((close / base_price - 1) * 100, 3),
                 "volume": float(row["成交量"]),
                 "amount": float(row["成交额"]),
+                "intraday_volume_ratio": (
+                    round(float(intraday_ratio.iloc[i]), 3)
+                    if pd.notna(intraday_ratio.iloc[i]) else None
+                ),
                 "direction": 1 if close >= float(minute_prev.iloc[i]) else -1,
             })
 
@@ -318,13 +349,14 @@ class MinuteRepository:
                 "open": round(float(df["开盘"].iloc[0]), 4),
                 "volume": float(df["成交量"].sum()),
                 "amount": float(df["成交额"].sum()),
+                "intraday_volume_ratio": last["intraday_volume_ratio"],
             },
         }
 
 
 def build_html(initial_payload: dict) -> str:
     initial_json = _json_for_html(initial_payload)
-    return f'''<!DOCTYPE html>
+    html = f'''<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -338,31 +370,50 @@ def build_html(initial_payload: dict) -> str:
 #searchInput{{flex:1;border:0;outline:0;padding:12px 14px;font-size:14px;min-width:0}}#searchBtn{{border:0;background:var(--blue);color:#fff;padding:0 20px;font-weight:600;cursor:pointer}}
 .results{{position:absolute;top:48px;left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 30px rgba(23,34,58,.15);z-index:20;display:none;max-height:360px;overflow:auto}}
 .result{{display:flex;justify-content:space-between;gap:14px;padding:11px 14px;cursor:pointer;border-bottom:1px solid #f1f2f5}}.result:hover{{background:#edf4ff}}.result-code{{color:var(--blue);font-variant-numeric:tabular-nums}}.result-date{{color:var(--muted);font-size:12px}}
-.toolbar{{display:flex;align-items:center;gap:8px}}.toolbar button,#dateSelect{{height:38px;border:1px solid var(--border);background:#fff;border-radius:8px;padding:0 10px;color:var(--text)}}.toolbar button{{cursor:pointer;font-size:16px}}.toolbar button:disabled{{opacity:.35;cursor:not-allowed}}
+.toolbar{{display:flex;align-items:center;gap:8px}}.toolbar button,.toolbar a,#dateSelect{{height:38px;border:1px solid var(--border);background:#fff;border-radius:8px;padding:0 10px;color:var(--text)}}.toolbar a{{display:flex;align-items:center;text-decoration:none;color:var(--blue);font-size:12px;font-weight:650}}.toolbar button{{cursor:pointer;font-size:16px}}.toolbar button:disabled{{opacity:.35;cursor:not-allowed}}
 .card{{background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:0 3px 12px rgba(30,45,75,.05)}}.quote{{padding:16px 18px 8px;display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap}}
 .identity{{min-width:220px}}.identity h1{{font-size:20px;margin:0 0 4px}}.identity .sub{{color:var(--muted);font-size:13px}}.last{{font-size:30px;font-weight:700;font-variant-numeric:tabular-nums}}.change{{font-size:15px;font-weight:600}}
-.stats{{display:grid;grid-template-columns:repeat(5,minmax(90px,1fr));gap:10px;flex:1}}.stat{{border-left:1px solid var(--border);padding-left:14px}}.stat .label{{display:block;color:var(--muted);font-size:11px;margin-bottom:3px}}.stat .value{{font-variant-numeric:tabular-nums;font-size:14px}}
+.stats{{display:grid;grid-template-columns:repeat(6,minmax(90px,1fr));gap:10px;flex:1}}.stat{{border-left:1px solid var(--border);padding-left:14px}}.stat .label{{display:block;color:var(--muted);font-size:11px;margin-bottom:3px}}.stat .value{{font-variant-numeric:tabular-nums;font-size:14px}}
 #chart{{height:650px;width:100%}}.status{{padding:0 18px 14px;color:var(--muted);font-size:12px;display:flex;justify-content:space-between;gap:10px}}.notice{{display:none;margin-bottom:12px;padding:10px 14px;border-radius:8px;background:#fff6dc;color:#765a00;font-size:13px}}
 .loading{{position:fixed;inset:0;background:rgba(244,246,249,.55);display:none;align-items:center;justify-content:center;z-index:50}}.loading span{{background:#1f2937;color:#fff;padding:10px 18px;border-radius:8px}}.up{{color:var(--red)}}.down{{color:var(--green)}}
+__INTRADAY_REPLAY_CSS__
 @media(max-width:760px){{.page{{padding:10px}}.topbar{{align-items:stretch;flex-direction:column}}.brand{{font-size:17px}}.search-wrap{{max-width:none}}.toolbar{{justify-content:flex-end}}.identity{{min-width:100%}}.stats{{grid-template-columns:repeat(3,1fr);min-width:100%}}.stat{{border-left:0;padding:8px;background:#f7f8fa;border-radius:8px}}#chart{{height:520px}}.status{{flex-direction:column}}}}
 </style></head><body>
 <div class="loading" id="loading"><span>正在读取分钟缓存…</span></div>
-<main class="page"><div class="topbar"><div class="brand">🕐 分时行情查询</div><div class="search-wrap"><div class="search-box"><input id="searchInput" autocomplete="off" placeholder="输入股票名称或代码，如 贵州茅台 / 600519"><button id="searchBtn">查询</button></div><div class="results" id="results"></div></div><div class="toolbar"><button id="prevDay" title="前一交易日">‹</button><select id="dateSelect" aria-label="选择交易日"></select><button id="nextDay" title="后一交易日">›</button></div></div>
-<div class="notice" id="notice"></div><section class="card"><div class="quote"><div class="identity"><h1 id="symbolName">—</h1><div class="sub" id="symbolMeta">—</div></div><div><span class="last" id="lastPrice">—</span> <span class="change" id="changePct">—</span></div><div class="stats"><div class="stat"><span class="label">今开</span><span class="value" id="openPrice">—</span></div><div class="stat"><span class="label">最高</span><span class="value" id="highPrice">—</span></div><div class="stat"><span class="label">最低</span><span class="value" id="lowPrice">—</span></div><div class="stat"><span class="label">成交量</span><span class="value" id="totalVolume">—</span></div><div class="stat"><span class="label">成交额</span><span class="value" id="totalAmount">—</span></div></div></div><div id="chart"></div><div class="status"><span>鼠标悬停查看对应分钟价格；滚轮缩放，拖拽平移</span><span>数据源：本地 minute_kline_cache.parquet</span></div></section></main>
+<main class="page"><div class="topbar"><div class="brand">🕐 分时行情查询</div><div class="search-wrap"><div class="search-box"><input id="searchInput" autocomplete="off" placeholder="输入股票名称或代码，如 贵州茅台 / 600519"><button id="searchBtn">查询</button></div><div class="results" id="results"></div></div><div class="toolbar"><a id="journalLink" href="/stock_journal.html">📓 记日记</a><button id="prevDay" title="前一交易日">‹</button><select id="dateSelect" aria-label="选择交易日"></select><button id="nextDay" title="后一交易日">›</button></div></div>
+<div class="notice" id="notice"></div><section class="card"><div class="quote"><div class="identity"><h1 id="symbolName">—</h1><div class="sub" id="symbolMeta">—</div></div><div><span class="last" id="lastPrice">—</span> <span class="change" id="changePct">—</span></div><div class="stats"><div class="stat"><span class="label">今开</span><span class="value" id="openPrice">—</span></div><div class="stat"><span class="label">最高</span><span class="value" id="highPrice">—</span></div><div class="stat"><span class="label">最低</span><span class="value" id="lowPrice">—</span></div><div class="stat"><span class="label">成交量</span><span class="value" id="totalVolume">—</span></div><div class="stat"><span class="label">成交额</span><span class="value" id="totalAmount">—</span></div><div class="stat"><span class="label">盘中量比(5日)</span><span class="value" id="intradayVolumeRatio">—</span></div></div></div><div class="intraday-replay" aria-label="动态分时回放"><button class="replay-primary" id="replayPlay">▶ 动态分时</button><button id="replayStep">推进1分钟</button><button id="replayReset">回到开盘</button><select id="replaySpeed" aria-label="动态分时速度"><option value="1">1×</option><option value="2">2×</option><option value="5" selected>5×</option><option value="10">10×</option></select><button id="replayAll">查看全日</button><span class="replay-clock" id="replayClock">全日</span><span class="replay-progress" id="replayProgress">—</span></div><div id="chart"></div><div class="status"><span>动态分时固定全天时间轴，只向右揭示已播放行情；鼠标悬停查看分钟价格</span><span>数据源：本地 minute_kline_cache.parquet</span></div></section></main>
 <script src="vendor/echarts.min.js"></script><script>window.echarts||document.write(`<script src='https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js'><\\/script>`);</script>
+<script>__INTRADAY_REPLAY_JS__</script>
 <script>
-const INITIAL_DATA={initial_json};const API_AVAILABLE=location.protocol==='http:'||location.protocol==='https:';const chart=echarts.init(document.getElementById('chart'));let current=INITIAL_DATA,searchTimer=null;const $=id=>document.getElementById(id);
+const INITIAL_DATA={initial_json};const API_AVAILABLE=location.protocol==='http:'||location.protocol==='https:';const chart=echarts.init(document.getElementById('chart'));let current=INITIAL_DATA,searchTimer=null;const $=id=>document.getElementById(id);const minuteReplay=createIntradayReplay({{onFrame:renderReplayFrame,initialSpeed:5}});
 function price(v){{if(v===null||v===undefined||Number.isNaN(+v))return '—';const n=+v;return n<10?n.toFixed(3):n.toFixed(2)}}function compact(v){{const n=+v||0;if(n>=1e8)return(n/1e8).toFixed(2)+'亿';if(n>=1e4)return(n/1e4).toFixed(1)+'万';return Math.round(n).toLocaleString()}}function signed(v){{return`${{v>=0?'+':''}}${{(+v).toFixed(2)}}%`}}function cls(v){{return+v>=0?'up':'down'}}function showNotice(msg,always=false){{$('notice').textContent=msg;$('notice').style.display=msg?'block':'none';if(msg&&!always)setTimeout(()=>{{$('notice').style.display='none'}},3500)}}function setLoading(on){{$('loading').style.display=on?'flex':'none'}}function escapeHtml(s){{return String(s).replace(/[&<>"']/g,c=>({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}}[c]))}}
-function render(data){{current=data;const s=data.summary;$('symbolName').textContent=data.name;$('symbolMeta').textContent=`${{data.code}} · ${{data.date}} · 前收 ${{price(data.prev_close)}}`;$('lastPrice').textContent=price(s.last);$('lastPrice').className='last '+cls(s.change_pct);$('changePct').textContent=signed(s.change_pct);$('changePct').className='change '+cls(s.change_pct);$('openPrice').textContent=price(s.open);$('highPrice').textContent=price(s.high);$('lowPrice').textContent=price(s.low);$('totalVolume').textContent=compact(s.volume);$('totalAmount').textContent=compact(s.amount);$('searchInput').value=`${{data.name}}  ${{data.code}}`;renderDates(data);renderChart(data);updateUrl(data)}}
+function render(data){{current=data;$('symbolName').textContent=data.name;$('searchInput').value=`${{data.name}}  ${{data.code}}`;$('journalLink').href='/stock_journal.html?code='+encodeURIComponent(data.code);renderDates(data);updateUrl(data);minuteReplay.load(data.points.length,{{showAll:true}})}}
+function renderReplayFrame(frame){{
+  if(!current)return;
+  const pts=current.points.slice(0,frame.visibleCount),last=pts[pts.length-1];
+  if(!last)return;
+  const summary={{last:last.close,change_pct:last.change_pct,open:pts[0].open,high:Math.max(...pts.map(x=>+x.high)),low:Math.min(...pts.map(x=>+x.low)),volume:pts.reduce((n,x)=>n+(+x.volume||0),0),amount:pts.reduce((n,x)=>n+(+x.amount||0),0),intraday_volume_ratio:last.intraday_volume_ratio}};
+  $('symbolMeta').textContent=`${{current.code}} · ${{current.date}} · ${{frame.dynamic?last.time:'全日'}} · 前收 ${{price(current.prev_close)}}`;
+  $('lastPrice').textContent=price(summary.last);$('lastPrice').className='last '+cls(summary.change_pct);$('changePct').textContent=signed(summary.change_pct);$('changePct').className='change '+cls(summary.change_pct);
+  $('openPrice').textContent=price(summary.open);$('highPrice').textContent=price(summary.high);$('lowPrice').textContent=price(summary.low);$('totalVolume').textContent=compact(summary.volume);$('totalAmount').textContent=compact(summary.amount);$('intradayVolumeRatio').textContent=summary.intraday_volume_ratio==null?'—':(+summary.intraday_volume_ratio).toFixed(2)+'×';
+  $('replayPlay').textContent=frame.playing?'Ⅱ 暂停':frame.complete?'↻ 重新播放':frame.dynamic?'▶ 继续':'▶ 动态分时';$('replayClock').textContent=frame.dynamic?last.time:'全日';$('replayProgress').textContent=frame.dynamic?`${{frame.visibleCount}}/${{frame.total}} 分钟`:`全日 ${{frame.total}} 分钟`;$('replayStep').disabled=frame.complete;$('replayReset').disabled=!frame.total;$('replayAll').disabled=!frame.dynamic;
+  const base=+current.prev_close;
+  const chartData=frame.dynamic?{{...current,points:current.points.map((x,i)=>i<frame.visibleCount?x:{{...x,open:base,high:base,low:base,close:null,vwap:null,volume:null,amount:null,change_pct:null,intraday_volume_ratio:null,direction:0}})}}:current;
+  renderChart(chartData);
+}}
 function renderDates(data){{$('dateSelect').innerHTML=data.dates.map(d=>`<option value="${{d}}" ${{d===data.date?'selected':''}}>${{d}}</option>`).join('');const i=data.dates.indexOf(data.date);$('prevDay').disabled=i<=0;$('nextDay').disabled=i<0||i>=data.dates.length-1}}
-function renderChart(data){{const pts=data.points,times=pts.map(p=>p.time),closes=pts.map(p=>p.close),vwaps=pts.map(p=>p.vwap),vols=pts.map(p=>p.volume),base=data.prev_close,extrema=pts.flatMap(p=>[p.high,p.low]);let dev=Math.max(...extrema.map(v=>Math.abs(v-base)),Math.abs(base)*.002)*1.08;const ymin=base-dev,ymax=base+dev,pct=Math.max(dev/base*100,.2);chart.setOption({{animation:false,grid:[{{left:68,right:72,top:35,height:'62%'}},{{left:68,right:72,top:'76%',height:'15%'}}],axisPointer:{{link:[{{xAxisIndex:[0,1]}}],label:{{backgroundColor:'#586174'}}}},tooltip:{{trigger:'axis',axisPointer:{{type:'cross',snap:true}},backgroundColor:'rgba(27,31,40,.94)',borderWidth:0,textStyle:{{color:'#fff',fontSize:12}},formatter:params=>{{if(!params.length)return'';const i=params[0].dataIndex,p=pts[i],color=p.change_pct>=0?'#ff6b6b':'#41d49a';return`<div style="min-width:190px"><b>${{data.date}} ${{p.time}}</b><br><span style="color:${{color}};font-size:16px;font-weight:700">${{price(p.close)}} (${{signed(p.change_pct)}})</span><br>开 ${{price(p.open)}}　高 ${{price(p.high)}}<br>低 ${{price(p.low)}}　均价 ${{price(p.vwap)}}<br>成交量 ${{compact(p.volume)}}<br>成交额 ${{compact(p.amount)}}</div>`}}}},xAxis:[{{type:'category',gridIndex:0,data:times,boundaryGap:false,axisLabel:{{show:false}},axisTick:{{show:false}},axisLine:{{lineStyle:{{color:'#d9dde6'}}}}}},{{type:'category',gridIndex:1,data:times,boundaryGap:true,axisLabel:{{color:'#7b8190',formatter:(v,i)=>i%30===0?v:''}},axisTick:{{show:false}},axisLine:{{lineStyle:{{color:'#d9dde6'}}}}}}],yAxis:[{{type:'value',gridIndex:0,min:ymin,max:ymax,scale:true,splitNumber:6,axisLabel:{{formatter:v=>price(v),color:v=>v>=base?'#e5484d':'#16a36a'}},splitLine:{{lineStyle:{{color:'#edf0f5',type:'dashed'}}}}}},{{type:'value',gridIndex:0,min:-pct,max:pct,position:'right',splitNumber:6,axisLabel:{{formatter:v=>`${{v>=0?'+':''}}${{v.toFixed(2)}}%`,color:v=>v>=0?'#e5484d':'#16a36a'}},splitLine:{{show:false}}}},{{type:'value',gridIndex:1,scale:true,axisLabel:{{formatter:v=>compact(v),color:'#7b8190'}},splitLine:{{show:false}}}}],dataZoom:[{{type:'inside',xAxisIndex:[0,1],filterMode:'none'}},{{type:'slider',xAxisIndex:[0,1],bottom:4,height:18,showDetail:false,borderColor:'#e5e8ef'}}],series:[{{name:'价格',type:'line',xAxisIndex:0,yAxisIndex:0,data:closes,showSymbol:false,lineStyle:{{width:1.4,color:'#3478f6'}},areaStyle:{{color:{{type:'linear',x:0,y:0,x2:0,y2:1,colorStops:[{{offset:0,color:'rgba(52,120,246,.18)'}},{{offset:1,color:'rgba(52,120,246,.01)'}}]}}}},markLine:{{silent:true,symbol:'none',label:{{formatter:`前收 ${{price(base)}}`,position:'insideEndTop',color:'#8a909e'}},lineStyle:{{color:'#9ca3af',type:'dashed'}},data:[{{yAxis:base}}]}}}},{{name:'均价',type:'line',xAxisIndex:0,yAxisIndex:0,data:vwaps,showSymbol:false,lineStyle:{{width:1,color:'#e5a000'}}}},{{name:'成交量',type:'bar',xAxisIndex:1,yAxisIndex:2,data:vols,itemStyle:{{color:p=>pts[p.dataIndex].direction>=0?'#e5484d':'#16a36a'}}}}]}},true)}}
-async function api(path){{const r=await fetch(path,{{cache:'no-store'}}),body=await r.json();if(!r.ok)throw new Error(body.error||`HTTP ${{r.status}}`);return body}}async function loadData(code,date=''){{if(!API_AVAILABLE){{showNotice('当前是静态快照。要查询其他股票，请运行：python -m scripts.services.minute_viewer --serve',true);return}}setLoading(true);try{{const q=new URLSearchParams({{code}});if(date)q.set('date',date);render(await api('/api/minute/data?'+q))}}catch(e){{showNotice(e.message,true)}}finally{{setLoading(false)}}}}async function doSearch(){{const q=$('searchInput').value.trim();if(!q)return;if(!API_AVAILABLE){{showNotice('查询需要本地服务：python -m scripts.services.minute_viewer --serve',true);return}}try{{const rows=await api('/api/minute/search?q='+encodeURIComponent(q));showResults(rows);if(rows.length===1)loadData(rows[0].code)}}catch(e){{showNotice(e.message,true)}}}}function showResults(rows){{const box=$('results');if(!rows.length){{box.innerHTML='<div class="result">未找到缓存标的</div>';box.style.display='block';return}}box.innerHTML=rows.map(r=>`<div class="result" data-code="${{r.code}}"><span><b>${{escapeHtml(r.name)}}</b>　<span class="result-code">${{r.code}}</span></span><span class="result-date">${{r.latest_date}}</span></div>`).join('');box.style.display='block'}}function updateUrl(data){{if(!API_AVAILABLE)return;const u=new URL(location.href);u.searchParams.set('code',data.code);u.searchParams.set('date',data.date);history.replaceState(null,'',u)}}
+function renderChart(data){{const pts=data.points,times=pts.map(p=>p.time),closes=pts.map(p=>p.close),vwaps=pts.map(p=>p.vwap),vols=pts.map(p=>p.volume),base=data.prev_close,extrema=pts.flatMap(p=>[p.high,p.low]);let dev=Math.max(...extrema.map(v=>Math.abs(v-base)),Math.abs(base)*.002)*1.08;const ymin=base-dev,ymax=base+dev,pct=Math.max(dev/base*100,.2);chart.setOption({{animation:false,grid:[{{left:68,right:72,top:35,height:'62%'}},{{left:68,right:72,top:'76%',height:'15%'}}],axisPointer:{{link:[{{xAxisIndex:[0,1]}}],label:{{backgroundColor:'#586174'}}}},tooltip:{{trigger:'axis',axisPointer:{{type:'cross',snap:true}},backgroundColor:'rgba(27,31,40,.94)',borderWidth:0,textStyle:{{color:'#fff',fontSize:12}},formatter:params=>{{if(!params.length)return'';const i=params[0].dataIndex,p=pts[i],color=p.change_pct>=0?'#ff6b6b':'#41d49a',ratio=p.intraday_volume_ratio==null?'—':(+p.intraday_volume_ratio).toFixed(2)+'×';return`<div style="min-width:190px"><b>${{data.date}} ${{p.time}}</b><br><span style="color:${{color}};font-size:16px;font-weight:700">${{price(p.close)}} (${{signed(p.change_pct)}})</span><br>开 ${{price(p.open)}}　高 ${{price(p.high)}}<br>低 ${{price(p.low)}}　均价 ${{price(p.vwap)}}<br>成交量 ${{compact(p.volume)}}　量比 ${{ratio}}<br>成交额 ${{compact(p.amount)}}</div>`}}}},xAxis:[{{type:'category',gridIndex:0,data:times,boundaryGap:false,axisLabel:{{show:false}},axisTick:{{show:false}},axisLine:{{lineStyle:{{color:'#d9dde6'}}}}}},{{type:'category',gridIndex:1,data:times,boundaryGap:true,axisLabel:{{color:'#7b8190',formatter:(v,i)=>i%30===0?v:''}},axisTick:{{show:false}},axisLine:{{lineStyle:{{color:'#d9dde6'}}}}}}],yAxis:[{{type:'value',gridIndex:0,min:ymin,max:ymax,scale:true,splitNumber:6,axisLabel:{{formatter:v=>price(v),color:v=>v>=base?'#e5484d':'#16a36a'}},splitLine:{{lineStyle:{{color:'#edf0f5',type:'dashed'}}}}}},{{type:'value',gridIndex:0,min:-pct,max:pct,position:'right',splitNumber:6,axisLabel:{{formatter:v=>`${{v>=0?'+':''}}${{v.toFixed(2)}}%`,color:v=>v>=0?'#e5484d':'#16a36a'}},splitLine:{{show:false}}}},{{type:'value',gridIndex:1,scale:true,axisLabel:{{formatter:v=>compact(v),color:'#7b8190'}},splitLine:{{show:false}}}}],dataZoom:[{{type:'inside',xAxisIndex:[0,1],filterMode:'none'}},{{type:'slider',xAxisIndex:[0,1],bottom:4,height:18,showDetail:false,borderColor:'#e5e8ef'}}],series:[{{name:'价格',type:'line',xAxisIndex:0,yAxisIndex:0,data:closes,showSymbol:false,lineStyle:{{width:1.4,color:'#3478f6'}},areaStyle:{{color:{{type:'linear',x:0,y:0,x2:0,y2:1,colorStops:[{{offset:0,color:'rgba(52,120,246,.18)'}},{{offset:1,color:'rgba(52,120,246,.01)'}}]}}}},markLine:{{silent:true,symbol:'none',label:{{formatter:`前收 ${{price(base)}}`,position:'insideEndTop',color:'#8a909e'}},lineStyle:{{color:'#9ca3af',type:'dashed'}},data:[{{yAxis:base}}]}}}},{{name:'均价',type:'line',xAxisIndex:0,yAxisIndex:0,data:vwaps,showSymbol:false,lineStyle:{{width:1,color:'#e5a000'}}}},{{name:'成交量',type:'bar',xAxisIndex:1,yAxisIndex:2,data:vols,itemStyle:{{color:p=>pts[p.dataIndex].direction>=0?'#e5484d':'#16a36a'}}}}]}},true)}}
+async function api(path){{const r=await fetch(path,{{cache:'no-store'}}),body=await r.json();if(!r.ok)throw new Error(body.error||`HTTP ${{r.status}}`);return body}}async function loadData(code,date=''){{if(!API_AVAILABLE){{showNotice('当前是静态快照。要查询其他股票，请运行：python -m scripts.serve start web',true);return}}setLoading(true);try{{const q=new URLSearchParams({{code}});if(date)q.set('date',date);render(await api('/api/minute/data?'+q))}}catch(e){{showNotice(e.message,true)}}finally{{setLoading(false)}}}}async function doSearch(){{const q=$('searchInput').value.trim();if(!q)return;if(!API_AVAILABLE){{showNotice('查询需要本地服务：python -m scripts.serve start web',true);return}}try{{const rows=await api('/api/minute/search?q='+encodeURIComponent(q));showResults(rows);if(rows.length===1)loadData(rows[0].code)}}catch(e){{showNotice(e.message,true)}}}}function showResults(rows){{const box=$('results');if(!rows.length){{box.innerHTML='<div class="result">未找到缓存标的</div>';box.style.display='block';return}}box.innerHTML=rows.map(r=>`<div class="result" data-code="${{r.code}}"><span><b>${{escapeHtml(r.name)}}</b>　<span class="result-code">${{r.code}}</span></span><span class="result-date">${{r.latest_date}}</span></div>`).join('');box.style.display='block'}}function updateUrl(data){{if(!API_AVAILABLE)return;const u=new URL(location.href);u.searchParams.set('code',data.code);u.searchParams.set('date',data.date);history.replaceState(null,'',u)}}
+$('replayPlay').onclick=()=>minuteReplay.toggle();$('replayStep').onclick=()=>minuteReplay.step();$('replayReset').onclick=()=>minuteReplay.reset();$('replayAll').onclick=()=>minuteReplay.showAll();$('replaySpeed').onchange=e=>minuteReplay.setSpeed(e.target.value);
 $('searchBtn').onclick=doSearch;$('searchInput').addEventListener('keydown',e=>{{if(e.key==='Enter')doSearch();if(e.key==='Escape')$('results').style.display='none'}});$('searchInput').addEventListener('input',()=>{{clearTimeout(searchTimer);const q=$('searchInput').value.trim();if(!API_AVAILABLE||q.length<2){{$('results').style.display='none';return}}searchTimer=setTimeout(async()=>{{try{{showResults(await api('/api/minute/search?q='+encodeURIComponent(q)))}}catch(e){{}}}},220)}});$('results').addEventListener('click',e=>{{const row=e.target.closest('[data-code]');if(row){{$('results').style.display='none';loadData(row.dataset.code)}}}});document.addEventListener('click',e=>{{if(!e.target.closest('.search-wrap'))$('results').style.display='none'}});$('dateSelect').onchange=e=>loadData(current.code,e.target.value);$('prevDay').onclick=()=>{{const i=current.dates.indexOf(current.date);if(i>0)loadData(current.code,current.dates[i-1])}};$('nextDay').onclick=()=>{{const i=current.dates.indexOf(current.date);if(i<current.dates.length-1)loadData(current.code,current.dates[i+1])}};window.addEventListener('resize',()=>chart.resize());const requestedUrl=new URL(location.href),requestedCode=requestedUrl.searchParams.get('code'),requestedDate=requestedUrl.searchParams.get('date');render(INITIAL_DATA);if(API_AVAILABLE)loadData(requestedCode||INITIAL_DATA.code,requestedDate||'');else showNotice('这是可离线打开的静态快照；启动本地服务后可查询全部缓存标的。',true);
 </script></body></html>'''
+    return inject_intraday_replay(html)
 
 
 class MinuteRequestHandler(SimpleHTTPRequestHandler):
     repository = None
+    trainer = None
+    journal = None
 
     def end_headers(self):
         """页面和接口都禁用浏览器缓存，始终读取服务端最新版本。"""
@@ -373,6 +424,14 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         parsed = urlparse(self.path)
+        if parsed.path == "/api/health":
+            return self._send_json({
+                "status": "ok",
+                "service": "stock-interactive-web",
+                "version": 1,
+                "features": ["minute", "grid", "trainer", "journal"],
+                "pid": os.getpid(),
+            })
         if parsed.path == "/api/minute/search":
             params = parse_qs(parsed.query)
             try:
@@ -380,6 +439,16 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
             except ValueError:
                 limit = 20
             return self._send_json(self.repository.search(params.get("q", [""])[0], limit))
+        if parsed.path == "/api/minute/available":
+            params = parse_qs(parsed.query)
+            try:
+                return self._send_json(self.repository.availability(
+                    params.get("code", [""])[0], params.get("date", [""])[0]
+                ))
+            except ValueError as exc:
+                return self._send_json({"error": str(exc)}, status=400)
+            except Exception as exc:
+                return self._send_json({"error": f"检查分钟缓存失败: {exc}"}, status=500)
         if parsed.path == "/api/minute/data":
             params = parse_qs(parsed.query)
             try:
@@ -401,7 +470,158 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
                 return self._send_json({"error": str(exc)}, status=400)
             except Exception as exc:
                 return self._send_json({"error": f"网格模拟失败: {exc}"}, status=500)
+        if parsed.path == "/api/trainer/dates":
+            params = parse_qs(parsed.query)
+            try:
+                return self._send_json(
+                    self.trainer.dates(params.get("code", [""])[0])
+                )
+            except LookupError as exc:
+                return self._send_json({"error": str(exc)}, status=404)
+            except ValueError as exc:
+                return self._send_json({"error": str(exc)}, status=400)
+        if parsed.path == "/api/trainer/state":
+            params = parse_qs(parsed.query)
+            try:
+                return self._send_json(
+                    self.trainer.state(params.get("session_id", [""])[0])
+                )
+            except LookupError as exc:
+                return self._send_json({"error": str(exc)}, status=404)
+            except ValueError as exc:
+                return self._send_json({"error": str(exc)}, status=400)
+            except Exception as exc:
+                return self._send_json({"error": f"读取训练会话失败: {exc}"}, status=500)
+        if parsed.path.startswith("/api/journal/"):
+            return self._journal_get(parsed)
         return super().do_GET()
+
+    def do_POST(self):
+        parsed = urlparse(self.path)
+        if parsed.path.startswith("/api/journal/"):
+            return self._journal_post(parsed)
+        if not parsed.path.startswith("/api/trainer/"):
+            return self._send_json({"error": "接口不存在"}, status=404)
+        try:
+            payload = self._read_json()
+            if parsed.path == "/api/trainer/session":
+                result = self.trainer.create(payload)
+            elif parsed.path == "/api/trainer/advance":
+                result = self.trainer.advance(
+                    payload.get("session_id", ""), int(payload.get("steps", 1))
+                )
+            elif parsed.path == "/api/trainer/next-day":
+                result = self.trainer.next_day(payload.get("session_id", ""))
+            elif parsed.path == "/api/trainer/order":
+                result = self.trainer.order(
+                    payload.get("session_id", ""), payload.get("side", ""),
+                    payload.get("shares", 0), payload.get("note", ""),
+                    payload.get("order_type", "market"),
+                    payload.get("limit_price"), payload.get("validity", "day"),
+                )
+            elif parsed.path == "/api/trainer/order/cancel":
+                result = self.trainer.cancel_pending_order(
+                    payload.get("session_id", ""), payload.get("order_id", "")
+                )
+            elif parsed.path == "/api/trainer/condition":
+                result = self.trainer.conditional_order(
+                    payload.get("session_id", ""), payload.get("side", ""),
+                    payload.get("condition_type", ""),
+                    payload.get("trigger_value", ""), payload.get("shares", 0),
+                    payload.get("note", ""), payload.get("validity", "day"),
+                    payload.get("secondary_trigger_value"),
+                )
+            elif parsed.path == "/api/trainer/condition/cancel":
+                result = self.trainer.cancel_conditional_order(
+                    payload.get("session_id", ""),
+                    payload.get("condition_id", ""),
+                )
+            else:
+                return self._send_json({"error": "接口不存在"}, status=404)
+            return self._send_json(result)
+        except LookupError as exc:
+            return self._send_json({"error": str(exc)}, status=404)
+        except (TypeError, ValueError, json.JSONDecodeError) as exc:
+            return self._send_json({"error": str(exc)}, status=400)
+        except Exception as exc:
+            return self._send_json({"error": f"交易训练失败: {exc}"}, status=500)
+
+    def _journal_get(self, parsed):
+        params = parse_qs(parsed.query)
+        try:
+            if parsed.path == "/api/journal/search":
+                result = self.journal.search(
+                    params.get("q", [""])[0], params.get("limit", [20])[0]
+                )
+            elif parsed.path == "/api/journal/kline":
+                result = self.journal.kline(
+                    params.get("code", [""])[0], params.get("days", [180])[0]
+                )
+            elif parsed.path == "/api/journal/cases":
+                result = self.journal.list_cases(
+                    code=params.get("code", [None])[0],
+                    status=params.get("status", [None])[0],
+                    query=params.get("q", [None])[0],
+                    limit=params.get("limit", [200])[0],
+                )
+            elif parsed.path == "/api/journal/case":
+                result = self.journal.get_case(params.get("case_id", [""])[0])
+            elif parsed.path == "/api/journal/entries":
+                result = self.journal.list_entries(
+                    code=params.get("code", [None])[0],
+                    case_id=params.get("case_id", [None])[0],
+                    include_deleted=(
+                        params.get("include_deleted", ["0"])[0].lower()
+                        in {"1", "true", "yes"}
+                    ),
+                    limit=params.get("limit", [2000])[0],
+                )
+            elif parsed.path == "/api/journal/due":
+                result = self.journal.due_reviews(
+                    as_of=params.get("as_of", [None])[0],
+                    limit=params.get("limit", [100])[0],
+                )
+            else:
+                return self._send_json({"error": "接口不存在"}, status=404)
+            return self._send_json(result)
+        except LookupError as exc:
+            return self._send_json({"error": str(exc)}, status=404)
+        except (TypeError, ValueError) as exc:
+            return self._send_json({"error": str(exc)}, status=400)
+        except Exception as exc:
+            return self._send_json({"error": f"读取选股日记失败: {exc}"}, status=500)
+
+    def _journal_post(self, parsed):
+        try:
+            payload = self._read_json()
+            if parsed.path == "/api/journal/case":
+                result = self.journal.create_case(payload)
+            elif parsed.path == "/api/journal/entry":
+                result = self.journal.add_entry(payload)
+            elif parsed.path == "/api/journal/entry/delete":
+                result = self.journal.delete_entry(payload)
+            elif parsed.path == "/api/journal/entry/restore":
+                result = self.journal.restore_entry(payload)
+            elif parsed.path == "/api/journal/backup":
+                result = self.journal.backup()
+            else:
+                return self._send_json({"error": "接口不存在"}, status=404)
+            return self._send_json(result)
+        except LookupError as exc:
+            return self._send_json({"error": str(exc)}, status=404)
+        except (TypeError, ValueError, json.JSONDecodeError) as exc:
+            return self._send_json({"error": str(exc)}, status=400)
+        except Exception as exc:
+            return self._send_json({"error": f"保存选股日记失败: {exc}"}, status=500)
+
+    def _read_json(self):
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            raise ValueError("Content-Length 格式错误")
+        if length <= 0 or length > 64 * 1024:
+            raise ValueError("请求体为空或过大")
+        return json.loads(self.rfile.read(length).decode("utf-8"))
 
     def _send_json(self, payload, status=200):
         body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
@@ -423,13 +643,17 @@ def write_app(path: str, payload: dict):
     print(f"✓ 页面: {path} ({os.path.getsize(path) / 1024:.0f} KB, {len(payload['points'])} 根分钟线)")
 
 
-def serve(repository: MinuteRepository, html_path: str, host: str, port: int):
+def serve(repository: MinuteRepository, trainer, journal, html_path: str, host: str, port: int):
     directory = os.path.dirname(os.path.abspath(html_path))
     handler = lambda *args, **kwargs: MinuteRequestHandler(*args, directory=directory, **kwargs)
     MinuteRequestHandler.repository = repository
+    MinuteRequestHandler.trainer = trainer
+    MinuteRequestHandler.journal = journal
     server = ThreadingHTTPServer((host, port), handler)
     print(f"✓ 分时查询服务已启动: http://{host}:{port}/{os.path.basename(html_path)}")
     print(f"✓ 网格动态回放: http://{host}:{port}/grid_simulator.html")
+    print(f"✓ T+1 交易训练: http://{host}:{port}/trading_trainer.html")
+    print(f"✓ 选股日记工作台: http://{host}:{port}/stock_journal.html")
     print(f"  已索引 {len(repository.search_rows)} 个缓存标的，按 Ctrl+C 停止")
     try:
         server.serve_forever()
@@ -457,10 +681,20 @@ def main():
     write_app(args.out, payload)
     if args.serve:
         from scripts.services.grid_simulator import write_app as write_grid_app
+        from scripts.services.trading_trainer import (
+            TradingTrainerService, write_app as write_trainer_app,
+        )
+        from scripts.services.stock_journal import (
+            StockJournalService, write_app as write_journal_app,
+        )
         write_grid_app()
-        serve(repository, args.out, args.host, args.port)
+        write_trainer_app()
+        write_journal_app()
+        trainer = TradingTrainerService(repository)
+        journal = StockJournalService(repository.name_map)
+        serve(repository, trainer, journal, args.out, args.host, args.port)
     else:
-        print("  查询全部标的请运行: python -m scripts.services.minute_viewer --serve")
+        print("  查询全部标的请运行: python -m scripts.serve start web")
 
 
 if __name__ == "__main__":
