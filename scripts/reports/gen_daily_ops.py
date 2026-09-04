@@ -188,7 +188,7 @@ python -m scripts.serve start web   # 若 8765 未启动</div>
 <script src="/assets/app-shell.js"></script>
 <script>
 (function(){{
-  var CAPS=[{{label:'训练'}},{{label:'回测'}},{{label:'选股'}},{{label:'防剧透'}}];
+  var CAPS=[{{label:'沪深300'}},{{label:'科创50'}},{{label:'恒指'}},{{label:'上证'}},{{label:'纳指'}},{{label:'道琼斯'}},{{label:'韩股'}}];
   function caps(){{ if(window.StockAppShell&&StockAppShell.setTicker) StockAppShell.setTicker(CAPS); }}
   async function loadTicker(){{
     if(!window.StockAppShell||!StockAppShell.setTicker) return;

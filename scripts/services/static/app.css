@@ -384,59 +384,49 @@ th {
 }
 
 
-/* —— Live ticker (Bloomberg-lite) —— */
+/* —— Static index board —— */
 .app-ticker {
   display: none;
-  overflow: hidden;
-  min-height: 28px;
   background: #0b1220;
-  color: #cbd5e1;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
-  font-size: 11px;
-  line-height: 28px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+  overflow: hidden;
 }
 .app-ticker.is-visible { display: block; }
 .app-ticker__track {
   display: flex;
-  flex-wrap: nowrap;
-  align-items: center;
-  width: max-content;
-  gap: 0;
-  animation: app-ticker-scroll 42s linear infinite;
-  will-change: transform;
-}
-.app-ticker:hover .app-ticker__track { animation-play-state: paused; }
-.app-ticker--static .app-ticker__track {
-  animation: none;
   flex-wrap: wrap;
+  gap: 4px 2px;
+  align-items: stretch;
+  padding: 4px 10px 5px;
   width: 100%;
-  max-width: 100%;
-  row-gap: 0;
-  padding: 0 8px;
+  animation: none !important;
+  transform: none !important;
 }
 .app-ticker__item {
-  flex-shrink: 0;
   display: inline-flex;
   align-items: baseline;
-  gap: 8px;
-  padding: 0 16px;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 6px;
   color: #e2e8f0;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
   text-decoration: none;
   white-space: nowrap;
-  border-right: 1px solid rgba(148, 163, 184, 0.14);
-  font-variant-numeric: tabular-nums;
+  border: 1px solid transparent;
 }
 a.app-ticker__item:hover { color: #fff; text-decoration: none; background: rgba(148, 163, 184, 0.08); }
 .app-ticker__name { color: #94a3b8; font-weight: 600; }
 .app-ticker__price { font-weight: 700; color: #f1f5f9; }
-.app-ticker__chg { font-weight: 700; min-width: 4.5em; }
+.app-ticker__chg { font-weight: 700; min-width: 4.2em; }
 .app-ticker__item.up .app-ticker__price,
 .app-ticker__item.up .app-ticker__chg { color: var(--app-up); }
 .app-ticker__item.down .app-ticker__price,
 .app-ticker__item.down .app-ticker__chg { color: var(--app-down); }
-@keyframes app-ticker-scroll {
-  from { transform: translateX(0); }
-  to { transform: translateX(-50%); }
+.app-ticker__item.is-empty .app-ticker__price,
+.app-ticker__item.is-empty .app-ticker__chg { color: #64748b; font-weight: 600; }
+
+to { transform: translateX(-50%); }
 }
 
 /* —— Scroll reveal —— */

@@ -238,53 +238,105 @@
     return (n >= 0 ? '+' : '') + n.toFixed(2) + '%';
   }
 
-  function tickerItemHtml(it) {
-    var pct = it.changePct;
-    if (pct == null && it.change_pct != null) pct = it.change_pct;
-    var n = pct == null || pct === '' ? NaN : Number(pct);
-    var cls = '';
-    if (isFinite(n)) {
-      if (n > 0) cls = ' up';
-      else if (n < 0) cls = ' down';
+
+  // 顶栏静态指数板（按显示顺序）
+  var INDEX_BOARD = [
+    { key: 'sh000300', match: [/沪深300/, /sh000300/i, /^000300$/] },
+    { key: 'sh000688', match: [/科创50/, /sh000688/i, /^000688$/] },
+    { key: 'HSI', match: [/恒生/, /恒指/, /\bHSI\b/i, /hkHSI/i] },
+    { key: 'sh000001', match: [/上证/, /上证指数/, /sh000001/i, /^000001$/] },
+    { key: 'IXIC', match: [/纳斯达克/, /纳指/, /\bIXIC\b/i, /NDX/i] },
+    { key: 'DJIA', match: [/道琼斯/, /道指/, /\bDJIA\b/i] },
+    { key: 'KS11', match: [/韩国/, /KOSPI/, /\bKS11\b/i] }
+  ];
+  var INDEX_BOARD_LABEL = {
+    sh000300: '沪深300',
+    sh000688: '科创50',
+    HSI: '恒指',
+    sh000001: '上证',
+    IXIC: '纳指',
+    DJIA: '道琼斯',
+    KS11: '韩股'
+  };
+
+  function matchBoardKey(it) {
+    var code = String((it && (it.code || it.key)) || '');
+    var label = String((it && (it.label || it.name)) || '');
+    var blob = (code + ' ' + label).trim();
+    for (var i = 0; i < INDEX_BOARD.length; i++) {
+      var row = INDEX_BOARD[i];
+      if (code && code.toUpperCase() === row.key.toUpperCase()) return row.key;
+      for (var j = 0; j < row.match.length; j++) {
+        if (row.match[j].test(blob) || row.match[j].test(code) || row.match[j].test(label)) return row.key;
+      }
     }
-    var price = it.price != null && it.price !== '' ? String(it.price) : '';
-    var chg = formatTickerPct(pct);
-    var label = it.label != null ? it.label : (it.name || '');
+    return null;
+  }
+
+  function normalizeBoardItems(items) {
+    items = Array.isArray(items) ? items : [];
+    var byKey = {};
+    items.forEach(function (it) {
+      var key = matchBoardKey(it);
+      if (!key) return;
+      byKey[key] = {
+        code: key,
+        label: INDEX_BOARD_LABEL[key] || it.label || it.name || key,
+        price: it.price,
+        changePct: it.changePct != null ? it.changePct : it.change_pct,
+        href: it.href || ''
+      };
+    });
+    return INDEX_BOARD.map(function (row) {
+      if (byKey[row.key]) return byKey[row.key];
+      return { code: row.key, label: INDEX_BOARD_LABEL[row.key], price: null, changePct: null, empty: true };
+    });
+  }
+
+  function tickerItemHtml(it) {
+    it = it || {};
+    var label = it.label || it.name || '';
+    var empty = !!it.empty || (it.price == null || it.price === '');
+    var price = empty ? '—' : String(it.price);
+    var chg = it.chg || it.change || '';
+    if (!chg && it.changePct != null && it.changePct !== '' && isFinite(+it.changePct)) {
+      var n = +it.changePct;
+      chg = (n > 0 ? '+' : '') + n.toFixed(2) + '%';
+    }
+    if (empty && !chg) chg = '—';
+    var cls = empty ? ' is-empty' : '';
+    if (!empty) {
+      if (it.up || (it.changePct != null && +it.changePct > 0)) cls = ' up';
+      else if (it.down || (it.changePct != null && +it.changePct < 0)) cls = ' down';
+    }
     var inner =
       '<span class="app-ticker__name">' + escHtml(label) + '</span>' +
-      (price ? '<span class="app-ticker__price">' + escHtml(price) + '</span>' : '') +
-      (chg ? '<span class="app-ticker__chg">' + escHtml(chg) + '</span>' : '');
-    if (it.href) {
+      '<span class="app-ticker__price">' + escHtml(price) + '</span>' +
+      '<span class="app-ticker__chg">' + escHtml(chg) + '</span>';
+    if (it.href && !empty) {
       return '<a class="app-ticker__item' + cls + '" href="' + escHtml(it.href) + '">' + inner + '</a>';
     }
     return '<span class="app-ticker__item' + cls + '">' + inner + '</span>';
   }
 
   function setTicker(items) {
-    items = Array.isArray(items) ? items.filter(Boolean) : [];
     var host = ensureShellHost();
     if (!host) return;
-    if (!host.querySelector('.app-shell')) {
-      fillShell(host, host.getAttribute('data-active'));
-    }
     var ticker = ensureTickerHost(host);
     if (!ticker) return;
-    if (!items.length) {
-      ticker.hidden = true;
-      ticker.classList.remove('is-visible');
-      ticker.innerHTML = '';
-      return;
+    var board = normalizeBoardItems(items);
+    var hasAny = board.some(function (x) { return !x.empty; });
+    if (!hasAny && (!items || !items.length)) {
+      // still show empty placeholders so layout is stable on home
     }
-    var reduced = prefersReducedMotion();
-    var row = items.map(tickerItemHtml).join('');
-    // Duplicate for seamless loop; reduced-motion → single static wrap
-    ticker.classList.toggle('app-ticker--static', reduced);
+    ticker.classList.add('app-ticker--static');
     ticker.innerHTML =
-      '<div class="app-ticker__track">' + row + (reduced ? '' : row) + '</div>';
+      '<div class="app-ticker__track" role="list">' + board.map(tickerItemHtml).join('') + '</div>';
     ticker.hidden = false;
     ticker.classList.add('is-visible');
     ticker.removeAttribute('hidden');
   }
+
 
   function setClock(opts) {
     opts = opts || {};

@@ -315,19 +315,21 @@ main{{max-width:1300px;margin:0 auto;padding:8px 32px 20px}}
 <script src="/assets/app-shell.js"></script>
 <script>
 (function(){{
-  var CAPS=[{{label:'训练'}},{{label:'回测'}},{{label:'选股'}},{{label:'防剧透'}},{{label:'观察池'}},{{label:'资讯复盘'}}];
+  var CAPS=[{{label:'沪深300'}},{{label:'科创50'}},{{label:'恒指'}},{{label:'上证'}},{{label:'纳指'}},{{label:'道琼斯'}},{{label:'韩股'}}];
   function caps(){{
     if(window.StockAppShell&&StockAppShell.setTicker) StockAppShell.setTicker(CAPS);
   }}
   function mapCtx(data){{
+    var wantA={{sh000300:1,sh000688:1,sh000001:1}};
+    var wantO={{HSI:1,IXIC:1,DJIA:1,KS11:1}};
     var items=[];
     (data.a_share||[]).forEach(function(x){{
-      items.push({{label:x.name,price:x.price==null?'—':Number(x.price).toFixed(2),changePct:x.change_pct}});
+      if(!wantA[x.code]) return;
+      items.push({{code:x.code,label:x.name,price:x.price==null?null:Number(x.price).toFixed(2),changePct:x.change_pct}});
     }});
-    (data.overseas||[]).filter(function(x){{
-      return x.region==='HK'||x.region_label==='港股'||String(x.code||'').toUpperCase()==='HSI';
-    }}).forEach(function(x){{
-      items.push({{label:x.name,price:x.price==null?'—':Number(x.price).toLocaleString(undefined,{{maximumFractionDigits:2}}),changePct:x.change_pct}});
+    (data.overseas||[]).forEach(function(x){{
+      if(!wantO[x.code]) return;
+      items.push({{code:x.code,label:x.name,price:x.price==null?null:Number(x.price).toLocaleString(undefined,{{maximumFractionDigits:2}}),changePct:x.change_pct}});
     }});
     return items;
   }}
