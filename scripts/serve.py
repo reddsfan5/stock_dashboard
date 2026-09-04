@@ -9,7 +9,7 @@
     python -m scripts.serve restart web --replace-conflicts
     python -m scripts.serve stop all
 
-minute、grid、trainer、journal 是四个业务入口，共用一个 Web 进程；reports 是为了兼容
+minute、grid、trainer、journal、news 是五个业务入口，共用一个 Web 进程；reports 是为了兼容
 旧索引地址而保留的纯静态服务。每日数据更新是计划任务，不是常驻服务。
 """
 
@@ -41,6 +41,7 @@ PAGE_PATHS = {
     "grid": "/grid_simulator.html",
     "trainer": "/trading_trainer.html",
     "journal": "/stock_journal.html",
+    "news": "/market_news.html",
     "web": "/index.html",
 }
 TARGET_ALIASES = {
@@ -48,6 +49,7 @@ TARGET_ALIASES = {
     "grid": "web",
     "trainer": "web",
     "journal": "web",
+    "news": "web",
     "interactive": "web",
     "static": "reports",
     "report": "reports",
@@ -81,7 +83,9 @@ def web_is_healthy():
         and payload
         and payload.get("status") == "ok"
         and payload.get("service") == "stock-interactive-web"
-        and set(payload.get("features", [])) >= {"minute", "grid", "trainer", "journal"}
+        and set(payload.get("features", [])) >= {
+            "minute", "grid", "trainer", "journal", "news", "market_context"
+        }
     )
 
 
@@ -280,6 +284,7 @@ def start_web(requested_target="web", replace_conflicts=False):
     print("  网格：  http://127.0.0.1:{}/grid_simulator.html".format(WEB_PORT))
     print("  训练：  http://127.0.0.1:{}/trading_trainer.html".format(WEB_PORT))
     print("  日记：  http://127.0.0.1:{}/stock_journal.html".format(WEB_PORT))
+    print("  资讯：  http://127.0.0.1:{}/market_news.html".format(WEB_PORT))
     print("  日志：  {}".format(log_path))
     return True
 
@@ -386,7 +391,7 @@ def show_status():
 
     print("项目运行单元：2 个 HTTP 服务 + 1 个计划任务")
     print("- 交互 Web  {:<30} http://127.0.0.1:{}/".format(web_status, WEB_PORT))
-    print("  └─ 分时 / 网格 / T+1训练 / 选股日记，共用一个进程")
+    print("  └─ 分时 / 网格 / T+1训练 / 选股日记 / 市场资讯，共用一个进程")
     print("- 静态报告  {:<30} http://127.0.0.1:{}/index.html".format(report_status, REPORT_PORT))
     print("- 每日更新  {}（计划任务，不计入 start all）".format(_launchd_update_status()))
     if web_listeners and not web_is_healthy():
@@ -406,7 +411,7 @@ def resolve_targets(target):
 
 def build_parser():
     parser = argparse.ArgumentParser(
-        description="统一管理分时、网格、T+1训练、选股日记和静态报告服务"
+        description="统一管理分时、网格、T+1训练、选股日记、市场资讯和静态报告服务"
     )
     parser.add_argument(
         "action", nargs="?", default="start",
@@ -415,8 +420,8 @@ def build_parser():
     )
     parser.add_argument(
         "target", nargs="?", default="all",
-        choices=["all", "web", "interactive", "minute", "grid", "trainer", "journal", "reports", "report", "static"],
-        help="默认 all；minute/grid/trainer/journal 共用 web 进程",
+        choices=["all", "web", "interactive", "minute", "grid", "trainer", "journal", "news", "reports", "report", "static"],
+        help="默认 all；minute/grid/trainer/journal/news 共用 web 进程",
     )
     parser.add_argument(
         "--replace-conflicts", action="store_true",

@@ -11,11 +11,13 @@ MINUTE_VIEW_URL = "http://127.0.0.1:8765/minute_view.html"
 GRID_SIMULATOR_URL = "http://127.0.0.1:8765/grid_simulator.html"
 TRADING_TRAINER_URL = "http://127.0.0.1:8765/trading_trainer.html"
 STOCK_JOURNAL_URL = "http://127.0.0.1:8765/stock_journal.html"
+MARKET_NEWS_URL = "http://127.0.0.1:8765/market_news.html"
 SERVICE_URLS = {
     "minute_view.html": MINUTE_VIEW_URL,
     "grid_simulator.html": GRID_SIMULATOR_URL,
     "trading_trainer.html": TRADING_TRAINER_URL,
     "stock_journal.html": STOCK_JOURNAL_URL,
+    "market_news.html": MARKET_NEWS_URL,
 }
 
 # 用户视角的导航结构：高频入口在前，低频研究与历史实验在后。
@@ -30,6 +32,7 @@ GROUPS = [
         "tone": "daily",
         "items": [
             ("dashboard.html", "🎛️", "选股仪表盘", "技术形态扫描叠加量比、换手、动量、风险和估值指标，可筛选排序并查看K线", "每日选股"),
+            ("market_news.html", "📰", "市场资讯复盘", "同花顺市场级重要资讯按早盘、午间、收盘归档，支持按模拟时刻防剧透查看并记录消息如何影响判断", "消息时间轴"),
             ("stock_journal.html", "📓", "选股日记工作台", "日K叠加决策记录，内嵌分时可从开盘动态回放，按当时可见行情记录心理与交易逻辑", "决策记录"),
             ("market_overview.html", "🌐", "整体行情统计", "每日资金量、大盘走势与申万1/2级板块强度轮动", "市场全景"),
             ("market_heatmap.html", "🧭", "板块轮动热力图", "申万1/2级 × 20～120日窗口，观察板块强弱和轮动方向", "板块跟踪"),

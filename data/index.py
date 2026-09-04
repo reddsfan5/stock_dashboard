@@ -1,7 +1,7 @@
 """
 指数日K线数据层 — 独立缓存 cache/index_kline_cache.parquet
 
-大盘指数：上证指数 sh000001 / 深证成指 sz399001 / 沪深300 sh000300
+大盘指数：上证 sh000001 / 深成指 sz399001 / 沪深300 sh000300 / 创业板指 sz399006 / 科创50 sh000688
 数据源：akshare stock_zh_index_daily_tx（腾讯，与股票主源一致），全挂时用 ETF 代理兜底
 代码格式：缓存统一带 sh/sz 前缀（与股票缓存一致）
 
@@ -39,10 +39,12 @@ INDEXES = {
     "sh000001": "上证指数",
     "sz399001": "深证成指",
     "sh000300": "沪深300",
+    "sz399006": "创业板指",
+    "sh000688": "科创50",
 }
 
 # ETF 兜底映射: 指数代码 → 代理 ETF（ETF 缓存为纯数字格式）
-ETF_FALLBACK = {"sh000001": "510050", "sz399001": "159901", "sh000300": "510300"}
+ETF_FALLBACK = {"sh000001": "510050", "sz399001": "159901", "sh000300": "510300", "sz399006": "159915", "sh000688": "588000"}
 
 FULL_START = "20100101"  # 首次拉取起点（与股票缓存对齐）
 
@@ -114,7 +116,7 @@ class IndexData:
     def update(self, start_date: str = FULL_START, progress: bool = True,
                target_date=None) -> "IndexData":
         """
-        增量更新 3 个指数。akshare 失败且缓存落后 ≥2 天时走 ETF 兜底。
+        增量更新宽基指数。akshare 失败且缓存落后 ≥2 天时走 ETF 兜底。
         双源全挂只记 last_failed + warning，不抛异常（定时链不因指数中断）。
         """
         self.last_failed = []

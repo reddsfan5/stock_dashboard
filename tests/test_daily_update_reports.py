@@ -6,6 +6,25 @@ from pipeline.daily_update import DailyUpdatePipeline
 
 
 class DailyUpdateReportsTest(unittest.TestCase):
+    @patch("data.market_news.MarketNewsRepository")
+    def test_news_stage_archives_target_date_without_blocking_market_data(self, repository):
+        repository.return_value.day.return_value = {
+            "items": [{"id": "n1"}, {"id": "n2"}],
+            "complete": False,
+            "fetched_at": "2026-08-25T18:30:00",
+            "message": "当日仍在发布",
+        }
+        pipeline = DailyUpdatePipeline(target_date="2026-08-25")
+
+        ok, message, details = pipeline._news_stage()
+
+        self.assertTrue(ok)
+        self.assertIn("2 条", message)
+        self.assertEqual(details["market_date"], "2026-08-25")
+        repository.return_value.day.assert_called_once_with(
+            "2026-08-25", refresh=True
+        )
+
     @patch("pipeline.daily_update.subprocess.run")
     def test_reports_stage_rebuilds_market_and_screening_pages(self, run):
         run.side_effect = [

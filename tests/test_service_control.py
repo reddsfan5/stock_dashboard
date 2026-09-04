@@ -12,7 +12,7 @@ class ServiceControlTest(unittest.TestCase):
         self.assertEqual(serve.resolve_targets(args.target), ["web", "reports"])
 
     def test_page_targets_share_web_process(self):
-        for target in ("minute", "grid", "trainer", "journal", "interactive"):
+        for target in ("minute", "grid", "trainer", "journal", "news", "interactive"):
             with self.subTest(target=target):
                 self.assertEqual(serve.resolve_targets(target), ["web"])
 
@@ -20,11 +20,11 @@ class ServiceControlTest(unittest.TestCase):
         good = {
             "status": "ok",
             "service": "stock-interactive-web",
-            "features": ["minute", "grid", "trainer", "journal"],
+            "features": ["minute", "grid", "trainer", "journal", "news", "market_context"],
         }
         with patch.object(serve, "_http_json", return_value=(200, good)):
             self.assertTrue(serve.web_is_healthy())
-        incomplete = dict(good, features=["minute", "grid", "trainer"])
+        incomplete = dict(good, features=["minute", "grid", "trainer", "journal"])
         with patch.object(serve, "_http_json", return_value=(200, incomplete)):
             self.assertFalse(serve.web_is_healthy())
 

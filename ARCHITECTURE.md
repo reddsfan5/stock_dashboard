@@ -4,63 +4,99 @@
 
 ```
 stock/
-├── config/                       # 配置文件
-│   └── pipeline.yaml             # 选股参数（阈值、天数等）
+├── config/                       # 配置（pipeline.yaml、openai*.yaml）
 │
-├── cache/                        # 本地数据缓存
-│   ├── stock_kline_cache.parquet # K线（4396只，1172万行，162MB）
-│   ├── stock_info.parquet        # 申万2021行业分类（5534只）
-│   └── stock_info.xlsx           # 同上，Excel 格式
+├── cache/                        # 本地 Parquet / 运行时状态（不提交大体量行情）
+│   ├── stock_kline_cache.parquet # 股票日 K
+│   ├── etf_kline_cache.parquet   # ETF 日 K
+│   ├── index_kline_cache.parquet # 指数日 K
+│   ├── index_minute_cache.parquet# A股指数分钟（训练情境）
+│   ├── global_markets_cache.parquet # 海外指数日线
+│   ├── minute_kline_cache.parquet# 1 分钟 K（股票+ETF）
+│   ├── daily_basic_cache.parquet # 估值/市值/供应商量比快照
+│   ├── stock_info.parquet        # 申万 2021 行业 + 名称
+│   ├── indicators_*.parquet      # 兼容旧日频指标透视表
+│   ├── features/                 # 版本化特征缓存（core/liquidity/research）
+│   ├── services/                 # serve 进程记录（web.json 等）
+│   ├── recovery/                 # 损坏/中断时的恢复副本
+│   └── daily_update_status.json  # 每日更新阶段状态
 │
-├── data/                         # 数据层
-│   ├── kline.py                  # StockData — 缓存管理、增量更新、查询API
-│   └── industry.py               # StockInfo — 申万行业分类（389个行业码→名称映射）
+├── state/                        # 个人 SQLite（不可再生研究数据，不提交）
+│   ├── stock_journal.sqlite3     # 选股日记案例与事件
+│   ├── market_news.sqlite3       # 市场资讯缓存与影响记录
+│   └── backups/                  # 日记一致性备份
 │
-├── screen/                       # 选股分析层
-│   ├── base.py                   # BaseScreener 抽象基类 + PipelineMeta
-│   ├── engine.py                 # Screener 通用排序/过滤/导出引擎
-│   ├── continuity.py             # K线连续性选股（接续不中断）
-│   ├── sideways.py               # 横盘震荡检测（100分综合评分）
-│   ├── trend.py                  # 连续涨/跌趋势选股
-│   └── hammer.py                 # 金针探底形态识别
+├── data/                         # 数据层（事实读写，不含特征公式）
+│   ├── schema.py                 # 日 K / 日度基础字段契约与单位
+│   ├── sources.py                # 外部源适配：腾讯/AkShare 主源 + BaoStock 备源等
+│   ├── storage.py                # Parquet/JSON 原子写入
+│   ├── kline.py                  # StockData — 股票日 K 缓存与查询
+│   ├── etf.py                    # ETFData — ETF 日 K
+│   ├── index.py                  # IndexData — 大盘指数日 K
+│   ├── minute.py                 # MinuteData — 1 分钟 K
+│   ├── daily_basic.py            # DailyBasicData — 估值/市值快照
+│   ├── enrichment.py             # 用分钟量补齐日 K 空成交量
+│   ├── industry.py               # StockInfo — 申万行业分类
+│   ├── journal.py                # 选股日记 SQLite
+│   ├── market_news.py            # 市场资讯 SQLite + 同花顺公开源
+│   ├── index_minute.py           # A股宽基指数分钟缓存
+│   ├── global_markets.py         # 海外指数日线（港/美/韩）
+│   └── market_context.py         # 训练页市场情境 as_of 组装
 │
-├── backtest/                     # 回测统计层
-│   ├── engine.py                 # StatsEngine + 12种策略（模板方法模式）
-│   ├── grid.py                   # 网格交易回测（策略模式，两种网格）
-│   ├── sim_engine.py             # 通用资金模拟、撮合与结构化结果
-│   ├── execution.py              # 费用、滑点、整手、容量与涨跌停执行模型
-│   ├── rebalance.py              # 周期轮动、前一日信号和逐日盯市
-│   ├── validation.py             # 时间留出、隔离期与滚动前推切分
-│   ├── trading_trainer.py        # 无未来数据的 T+1 手动交易状态机
-│   ├── sim_core.py               # 费用、手数、盯市、平仓公共规则
-│   ├── sim_types.py              # Signal/Position/Trade/SimulationResult
-│   └── metrics.py                # 统一收益与风险指标
+├── features/                     # 特征层（可复算指标，与事实分离）
+│   ├── catalog.py                # 特征目录与 profile（core/liquidity/research）
+│   ├── daily.py                  # 日频特征计算
+│   ├── intraday.py               # 盘中量比等
+│   ├── store.py                  # 特征缓存读写与失效
+│   ├── snapshot.py               # 选股网页决策快照
+│   └── revealed.py               # T+1 训练防剧透指标
 │
-├── pipeline/                     # 管线编排层
-│   ├── runner.py                 # 模块自动发现 + 并行执行
-│   ├── reporter.py               # 统一 HTML 报告生成
-│   ├── daily_update.py           # 每日数据分阶段更新 + 质量门禁
-│   └── config.py                 # YAML 配置加载 + 参数注入
+├── screen/                       # 选股分析层（PIPELINE_META 自注册）
+│   ├── base.py / engine.py       # 基类与链式 Screener
+│   ├── continuity.py             # K线连续性
+│   ├── sideways.py               # 横盘震荡
+│   ├── trend.py                  # 连续涨/跌（variants: trend-up / trend-down）
+│   ├── hammer.py                 # 金针探底
+│   ├── long_shadow.py            # 长下影线
+│   └── upward_gap.py             # 持续推高
 │
-├── scripts/                      # 命令入口（顶层仅放全局编排）
-│   ├── update_cache.py           # 数据更新编排 → 日线/指数/分时/市场页
-│   ├── screen.py                 # 选股管线 → dashboard.html
-│   ├── backtest.py               # 回测管线 → stats_report.html
-│   ├── run_all_strategies.py     # 独立策略研究的总编排
-│   ├── serve.py                   # HTTP 服务统一启停、状态与健康检查
-│   ├── strategies/               # 单项策略 strategy_01 ~ strategy_14
+├── backtest/                     # 回测 / 模拟 / 训练核心库
+│   ├── engine.py                 # StatsEngine + 模板策略（scripts.backtest 注册 12 个）
+│   ├── strategy.py / indicators.py
+│   ├── grid.py / intraday_grid.py# 日频与分钟网格
+│   ├── sim_engine.py / sim_core.py / sim_types.py
+│   ├── execution.py / rebalance.py / validation.py / metrics.py
+│   ├── trading_trainer.py        # T+1 手动交易状态机
+│   ├── proverbs.py / proverb_report.py
+│   ├── slow_rise.py / slow_rise_report.py
+│   └── renderer.py / templates/
+│
+├── pipeline/                     # 管线编排
+│   ├── runner.py                 # 选股模块发现 + 并行执行
+│   ├── reporter.py               # HTML 报告
+│   ├── daily_update.py           # 每日分阶段更新 + 质量门禁
+│   └── config.py                 # YAML 加载与参数注入
+│
+├── scripts/                      # 命令入口（顶层仅全局编排）
+│   ├── update_cache.py           # → pipeline.daily_update
+│   ├── screen.py / backtest.py / run_all_strategies.py
+│   ├── serve.py                  # 两个 HTTP 进程的统一启停与健康检查
+│   ├── strategies/               # 独立研究页 strategy_01 ~ strategy_14（与 engine 模板策略分离）
 │   ├── simulations/              # 资金与交易流程模拟
-│   ├── research/                 # 市场统计与专题回测
-│   ├── reports/                  # HTML 报告与导航生成
-│   ├── services/                 # 分时、网格回放与 T+1 训练服务
-│   └── tools/                    # 调试与参数扫描工具
+│   ├── research/                 # 专题回测与统计
+│   ├── reports/                  # 导航与市场页生成
+│   ├── services/                 # 交互 Web 业务实现（共用 8765）
+│   └── tools/                    # 调试与参数扫描
 │
-├── output/                       # 生成输出（HTML、CSV等）
-├── stock_data.py                 # → data.kline（向后兼容 shim）
-└── stock_info.py                 # → data.industry（shim）
+├── tests/                        # pytest（合约、服务、日记、训练等）
+├── demos/                        # 第三方库演示（非业务入口）
+├── output/                       # 生成的 HTML / CSV / logs
+└── docs/                         # 文档
 ```
 
-脚本职责、编排关系和新增脚本的归类规则见 [`scripts/README.md`](scripts/README.md)。
+说明：根目录偶发的 `xlsx`、`mac_recommend/`、截图等**不是**正式架构的一部分。
+
+脚本职责与归类规则见 [`scripts/README.md`](scripts/README.md)。
 
 ---
 
@@ -82,11 +118,15 @@ data.update()                     # 增量
 data.rebuild(start_date="20100101")  # 全量重建
 ```
 
-日常任务由 `pipeline.daily_update` 依次执行股票、ETF、指数、分钟线、质量校验和
-报告刷新。状态写入 `cache/daily_update_status.json`；关键数据未达到覆盖率门禁时
-命令返回非零退出码。分钟线每 1000 只原子落盘，可在中断后续跑。
+日常任务由 `pipeline.daily_update` 按阶段执行：
+`stocks → etfs → index → minute → enrich → validate → news → reports`。
+状态写入 `cache/daily_update_status.json`；关键数据未达到覆盖率门禁时命令返回非零退出码。
+分钟线每 1000 只原子落盘，可在中断后续跑。
 
-缓存范围：2010-01-01 ~ 至今，排除北交所（bj）和科创板（sh688），约 4400 只。
+缓存范围：2010-01-01 ~ 至今，排除北交所（bj）和科创板（sh688）。
+股票/ETF/指数/分钟/日度基础快照分文件存放于 `cache/`；选股日记与市场资讯落在 `state/*.sqlite3`。
+外部行情主源为腾讯（AkShare + qt.gtimg.cn 快照），BaoStock 为失败子集备源；
+首次全量重建与分钟备源可用新浪。行业分类来自申万 2021。
 
 ### 1.2 行业分类更新
 
@@ -103,7 +143,7 @@ python -c "from data.industry import StockInfo; StockInfo().build(force=True)"
 ### 2.1 运行
 
 ```bash
-# 全部 5 个模块
+# 全部选股模块
 python -m scripts.screen
 
 # 指定模块（逗号分隔）
@@ -118,13 +158,17 @@ python -m scripts.screen --out output/my_dashboard.html
 
 ### 2.2 模块列表
 
+管线自动发现 `screen/` 下带 `PIPELINE_META` 的模块（含 `variants`）：
+
 | 模块 ID | 标题 | 说明 |
 |---------|------|------|
 | `continuity` | K线连续性 | 每天最高价持续高于前日最低价一定比例，K线接续不中断 |
 | `sideways` | 横盘震荡 | 振幅小、趋势平坦、K线重叠率高（100分综合评分） |
-| `trend-up` | 连续上涨(5日) | 连续 N 天收阳，过滤涨停连板妖股 |
-| `trend-down` | 连续下跌(5日) | 连续 N 天收阴，寻找超跌反弹机会 |
+| `trend-up` | 连续上涨(5日) | `trend.py` 变体：连续 N 天收阳，过滤涨停连板妖股 |
+| `trend-down` | 连续下跌(5日) | `trend.py` 变体：连续 N 天收阴，寻找超跌反弹机会 |
 | `hammer` | 金针探底 | 近 3 日出现长下影线探底形态 |
+| `long_shadow` | 长下影线(10日) | 近 N 日多次出现足够长的下影线 |
+| `upward_gap` | 持续推高 | 连续推高/缺口类形态 |
 
 ### 2.3 参数配置
 
@@ -192,6 +236,12 @@ python -m scripts.backtest --out output/my_report.html
 | `oversold` | 连续下跌后反弹 | 多N值 |
 | `bollinger` | 布林带收敛突破 | 多N值 |
 | `multi_signal` | 双信号：重叠+缩量 | 多N值 |
+
+
+> **策略代码两处并存，勿混为一谈：**
+> - `backtest/engine.py` 的模板策略：由 `python -m scripts.backtest` 统一跑统计报告（上表 12 个 ID）。
+> - `scripts/strategies/strategy_01`～`strategy_14`：独立研究页/导航选项卡，由 `python -m scripts.run_all_strategies` 编排。
+> 两套实现不合并；周期轮动类（策略 07～14）共用 `backtest.rebalance.RebalanceEngine`。
 
 ### 3.3 输出
 
@@ -323,31 +373,35 @@ python -m scripts.screen --only breakout
 
 ---
 
-## 七、数据流
+## 七、数据流与服务拓扑
 
 ```
-cache/stock_kline_cache.parquet
+外部源（腾讯/AkShare 主源，BaoStock 备源；新浪用于首建/分钟备源）
     │
     ▼
-data/kline.py (StockData)
+scripts.update_cache → pipeline.daily_update
+    阶段：stocks → etfs → index → minute → enrich → validate → news → reports
     │
-    ├──→ screen/*.py (find_all) ──→ pipeline/runner.py (并行执行)
-    │                                      │
-    │                                      ▼
-    │                               pipeline/reporter.py (build_screening_html)
-    │                                      │
-    │                                      ▼
-    │                               output/dashboard.html
+    ├─ Parquet 事实 ──→ cache/*.parquet (+ cache/features/)
+    └─ 资讯缓存   ──→ state/market_news.sqlite3
+
+cache 行情事实
     │
-    ├──→ backtest/engine.py (StatsEngine) ──→ scripts/backtest.py
-    │                                              │
-    │                                              ▼
-    │                                       pipeline/reporter.py (build_backtest_html)
-    │                                              │
-    │                                              ▼
-    │                                       output/stats_report.html
-    │
-    └──→ scripts/simulations/sim_portfolio.py (模拟引擎) ──→ output/portfolio_sim.html
+    ├──→ features/*（可复算指标）──→ screen / 决策快照 / 训练防剧透
+    ├──→ screen/* → pipeline.runner → output/dashboard.html
+    ├──→ backtest/engine.py → scripts.backtest → output/stats_report.html
+    ├──→ scripts/strategies/*（独立研究页，与 engine 模板策略分离）
+    └──→ scripts/simulations/* → output/*_sim.html
+
+交互服务（同一进程，127.0.0.1:8765）
+    scripts.serve → scripts.services.minute_viewer --serve
+      入口：minute / grid / trainer / journal / news
+      日记读写：state/stock_journal.sqlite3
+
+静态报告（另一进程，127.0.0.1:8000）
+    scripts.serve → 兼容索引与 output/ 静态 HTML
+
+每日缓存更新是工作日计划任务，不是常驻微服务。
 ```
 
 ---

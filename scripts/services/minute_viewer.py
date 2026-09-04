@@ -414,6 +414,8 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
     repository = None
     trainer = None
     journal = None
+    news = None
+    market_context = None
 
     def end_headers(self):
         """页面和接口都禁用浏览器缓存，始终读取服务端最新版本。"""
@@ -429,7 +431,7 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
                 "status": "ok",
                 "service": "stock-interactive-web",
                 "version": 1,
-                "features": ["minute", "grid", "trainer", "journal"],
+                "features": ["minute", "grid", "trainer", "journal", "news", "market_context"],
                 "pid": os.getpid(),
             })
         if parsed.path == "/api/minute/search":
@@ -492,12 +494,18 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
                 return self._send_json({"error": str(exc)}, status=400)
             except Exception as exc:
                 return self._send_json({"error": f"读取训练会话失败: {exc}"}, status=500)
+        if parsed.path.startswith("/api/news/"):
+            return self._news_get(parsed)
+        if parsed.path in ("/api/trainer/market-context", "/api/market/context"):
+            return self._market_context_get(parsed)
         if parsed.path.startswith("/api/journal/"):
             return self._journal_get(parsed)
         return super().do_GET()
 
     def do_POST(self):
         parsed = urlparse(self.path)
+        if parsed.path.startswith("/api/news/"):
+            return self._news_post(parsed)
         if parsed.path.startswith("/api/journal/"):
             return self._journal_post(parsed)
         if not parsed.path.startswith("/api/trainer/"):
@@ -545,6 +553,90 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
             return self._send_json({"error": str(exc)}, status=400)
         except Exception as exc:
             return self._send_json({"error": f"交易训练失败: {exc}"}, status=500)
+
+
+    def _market_context_get(self, parsed):
+        params = parse_qs(parsed.query)
+        try:
+            session_id = params.get("session_id", [None])[0]
+            market_date = params.get("date", [None])[0]
+            as_of = params.get("as_of", [None])[0]
+            if session_id:
+                state = self.trainer.state(session_id)
+                market_date = state.get("date")
+                as_of = state.get("time")
+            if not market_date:
+                raise ValueError("请提供 date 或 session_id")
+            result = self.market_context.context(market_date, as_of=as_of)
+            if session_id:
+                result["session_id"] = session_id
+            return self._send_json(result)
+        except LookupError as exc:
+            return self._send_json({"error": str(exc)}, status=404)
+        except (TypeError, ValueError) as exc:
+            return self._send_json({"error": str(exc)}, status=400)
+        except Exception as exc:
+            return self._send_json({"error": f"读取市场情境失败: {exc}"}, status=500)
+
+    def _news_get(self, parsed):
+        params = parse_qs(parsed.query)
+        try:
+            if parsed.path == "/api/news/day":
+                result = self.news.day(
+                    params.get("date", [""])[0],
+                    as_of=params.get("as_of", [None])[0],
+                    refresh=(
+                        params.get("refresh", ["0"])[0].lower()
+                        in {"1", "true", "yes"}
+                    ),
+                    include_announcements=(
+                        params.get("include_announcements", ["0"])[0].lower()
+                        in {"1", "true", "yes"}
+                    ),
+                )
+            elif parsed.path == "/api/news/impacts":
+                result = self.news.impacts(
+                    market_date=params.get("date", [""])[0],
+                    code=params.get("code", [None])[0],
+                    include_deleted=(
+                        params.get("include_deleted", ["0"])[0].lower()
+                        in {"1", "true", "yes"}
+                    ),
+                )
+            else:
+                return self._send_json({"error": "接口不存在"}, status=404)
+            return self._send_json(result)
+        except LookupError as exc:
+            return self._send_json({"error": str(exc)}, status=404)
+        except (TypeError, ValueError) as exc:
+            return self._send_json({"error": str(exc)}, status=400)
+        except Exception as exc:
+            return self._send_json({"error": f"读取市场资讯失败: {exc}"}, status=500)
+
+    def _news_post(self, parsed):
+        try:
+            payload = self._read_json()
+            if parsed.path == "/api/news/impact":
+                result = self.news.add_impact(
+                    news_id=payload.get("news_id", ""),
+                    market_date=payload.get("market_date", ""),
+                    decision_time=payload.get("decision_time"),
+                    code=payload.get("code", ""),
+                    action=payload.get("action", ""),
+                    stance=payload.get("stance", ""),
+                    note=payload.get("note", ""),
+                )
+            elif parsed.path == "/api/news/impact/delete":
+                result = self.news.delete_impact(payload.get("impact_id", ""))
+            else:
+                return self._send_json({"error": "接口不存在"}, status=404)
+            return self._send_json(result)
+        except LookupError as exc:
+            return self._send_json({"error": str(exc)}, status=404)
+        except (TypeError, ValueError, json.JSONDecodeError) as exc:
+            return self._send_json({"error": str(exc)}, status=400)
+        except Exception as exc:
+            return self._send_json({"error": f"保存资讯影响失败: {exc}"}, status=500)
 
     def _journal_get(self, parsed):
         params = parse_qs(parsed.query)
@@ -643,17 +735,20 @@ def write_app(path: str, payload: dict):
     print(f"✓ 页面: {path} ({os.path.getsize(path) / 1024:.0f} KB, {len(payload['points'])} 根分钟线)")
 
 
-def serve(repository: MinuteRepository, trainer, journal, html_path: str, host: str, port: int):
+def serve(repository: MinuteRepository, trainer, journal, news, market_context, html_path: str, host: str, port: int):
     directory = os.path.dirname(os.path.abspath(html_path))
     handler = lambda *args, **kwargs: MinuteRequestHandler(*args, directory=directory, **kwargs)
     MinuteRequestHandler.repository = repository
     MinuteRequestHandler.trainer = trainer
     MinuteRequestHandler.journal = journal
+    MinuteRequestHandler.news = news
+    MinuteRequestHandler.market_context = market_context
     server = ThreadingHTTPServer((host, port), handler)
     print(f"✓ 分时查询服务已启动: http://{host}:{port}/{os.path.basename(html_path)}")
     print(f"✓ 网格动态回放: http://{host}:{port}/grid_simulator.html")
     print(f"✓ T+1 交易训练: http://{host}:{port}/trading_trainer.html")
     print(f"✓ 选股日记工作台: http://{host}:{port}/stock_journal.html")
+    print(f"✓ 市场资讯复盘: http://{host}:{port}/market_news.html")
     print(f"  已索引 {len(repository.search_rows)} 个缓存标的，按 Ctrl+C 停止")
     try:
         server.serve_forever()
@@ -687,12 +782,23 @@ def main():
         from scripts.services.stock_journal import (
             StockJournalService, write_app as write_journal_app,
         )
+        from data.market_news import MarketNewsRepository
+        from data.market_context import MarketContextService
+        from scripts.services.market_news import write_app as write_news_app
         write_grid_app()
         write_trainer_app()
         write_journal_app()
+        write_news_app()
         trainer = TradingTrainerService(repository)
         journal = StockJournalService(repository.name_map)
-        serve(repository, trainer, journal, args.out, args.host, args.port)
+        news = MarketNewsRepository()
+        market_context = MarketContextService()
+        try:
+            from scripts.reports.gen_index import generate as generate_index
+            generate_index()
+        except Exception as exc:
+            print(f"! 导航页刷新失败（不影响交互服务）: {exc}")
+        serve(repository, trainer, journal, news, market_context, args.out, args.host, args.port)
     else:
         print("  查询全部标的请运行: python -m scripts.serve start web")
 

@@ -36,7 +36,7 @@ from data.storage import atomic_write_json
 
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STATUS_FILE = os.path.join(PROJECT_DIR, "cache", "daily_update_status.json")
-STAGES = ("stocks", "etfs", "index", "minute", "enrich", "validate", "reports")
+STAGES = ("stocks", "etfs", "index", "minute", "enrich", "validate", "news", "market_context", "reports")
 REPORT_JOBS = (
     ("行情与板块报告", (sys.executable, "-m", "scripts.reports.gen_market")),
     ("选股仪表盘", (sys.executable, "-m", "scripts.screen")),
@@ -653,6 +653,51 @@ class DailyUpdatePipeline:
                 )
         return True, "行情、板块和选股网页已刷新", details
 
+
+    def _market_context_stage(self):
+        """非关键：A股指数分钟 + 海外日线，供训练页市场情境使用。"""
+        from data.global_markets import GlobalMarketsData
+        from data.index_minute import IndexMinuteData
+
+        target = self.target_date or pd.Timestamp.today().normalize()
+        minute = IndexMinuteData()
+        minute.update(progress=False, target_date=target)
+        global_data = GlobalMarketsData()
+        global_data.update(progress=False)
+        details = {
+            "target_date": _date_text(target),
+            "index_minute_new_rows": minute.last_new_rows,
+            "index_minute_failed": list(minute.last_failed),
+            "global_new_rows": global_data.last_new_rows,
+            "global_failed": list(global_data.last_failed),
+        }
+        ok = not minute.last_failed or len(minute.last_failed) < len(minute.codes)
+        # 海外失败不阻断；有任一可用缓存即算温和成功
+        message = (
+            f"指数分钟新增约 {minute.last_new_rows} 行"
+            f"（失败 {len(minute.last_failed)}），"
+            f"海外缓存变更约 {global_data.last_new_rows} 行"
+            f"（失败 {len(global_data.last_failed)}）"
+        )
+        # 非关键阶段：只要没抛异常就算可继续；空失败也 ok
+        return True, message, details
+
+    def _news_stage(self):
+        """收盘后留存当天重要资讯，避免公开滚动窗口淘汰历史消息。"""
+        from data.market_news import MarketNewsRepository
+
+        target = self.target_date or pd.Timestamp.today().normalize()
+        market_date = pd.Timestamp(target).strftime("%Y-%m-%d")
+        payload = MarketNewsRepository().day(market_date, refresh=True)
+        count = len(payload["items"])
+        return count > 0, f"留存 {market_date} 重要资讯 {count} 条", {
+            "market_date": market_date,
+            "item_count": count,
+            "complete": payload["complete"],
+            "fetched_at": payload["fetched_at"],
+            "message": payload["message"],
+        }
+
     # ------------------------------------------------------------------
     # 对外入口
     # ------------------------------------------------------------------
@@ -666,6 +711,8 @@ class DailyUpdatePipeline:
             ("minute", True, self._minute_stage),
             ("enrich", True, self._enrich_stage),
             ("validate", True, self._validate_stage),
+            ("news", False, self._news_stage),
+            ("market_context", False, self._market_context_stage),
             ("reports", False, self._reports_stage),
         ]
         for name, critical, function in stage_functions:

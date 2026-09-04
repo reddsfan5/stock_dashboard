@@ -12,7 +12,7 @@ scripts/
 ├── simulations/             # 单项：资金与交易流程模拟
 ├── research/                # 单项：市场统计研究
 ├── reports/                 # 基础设施：报告和导航生成
-├── services/                # 服务：分时查询、网格回放与T+1训练
+├── services/                # 服务：分时、网格、T+1训练、日记与市场资讯
 └── tools/                   # 开发工具：逐笔调试、参数扫描
 ```
 
@@ -38,6 +38,7 @@ python -m scripts.research.backtest_slow_rise           # 缓涨3～5日开盘�
 python -m scripts.research.optimize_intraday_grid          # 520500 最近10日网格调参
 python -m scripts.serve                                    # 一键启动全部 HTTP 服务
 python -m scripts.serve start trainer                      # 单独启动训练入口
+python -m scripts.serve start news                         # 单独启动市场资讯入口
 python -m scripts.serve status                             # 查看服务和定时任务
 python -m scripts.tools.debug_overlap --code sh600519
 ```
