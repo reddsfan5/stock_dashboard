@@ -422,7 +422,7 @@ class TradingTrainerServiceTest(unittest.TestCase):
             )
         self.assertTrue(any(o["side"] == "buy" for o in ordered["orders"]))
 
-    def test_dates_intersects_index_minute_coverage(self):
+    def test_dates_uses_stock_minutes_with_partial_index_warning(self):
         service = TradingTrainerService(FakeMinuteRepository())
         with patch.object(
             service, "_complete_dates",
@@ -432,9 +432,10 @@ class TradingTrainerServiceTest(unittest.TestCase):
             return_value=["2026-09-01", "2026-09-02", "2026-09-03"],
         ):
             meta = service.dates("600000")
-        self.assertEqual(meta["dates"], ["2026-09-01", "2026-09-02"])
-        self.assertTrue(meta["index_minute_aligned"])
-        self.assertFalse(meta["index_minute_warning"])
+        self.assertEqual(meta["dates"], ["2026-08-25", "2026-09-01", "2026-09-02"])
+        self.assertFalse(meta["index_minute_aligned"])
+        self.assertTrue(meta["index_minute_warning"])
+        self.assertEqual(meta["index_minute_warning_code"], "index_minute_partial")
 
     def test_dates_falls_back_when_no_index_overlap(self):
         service = TradingTrainerService(FakeMinuteRepository())

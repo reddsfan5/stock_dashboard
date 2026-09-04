@@ -47,10 +47,10 @@ def align_trainer_dates(
     stock_dates: Sequence[str],
     index_dates: Sequence[str],
 ) -> Tuple[List[str], bool, Optional[str]]:
-    """将训练日与指数分钟覆盖对齐。
+    """训练可选日以股票完整分时为准（放宽对齐）。
 
-    有指数分钟日期时优先取交集，使 A 股卡片可用 source=minute。
-    交集为空则回退股票日期，并附带 warning。
+    不再与指数分钟求交；若部分/全部训练日缺少指数分钟，仅附带 warning，
+    市场情境在那些日子可能回退为开盘价/日线。
     """
     stock = [str(d) for d in stock_dates]
     index = [str(d) for d in index_dates]
@@ -59,10 +59,12 @@ def align_trainer_dates(
     if not index:
         return stock, True, "index_minute_empty"
     index_set = set(index)
-    intersection = [d for d in stock if d in index_set]
-    if intersection:
-        return intersection, False, None
-    return stock, True, "index_minute_no_overlap"
+    covered = [d for d in stock if d in index_set]
+    if not covered:
+        return stock, True, "index_minute_no_overlap"
+    if len(covered) < len(stock):
+        return stock, True, "index_minute_partial"
+    return stock, False, None
 
 
 class IndexMinuteData:

@@ -270,9 +270,9 @@ class AlignTrainerDatesTest(unittest.TestCase):
             ["2026-08-25", "2026-09-01", "2026-09-02"],
             ["2026-09-01", "2026-09-02", "2026-09-03"],
         )
-        self.assertEqual(dates, ["2026-09-01", "2026-09-02"])
-        self.assertFalse(warned)
-        self.assertIsNone(code)
+        self.assertEqual(dates, ["2026-08-25", "2026-09-01", "2026-09-02"])
+        self.assertTrue(warned)
+        self.assertEqual(code, "index_minute_partial")
 
     def test_empty_intersection_falls_back_with_warning(self):
         from data.index_minute import align_trainer_dates
