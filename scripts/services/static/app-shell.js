@@ -340,6 +340,36 @@
     });
   }
 
+
+  function bindClearOnFocus(input, options) {
+    options = options || {};
+    if (!input) return null;
+    if (input.__clearOnFocusCtl) return input.__clearOnFocusCtl;
+    var ctl = { armed: true };
+    ctl.arm = function () { ctl.armed = true; };
+    ctl.disarm = function () { ctl.armed = false; };
+    var clearOnce = function () {
+      if (!ctl.armed) return;
+      if (!String(input.value || '').trim()) return;
+      ctl.armed = false;
+      input.value = '';
+      if (typeof options.onClear === 'function') options.onClear();
+    };
+    input.addEventListener('focus', clearOnce);
+    input.addEventListener('pointerdown', clearOnce);
+    input.__clearOnFocusCtl = ctl;
+    input.dataset.clearOnFocus = '1';
+    return ctl;
+  }
+
+  function bindClearOnFocusAll(root) {
+    root = root || document;
+    var nodes = root.querySelectorAll('[data-clear-on-focus]');
+    Array.prototype.forEach.call(nodes, function (el) {
+      bindClearOnFocus(el);
+    });
+  }
+
   function mount(options) {
     options = options || {};
     initPrefs();
@@ -352,6 +382,7 @@
     if (options.ticker) setTicker(options.ticker);
     ensureToastHost();
     observeReveal(document);
+    bindClearOnFocusAll(document);
   }
 
   function autoMount() {
@@ -368,6 +399,8 @@
     toast: toast,
     setTheme: applyTheme,
     setDensity: applyDensity,
+    bindClearOnFocus: bindClearOnFocus,
+    bindClearOnFocusAll: bindClearOnFocusAll,
     nav: NAV
   };
 
