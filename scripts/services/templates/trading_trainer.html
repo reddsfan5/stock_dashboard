@@ -26,7 +26,7 @@
 <body>
 <div class="loading" id="loading"><span>正在建立无剧透训练会话…</span></div>
 <main class="page">
-  <div class="top"><h1>🎯 T+1 无剧透交易训练</h1><div class="links"><a id="newsLink" href="market_news.html" target="_blank" rel="noopener">市场资讯</a><a id="journalLink" href="stock_journal.html?code=sh600000">记录决策</a><a href="minute_view.html">分时查询</a><a href="index.html">返回导航</a></div></div>
+  <div class="top"><h1>🎯 T+1 无剧透交易训练</h1><div class="links"><a id="newsLink" href="market_news.html" target="_blank" rel="noopener">市场资讯</a><a id="journalLink" href="stock_journal.html?code=sh600000">记录决策</a><a id="symbolLink" href="symbol.html?code=sh600000">标的上下文</a><a href="minute_view.html">分时查询</a><a href="index.html">返回导航</a></div></div>
   <div class="notice" id="notice"></div>
   <section class="panel setup" id="setup"><div class="setup-grid">
     <div class="field search"><label>标的代码或名称</label><input id="code" value="600000" autocomplete="off" placeholder="例如 浦发银行 / 600000"><div class="results" id="results"></div></div>
@@ -279,6 +279,7 @@ function tradingTimes(){const out=[];for(let h=9,m=31;h<12;){out.push(`${String(
 function render(next){
   state=next;sessionId=next.session_id;sessionStorage.setItem('tradingTrainerSession',sessionId);
   $('journalLink').href='stock_journal.html?code='+encodeURIComponent(next.code);
+  if($('symbolLink'))$('symbolLink').href='symbol.html?code='+encodeURIComponent(next.code);
   $('newsLink').href='market_news.html?mode=replay&date='+encodeURIComponent(next.date)+'&as_of='+encodeURIComponent(next.time)+'&code='+encodeURIComponent(next.code);
   $('liveNewsMore').href=$('newsLink').href;
   const a=next.account,m=next.market,p=next.progress;

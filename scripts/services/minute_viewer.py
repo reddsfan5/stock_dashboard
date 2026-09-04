@@ -416,6 +416,8 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
     journal = None
     news = None
     market_context = None
+    watchlist = None
+    symbol_context = None
 
     def end_headers(self):
         """页面和接口都禁用浏览器缓存，始终读取服务端最新版本。"""
@@ -431,7 +433,7 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
                 "status": "ok",
                 "service": "stock-interactive-web",
                 "version": 1,
-                "features": ["minute", "grid", "trainer", "journal", "news", "market_context", "training_loop", "watchlist"],
+                "features": ["minute", "grid", "trainer", "journal", "news", "market_context", "training_loop", "watchlist", "symbol_context", "hypotheses"],
                 "pid": os.getpid(),
             })
         if parsed.path == "/api/minute/search":
@@ -533,6 +535,8 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
             return self._journal_get(parsed)
         if parsed.path.startswith("/api/watchlist/"):
             return self._watchlist_get(parsed)
+        if parsed.path in ("/api/symbol/context", "/api/symbol/hypothesis"):
+            return self._symbol_get(parsed)
         return super().do_GET()
 
     def do_POST(self):
@@ -543,6 +547,8 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
             return self._journal_post(parsed)
         if parsed.path.startswith("/api/watchlist/"):
             return self._watchlist_post(parsed)
+        if parsed.path.startswith("/api/symbol/"):
+            return self._symbol_post(parsed)
         if not parsed.path.startswith("/api/trainer/"):
             return self._send_json({"error": "接口不存在"}, status=404)
         try:
@@ -838,6 +844,51 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
             sys.stdout.write("  API " + (fmt % args) + "\n")
 
 
+    def _symbol_get(self, parsed):
+        params = parse_qs(parsed.query)
+        try:
+            if parsed.path == "/api/symbol/context":
+                result = self.symbol_context.context(params.get("code", [""])[0])
+            elif parsed.path == "/api/symbol/hypothesis":
+                code = params.get("code", [""])[0]
+                try:
+                    limit = int(params.get("limit", ["50"])[0])
+                except ValueError:
+                    limit = 50
+                items = self.symbol_context.hypotheses.list_for_code(
+                    code, limit=limit
+                )
+                result = {"items": items, "count": len(items)}
+            else:
+                return self._send_json({"error": "接口不存在"}, status=404)
+            return self._send_json(result)
+        except LookupError as exc:
+            return self._send_json({"error": str(exc)}, status=404)
+        except (TypeError, ValueError) as exc:
+            return self._send_json({"error": str(exc)}, status=400)
+        except Exception as exc:
+            return self._send_json({"error": f"读取标的上下文失败: {exc}"}, status=500)
+
+    def _symbol_post(self, parsed):
+        try:
+            payload = self._read_json()
+            if parsed.path == "/api/symbol/hypothesis":
+                result = self.symbol_context.create_hypothesis(payload)
+            elif parsed.path == "/api/symbol/hypothesis/status":
+                result = self.symbol_context.update_hypothesis(payload)
+            else:
+                return self._send_json({"error": "接口不存在"}, status=404)
+            return self._send_json(result)
+        except LookupError as exc:
+            return self._send_json({"error": str(exc)}, status=404)
+        except (TypeError, ValueError, json.JSONDecodeError) as exc:
+            return self._send_json({"error": str(exc)}, status=400)
+        except Exception as exc:
+            return self._send_json({"error": f"保存假设失败: {exc}"}, status=500)
+
+
+
+
 def write_app(path: str, payload: dict):
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
@@ -845,7 +896,7 @@ def write_app(path: str, payload: dict):
     print(f"✓ 页面: {path} ({os.path.getsize(path) / 1024:.0f} KB, {len(payload['points'])} 根分钟线)")
 
 
-def serve(repository: MinuteRepository, trainer, journal, news, market_context, watchlist, html_path: str, host: str, port: int):
+def serve(repository: MinuteRepository, trainer, journal, news, market_context, watchlist, symbol_context, html_path: str, host: str, port: int):
     directory = os.path.dirname(os.path.abspath(html_path))
     handler = lambda *args, **kwargs: MinuteRequestHandler(*args, directory=directory, **kwargs)
     MinuteRequestHandler.repository = repository
@@ -854,6 +905,7 @@ def serve(repository: MinuteRepository, trainer, journal, news, market_context, 
     MinuteRequestHandler.news = news
     MinuteRequestHandler.market_context = market_context
     MinuteRequestHandler.watchlist = watchlist
+    MinuteRequestHandler.symbol_context = symbol_context
     server = ThreadingHTTPServer((host, port), handler)
     print(f"✓ 分时查询服务已启动: http://{host}:{port}/{os.path.basename(html_path)}")
     print(f"✓ 网格动态回放: http://{host}:{port}/grid_simulator.html")
@@ -861,6 +913,7 @@ def serve(repository: MinuteRepository, trainer, journal, news, market_context, 
     print(f"✓ 选股日记工作台: http://{host}:{port}/stock_journal.html")
     print(f"✓ 市场资讯复盘: http://{host}:{port}/market_news.html")
     print(f"✓ 观察池跟踪: http://{host}:{port}/watchlist.html")
+    print(f"✓ 标的上下文: http://{host}:{port}/symbol.html")
     print(f"  已索引 {len(repository.search_rows)} 个缓存标的，按 Ctrl+C 停止")
     try:
         server.serve_forever()
@@ -900,22 +953,32 @@ def main():
         from scripts.services.watchlist import (
             WatchlistService, write_app as write_watchlist_app,
         )
+        from scripts.services.symbol_context import (
+            SymbolContextService, write_app as write_symbol_app,
+        )
         write_grid_app()
         write_trainer_app()
         write_journal_app()
         write_news_app()
         write_watchlist_app()
+        write_symbol_app()
+        try:
+            from scripts.reports.gen_daily_ops import generate as generate_daily_ops
+            generate_daily_ops(skip_sector=True)
+        except Exception as exc:
+            print(f"! 每日操盘清单刷新失败（不影响交互服务）: {exc}")
         trainer = TradingTrainerService(repository)
         journal = StockJournalService(repository.name_map)
         news = MarketNewsRepository()
         market_context = MarketContextService()
         watchlist = WatchlistService(name_map=repository.name_map)
+        symbol_context = SymbolContextService(name_map=repository.name_map)
         try:
             from scripts.reports.gen_index import generate as generate_index
             generate_index()
         except Exception as exc:
             print(f"! 导航页刷新失败（不影响交互服务）: {exc}")
-        serve(repository, trainer, journal, news, market_context, watchlist, args.out, args.host, args.port)
+        serve(repository, trainer, journal, news, market_context, watchlist, symbol_context, args.out, args.host, args.port)
     else:
         print("  查询全部标的请运行: python -m scripts.serve start web")
 

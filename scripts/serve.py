@@ -43,6 +43,7 @@ PAGE_PATHS = {
     "journal": "/stock_journal.html",
     "news": "/market_news.html",
     "watchlist": "/watchlist.html",
+    "symbol": "/symbol.html",
     "web": "/index.html",
 }
 TARGET_ALIASES = {
@@ -52,6 +53,7 @@ TARGET_ALIASES = {
     "journal": "web",
     "news": "web",
     "watchlist": "web",
+    "symbol": "web",
     "interactive": "web",
     "static": "reports",
     "report": "reports",
@@ -87,7 +89,7 @@ def web_is_healthy():
         and payload.get("service") == "stock-interactive-web"
         and set(payload.get("features", [])) >= {
             "minute", "grid", "trainer", "journal", "news", "market_context",
-            "training_loop", "watchlist",
+            "training_loop", "watchlist", "symbol_context", "hypotheses",
         }
     )
 

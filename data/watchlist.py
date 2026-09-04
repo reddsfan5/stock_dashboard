@@ -455,6 +455,7 @@ class WatchlistRepository:
         *,
         track_date: str = None,
         screen_date: str = None,
+        code: str = None,
         limit: int = 200,
     ) -> list:
         clauses = ["1=1"]
@@ -465,6 +466,9 @@ class WatchlistRepository:
         if screen_date:
             clauses.append("screen_date=?")
             params.append(_iso_date(screen_date, "筛出日"))
+        if code:
+            clauses.append("code=?")
+            params.append(normalize_code(code))
         try:
             limit = max(1, min(int(limit), 2000))
         except (TypeError, ValueError) as exc:

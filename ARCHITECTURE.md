@@ -29,6 +29,7 @@ stock/
 │   ├── market_news.sqlite3       # 市场资讯缓存与影响记录
 │   ├── training_sessions.sqlite3 # T+1 训练闭环（计划/决策/心态）
 │   ├── watchlist.sqlite3         # 观察池 / 待买池与次日跟踪
+│   ├── hypotheses.sqlite3        # 轻量假设生命周期（Phase 4）
 │   └── backups/                  # 日记一致性备份
 │
 ├── data/                         # 数据层（事实读写，不含特征公式）
@@ -46,7 +47,10 @@ stock/
 │   ├── market_news.py            # 市场资讯 SQLite + 同花顺公开源
 │   ├── index_minute.py           # A股宽基指数分钟缓存
 │   ├── global_markets.py         # 海外指数日线（港/美/韩）
-│   └── market_context.py         # 训练页市场情境 as_of 组装
+│   ├── market_context.py         # 训练页市场情境 as_of 组装
+│   ├── watchlist.py              # 观察池 / 次日跟踪
+│   ├── training_sessions.py      # T+1 训练闭环 SQLite
+│   └── hypotheses.py             # 假设生命周期（hypothesis→noted）
 │
 ├── features/                     # 特征层（可复算指标，与事实分离）
 │   ├── catalog.py                # 特征目录与 profile（core/liquidity/research）
@@ -90,8 +94,11 @@ stock/
 │   ├── strategies/               # 独立研究页 strategy_01 ~ strategy_14（与 engine 模板策略分离）
 │   ├── simulations/              # 资金与交易流程模拟
 │   ├── research/                 # 专题回测与统计
-│   ├── reports/                  # 导航与市场页生成
+│   ├── reports/                  # gen_index / gen_daily_ops / 行情报告
+│   │                             # 导航与市场页生成
 │   ├── services/                 # 交互 Web 业务实现（共用 8765）
+│   │   ├── symbol_context.py     # 标的统一上下文页 + API
+│   │   └── … minute/grid/trainer/journal/news/watchlist
 │   └── tools/                    # 调试与参数扫描
 │
 ├── tests/                        # pytest（合约、服务、日记、训练等）
@@ -386,7 +393,7 @@ python -m scripts.screen --only breakout
     │
     ▼
 scripts.update_cache → pipeline.daily_update
-    阶段：stocks → etfs → index → minute → enrich → validate → news → reports
+    阶段：stocks → etfs → index → minute → enrich → validate → news → market_context → stock_facts → watchlist_track → reports
     │
     ├─ Parquet 事实 ──→ cache/*.parquet (+ cache/features/)
     └─ 资讯缓存   ──→ state/market_news.sqlite3
@@ -401,8 +408,9 @@ cache 行情事实
 
 交互服务（同一进程，127.0.0.1:8765）
     scripts.serve → scripts.services.minute_viewer --serve
-      入口：minute / grid / trainer / journal / news / watchlist
-      日记读写：state/stock_journal.sqlite3
+      入口：minute / grid / trainer / journal / news / watchlist / symbol
+      读写：state/stock_journal.sqlite3、watchlist、training_sessions、hypotheses
+      每日清单：output/daily_ops.html（scripts.reports.gen_daily_ops）
 
 静态报告（另一进程，127.0.0.1:8000）
     scripts.serve → 兼容索引与 output/ 静态 HTML

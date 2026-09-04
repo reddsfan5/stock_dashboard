@@ -357,6 +357,34 @@ class TrainingSessionRepository:
             raise LookupError("训练记录不存在")
         return _decode_row(row)
 
+    def list_runs_for_code(self, code: str, *, limit: int = 20) -> list:
+        """按代码返回近期训练会话摘要（含决策数）。"""
+        code = self.validate_code(code)
+        try:
+            limit = max(1, min(int(limit), 100))
+        except (TypeError, ValueError) as exc:
+            raise ValueError("limit 必须是整数") from exc
+        with self._connect() as connection:
+            rows = connection.execute(
+                """SELECT r.*,
+                          (SELECT COUNT(*) FROM decision_snapshot d
+                           WHERE d.run_id=r.id AND d.deleted_at IS NULL) AS decision_count,
+                          (SELECT COUNT(*) FROM day_plan p
+                           WHERE p.run_id=r.id AND p.deleted_at IS NULL) AS plan_count
+                   FROM training_run r
+                   WHERE r.code=? AND r.deleted_at IS NULL
+                   ORDER BY r.updated_at DESC, r.id DESC
+                   LIMIT ?""",
+                (code, limit),
+            ).fetchall()
+        out = []
+        for row in rows:
+            item = _decode_row(row)
+            item["decision_count"] = int(item.get("decision_count") or 0)
+            item["plan_count"] = int(item.get("plan_count") or 0)
+            out.append(item)
+        return out
+
     def touch_run(self, run_id: int, *, status: str = None, ended: bool = False) -> dict:
         stamp = _now()
         with self._connect() as connection:

@@ -40,6 +40,7 @@ th{color:var(--muted);font-weight:600}
   <div><h1>👀 观察池 / 待买池 · 次日跟踪</h1><div style="opacity:.7;font-size:12px;margin-top:4px">从选股结果加入 · 跟踪次日收益 · 申万一级板块强度</div></div>
   <div style="display:flex;gap:14px">
     <a href="/">工作台</a>
+    <a href="/symbol.html">标的上下文</a>
     <a href="/stock_journal.html">选股日记</a>
     <a href="/trading_trainer.html">T+1训练</a>
   </div>
@@ -123,7 +124,7 @@ async function loadWatch(){
   const data = await api('/api/watchlist/items'+q);
   const body = $('watchBody');
   body.innerHTML = (data.items||[]).map(it => `<tr>
-    <td><a href="/stock_journal.html?code=${encodeURIComponent(it.code)}">${esc(it.code)}</a></td>
+    <td><a href="/symbol.html?code=${encodeURIComponent(it.code)}">${esc(it.code)}</a></td>
     <td>${esc(it.name)}</td>
     <td>${statusBadge(it)}</td>
     <td>${esc(it.source_module||'')}</td>

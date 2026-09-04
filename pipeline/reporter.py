@@ -200,6 +200,7 @@ body{{font-family:-apple-system,"PingFang SC",sans-serif;background:#f0f2f5;colo
 <div class="kline-panel" id="klinePanel">
   <button class="close" onclick="closeKline()">← 返回 <span id="klineTitle"></span></button>
   <div class="kline-metrics" id="klineMetrics"></div>
+  <a class="journal-action" id="klineSymbolLink" href="http://127.0.0.1:8765/symbol.html">📎 标的上下文</a>
   <a class="journal-action" id="klineJournalLink" href="http://127.0.0.1:8765/stock_journal.html">📓 在选股日记中打开</a>
   <div class="chart" id="klineChart"></div>
   <div style="text-align:center;padding:16px"><button onclick="closeKline()" style="background:#1a73e8;color:#fff;border:none;padding:10px 40px;border-radius:8px;font-size:15px">关闭K线</button></div>
@@ -224,6 +225,7 @@ function showKline(code){{
   document.getElementById("klinePanel").classList.add("active");
   document.getElementById("klineTitle").textContent=code+" "+(d.name||"");
   document.getElementById("klineJournalLink").href="http://127.0.0.1:8765/stock_journal.html?code="+encodeURIComponent(code);
+  var sym=document.getElementById("klineSymbolLink"); if(sym) sym.href="http://127.0.0.1:8765/symbol.html?code="+encodeURIComponent(code);
   document.getElementById("klineWatchLink").href="http://127.0.0.1:8765/watchlist.html";
   document.getElementById("klineWatchNotice").textContent="";
   document.getElementById("klineMetrics").innerHTML=metricHtml(d.metrics);
@@ -456,6 +458,7 @@ footer {{ text-align:center; color:#999; font-size:11px; padding:20px; }}
 <div class="kline-panel" id="klinePanel">
   <button class="close" onclick="closeKline()">✕ <span id="klineTitle"></span><span style="float:right;opacity:.6;font-size:11px" id="klineNav"></span></button>
   <div class="kline-metrics" id="klineMetrics"></div>
+  <a class="journal-action" id="klineSymbolLink" href="http://127.0.0.1:8765/symbol.html">📎 标的上下文</a>
   <a class="journal-action" id="klineJournalLink" href="http://127.0.0.1:8765/stock_journal.html">📓 在选股日记中打开</a>
   <button class="journal-action" id="klineWatchBtn" type="button">👀 加入观察池</button>
   <a class="journal-action" id="klineWatchLink" href="http://127.0.0.1:8765/watchlist.html">打开观察池</a>
@@ -558,6 +561,7 @@ function showKline(code){{
   var sector=d.sector||"";
   document.getElementById("klineTitle").innerHTML=code+" "+(d.name||"")+(sector?"<br><small style='opacity:.6'>"+sector+"</small>":"");
   document.getElementById("klineJournalLink").href="http://127.0.0.1:8765/stock_journal.html?code="+encodeURIComponent(code);
+  var sym=document.getElementById("klineSymbolLink"); if(sym) sym.href="http://127.0.0.1:8765/symbol.html?code="+encodeURIComponent(code);
   document.getElementById("klineWatchLink").href="http://127.0.0.1:8765/watchlist.html";
   document.getElementById("klineWatchNotice").textContent="";
   document.getElementById("klineMetrics").innerHTML=metricHtml(d.metrics);

@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>标的上下文</title>
+<style>
+:root{--bg:#f3f5f8;--card:#fff;--line:#e3e8f0;--blue:#2563eb;--muted:#758096;--red:#d32f2f;--green:#159568;--amber:#b54708}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:#182033;font-size:14px}
+.header{background:linear-gradient(135deg,#121b31,#1d3158);color:#fff;padding:18px 22px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center}
+.header h1{font-size:20px}.header .sub{opacity:.72;font-size:12px;margin-top:4px}
+.header a{color:#9ec1ff;text-decoration:none;font-size:13px;margin-left:12px}
+.wrap{max-width:1100px;margin:0 auto;padding:16px 18px 40px;display:grid;gap:14px}
+.search{display:flex;gap:8px;flex-wrap:wrap}
+.search input{flex:1;min-width:180px;border:1px solid #ccd3df;border-radius:8px;padding:10px 12px}
+button,.ghost{border:1px solid #bfc9d8;background:#fff;border-radius:8px;padding:9px 12px;cursor:pointer;font:inherit;text-decoration:none;color:inherit;display:inline-flex;align-items:center}
+button.primary{background:var(--blue);color:#fff;border-color:var(--blue)}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.panel h2{font-size:15px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.meta{color:var(--muted);font-size:12px}
+.identity{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.identity h2{font-size:22px;margin:0}
+.badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;background:#edf2ff;color:#3451b2}
+.badge.planned,.badge.backtested{background:#fff4e5;color:var(--amber)}
+.badge.bought,.badge.training{background:#e8f8ef;color:#087443}
+.badge.dropped,.badge.noted{background:#f2f4f7;color:#667085}
+.badge.hypothesis{background:#eef2ff;color:#3730a3}
+.links{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.links a{font-size:12px;padding:7px 10px;border-radius:8px;border:1px solid #bfd2f7;background:#edf4ff;color:var(--blue);text-decoration:none}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th,td{padding:8px 6px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{color:var(--muted);font-weight:600}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.up{color:var(--red)}.down{color:var(--green)}
+.empty{color:var(--muted);background:#f7f8fa;border:1px dashed #d7dde7;border-radius:8px;padding:14px;text-align:center;font-size:12px}
+.err{color:var(--red);font-size:12px;margin-top:6px}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{background:#eef2f7;border-radius:999px;padding:4px 10px;font-size:12px}
+.form{display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-top:10px}
+.form label{font-size:11px;color:var(--muted);display:flex;flex-direction:column;gap:4px}
+.form input,.form select,.form textarea{border:1px solid #ccd3df;border-radius:8px;padding:8px 10px;min-width:120px;font:inherit}
+.form textarea{min-width:220px;min-height:38px}
+.notice{position:fixed;right:16px;top:16px;background:#172033;color:#fff;padding:10px 14px;border-radius:8px;display:none;z-index:20;max-width:360px}
+@media(max-width:700px){.wrap{padding:12px}.header{padding:14px 16px}}
+</style>
+</head>
+<body>
+<div class="notice" id="notice"></div>
+<div class="header">
+  <div>
+    <h1>📎 标的上下文</h1>
+    <div class="sub">选股命中 · 观察池 · 训练 · 日记 · 假设生命周期</div>
+  </div>
+  <div>
+    <a href="/index.html">工作台</a>
+    <a href="/watchlist.html">观察池</a>
+    <a href="/daily_ops.html">每日操盘清单</a>
+  </div>
+</div>
+<div class="wrap">
+  <div class="panel">
+    <div class="search">
+      <input id="codeInput" placeholder="输入代码，如 sh600519" autocomplete="off">
+      <button class="primary" id="loadBtn">加载</button>
+    </div>
+    <div class="err" id="loadErr"></div>
+  </div>
+
+  <div class="panel" id="identityPanel">
+    <div class="identity">
+      <h2 id="symbolName">—</h2>
+      <span class="meta" id="symbolCode">请先加载标的</span>
+    </div>
+    <div class="links" id="quickLinks"></div>
+  </div>
+
+  <div class="panel">
+    <h2>最新选股命中 <span class="meta" id="screenMeta"></span></h2>
+    <div id="screenHits" class="empty">加载后显示</div>
+  </div>
+
+  <div class="panel">
+    <h2>观察池与次日跟踪</h2>
+    <div id="watchBlock" class="empty">加载后显示</div>
+    <div style="margin-top:12px" id="trackBlock"></div>
+  </div>
+
+  <div class="panel">
+    <h2>训练会话摘要</h2>
+    <div id="trainBlock" class="empty">加载后显示</div>
+  </div>
+
+  <div class="panel">
+    <h2>选股日记案例</h2>
+    <div id="journalBlock" class="empty">加载后显示</div>
+  </div>
+
+  <div class="panel">
+    <h2>假设生命周期</h2>
+    <div id="hypoBlock" class="empty">加载后显示</div>
+    <div class="form">
+      <label>标题<input id="hypoTitle" placeholder="简短标题"></label>
+      <label>状态
+        <select id="hypoStatus">
+          <option value="hypothesis">假设</option>
+          <option value="backtested">已回测</option>
+          <option value="training">训练中</option>
+          <option value="noted">已笔记</option>
+        </select>
+      </label>
+      <label>论点<input id="hypoThesis" style="min-width:240px" placeholder="为何关注 / 验证什么"></label>
+      <button class="primary" id="hypoCreate">新建假设</button>
+    </div>
+    <div class="err" id="hypoErr"></div>
+  </div>
+
+  <div class="panel">
+    <h2>选股→交易笔记 <span class="meta" id="sttMeta"></span></h2>
+    <div id="sttBlock" class="empty">加载后显示</div>
+  </div>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function notice(msg,isErr){$('notice').style.display='block';$('notice').style.background=isErr?'#9b1c1c':'#172033';$('notice').textContent=msg;clearTimeout(notice._t);notice._t=setTimeout(()=>$('notice').style.display='none',3200)}
+async function api(path, opts){
+  const r = await fetch(path, Object.assign({cache:'no-store'}, opts||{}));
+  const body = await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
+  return body;
+}
+function pct(v){if(v==null||v==='')return '—';const n=+v; const cls=n>0?'up':n<0?'down':'';return `<span class="num ${cls}">${n>0?'+':''}${n.toFixed(2)}</span>`}
+function badge(status,label){return `<span class="badge ${esc(status)}">${esc(label||status)}</span>`}
+
+let currentCode = '';
+
+function render(data){
+  currentCode = data.code;
+  $('symbolName').textContent = data.name || data.code;
+  $('symbolCode').textContent = data.code;
+  const L = data.links || {};
+  $('quickLinks').innerHTML = [
+    ['分时', L.minute],['日记', L.journal],['训练', L.trainer],['观察池', L.watchlist],['仪表盘', L.dashboard]
+  ].map(([t,h])=>`<a href="${esc(h)}">${t}</a>`).join('');
+
+  const hits = data.screen_hits || {};
+  $('screenMeta').textContent = hits.dashboard_mtime ? `仪表盘 ${hits.dashboard_mtime}` : '';
+  if((hits.modules||[]).length){
+    $('screenHits').className='chips';
+    $('screenHits').innerHTML = hits.modules.map(m=>`<span class="chip">${esc(m.title||m.module)}</span>`).join('');
+  } else {
+    $('screenHits').className='empty';
+    $('screenHits').textContent = hits.message || '暂无命中';
+  }
+
+  const w = data.watchlist || {};
+  if((w.items||[]).length){
+    $('watchBlock').className='';
+    $('watchBlock').innerHTML = `<table><thead><tr><th>状态</th><th>来源</th><th>筛出日</th><th>论点</th></tr></thead><tbody>${
+      w.items.map(it=>`<tr><td>${badge(it.status, it.status_label)}</td><td>${esc(it.source_module||'—')}</td><td>${esc(it.screen_date||'—')}</td><td>${esc(it.thesis||it.note||'—')}</td></tr>`).join('')
+    }</tbody></table>`;
+  } else {
+    $('watchBlock').className='empty';
+    $('watchBlock').textContent = '观察池中暂无该代码';
+  }
+  const tracks = (data.tracks||{}).items||[];
+  if(tracks.length){
+    $('trackBlock').innerHTML = `<table><thead><tr><th>筛出日</th><th>跟踪日</th><th class="num">次日%</th><th>失效</th></tr></thead><tbody>${
+      tracks.map(t=>`<tr><td>${esc(t.screen_date)}</td><td>${esc(t.track_date)}</td><td class="num">${pct(t.return_pct)}</td><td>${t.pattern_failed?'是':'否'}</td></tr>`).join('')
+    }</tbody></table>`;
+  } else {
+    $('trackBlock').innerHTML = '<div class="empty">暂无次日跟踪记录</div>';
+  }
+
+  const tr = data.training || {};
+  if((tr.runs||[]).length){
+    $('trainBlock').className='';
+    $('trainBlock').innerHTML = `<div class="meta" style="margin-bottom:8px">会话 ${tr.count} · 决策合计 ${tr.decision_count||0}</div>
+      <table><thead><tr><th>起始日</th><th>状态</th><th class="num">决策</th><th class="num">日计划</th><th>更新</th></tr></thead><tbody>${
+        tr.runs.map(r=>`<tr><td>${esc(r.start_date)}</td><td>${esc(r.status)}</td><td class="num">${r.decision_count||0}</td><td class="num">${r.plan_count||0}</td><td>${esc((r.updated_at||'').slice(0,16))}</td></tr>`).join('')
+      }</tbody></table>`;
+  } else {
+    $('trainBlock').className='empty';
+    $('trainBlock').textContent = '暂无训练会话';
+  }
+
+  const j = data.journal || {};
+  if((j.cases||[]).length){
+    $('journalBlock').className='';
+    $('journalBlock').innerHTML = `<table><thead><tr><th>案例</th><th>状态</th><th class="num">记录</th><th>最近行情日</th><th></th></tr></thead><tbody>${
+      j.cases.map(c=>`<tr><td><b>${esc(c.title)}</b></td><td>${esc(c.status)}</td><td class="num">${c.entry_count||0}</td><td>${esc(c.latest_market_date||'—')}</td>
+      <td><a href="/stock_journal.html?code=${encodeURIComponent(data.code)}&case=${c.id}">打开</a></td></tr>`).join('')
+    }</tbody></table>`;
+  } else {
+    $('journalBlock').className='empty';
+    $('journalBlock').textContent = '暂无日记案例';
+  }
+
+  const h = data.hypotheses || {};
+  if((h.items||[]).length){
+    $('hypoBlock').className='';
+    $('hypoBlock').innerHTML = `<table><thead><tr><th>标题</th><th>状态</th><th>论点</th><th>更新</th><th>推进</th></tr></thead><tbody>${
+      h.items.map(it=>{
+        const opts = (h.statuses||[]).map(s=>`<option value="${s}" ${s===it.status?'selected':''}>${esc((h.status_labels||{})[s]||s)}</option>`).join('');
+        return `<tr>
+          <td><b>${esc(it.title)}</b></td>
+          <td>${badge(it.status, it.status_label)}</td>
+          <td>${esc(it.thesis||it.note||'—')}</td>
+          <td>${esc((it.updated_at||'').slice(0,16))}</td>
+          <td><select data-id="${it.id}" class="hypo-advance">${opts}</select></td>
+        </tr>`;
+      }).join('')
+    }</tbody></table>`;
+    document.querySelectorAll('.hypo-advance').forEach(sel=>{
+      sel.onchange = async ()=>{
+        try{
+          await api('/api/symbol/hypothesis/status',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:+sel.dataset.id,status:sel.value})});
+          notice('假设状态已更新');
+          loadCode(currentCode);
+        }catch(e){notice(e.message,true)}
+      };
+    });
+  } else {
+    $('hypoBlock').className='empty';
+    $('hypoBlock').textContent = '暂无假设，可在下方新建';
+  }
+
+  const stt = data.screen_to_trade || {};
+  $('sttMeta').textContent = stt.generated_at ? `报告 ${stt.generated_at}` : '';
+  if(stt.available && (stt.recent_trades||[]).length){
+    $('sttBlock').className='';
+    $('sttBlock').innerHTML = `<div class="meta" style="margin-bottom:8px">${esc(stt.module_title||stt.module||'')} · 样本 ${stt.trade_count} · 平均净收益 ${stt.avg_net_return_pct??'—'}%</div>
+      <table><thead><tr><th>信号日</th><th>入场</th><th>退出</th><th class="num">净收益%</th><th>原因</th></tr></thead><tbody>${
+        stt.recent_trades.map(t=>`<tr><td>${esc(t.signal_date)}</td><td>${esc(t.entry_date)}</td><td>${esc(t.exit_date)}</td><td class="num">${pct(t.net_return_pct)}</td><td>${esc(t.exit_reason)}</td></tr>`).join('')
+      }</tbody></table>`;
+  } else {
+    $('sttBlock').className='empty';
+    $('sttBlock').textContent = stt.message || '暂无选股→交易笔记';
+  }
+}
+
+async function loadCode(code){
+  const raw = (code||'').trim();
+  if(!raw){$('loadErr').textContent='请输入代码';return}
+  $('loadErr').textContent='';
+  try{
+    const data = await api('/api/symbol/context?code='+encodeURIComponent(raw));
+    render(data);
+    const u = new URL(location.href);
+    u.searchParams.set('code', data.code);
+    history.replaceState(null,'',u);
+    $('codeInput').value = data.code;
+  }catch(e){
+    $('loadErr').textContent = e.message;
+    notice(e.message,true);
+  }
+}
+
+$('loadBtn').onclick = ()=>loadCode($('codeInput').value);
+$('codeInput').addEventListener('keydown', e=>{ if(e.key==='Enter') loadCode($('codeInput').value) });
+$('hypoCreate').onclick = async ()=>{
+  $('hypoErr').textContent='';
+  if(!currentCode){$('hypoErr').textContent='请先加载标的';return}
+  try{
+    await api('/api/symbol/hypothesis',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      code: currentCode,
+      title: $('hypoTitle').value,
+      status: $('hypoStatus').value,
+      thesis: $('hypoThesis').value,
+    })});
+    $('hypoTitle').value=''; $('hypoThesis').value='';
+    notice('已创建假设');
+    loadCode(currentCode);
+  }catch(e){$('hypoErr').textContent=e.message; notice(e.message,true)}
+};
+
+const init = new URL(location.href).searchParams.get('code') || 'sh600519';
+$('codeInput').value = init;
+loadCode(init);
+</script>
+</body>
+</html>

@@ -13,6 +13,8 @@ TRADING_TRAINER_URL = "http://127.0.0.1:8765/trading_trainer.html"
 STOCK_JOURNAL_URL = "http://127.0.0.1:8765/stock_journal.html"
 MARKET_NEWS_URL = "http://127.0.0.1:8765/market_news.html"
 WATCHLIST_URL = "http://127.0.0.1:8765/watchlist.html"
+SYMBOL_URL = "http://127.0.0.1:8765/symbol.html"
+DAILY_OPS_URL = "daily_ops.html"
 SERVICE_URLS = {
     "minute_view.html": MINUTE_VIEW_URL,
     "grid_simulator.html": GRID_SIMULATOR_URL,
@@ -20,6 +22,8 @@ SERVICE_URLS = {
     "stock_journal.html": STOCK_JOURNAL_URL,
     "market_news.html": MARKET_NEWS_URL,
     "watchlist.html": WATCHLIST_URL,
+    "symbol.html": SYMBOL_URL,
+    "daily_ops.html": DAILY_OPS_URL,
 }
 
 # 用户视角的导航结构：高频入口在前，低频研究与历史实验在后。
