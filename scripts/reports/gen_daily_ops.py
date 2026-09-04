@@ -198,9 +198,9 @@ python -m scripts.serve start web   # 若 8765 未启动</div>
       var r=await fetch('/api/market/context?date='+encodeURIComponent(today)+'&as_of='+encodeURIComponent((now||'15:00:00').slice(0,8)),{{cache:'no-store'}});
       if(!r.ok) throw new Error('http');
       var data=await r.json();
-      var items=[];
-      (data.a_share||[]).forEach(function(x){{ items.push({{label:x.name,price:x.price==null?'—':Number(x.price).toFixed(2),changePct:x.change_pct}}); }});
-      (data.overseas||[]).filter(function(x){{ return x.region_label==='港股'||x.region==='HK'||String(x.code||'').toUpperCase()==='HSI'; }}).forEach(function(x){{ items.push({{label:x.name,price:x.price==null?'—':Number(x.price).toLocaleString(undefined,{{maximumFractionDigits:2}}),changePct:x.change_pct}}); }});
+      var wantA={{sh000300:1,sh000688:1,sh000001:1}}, wantO={{HSI:1,IXIC:1,DJIA:1,KS11:1}}, items=[];
+      (data.a_share||[]).forEach(function(x){{ if(!wantA[x.code]) return; items.push({{code:x.code,label:x.name,price:x.price==null?null:Number(x.price).toFixed(2),changePct:x.change_pct}}); }});
+      (data.overseas||[]).forEach(function(x){{ if(!wantO[x.code]) return; items.push({{code:x.code,label:x.name,price:x.price==null?null:Number(x.price).toLocaleString(undefined,{{maximumFractionDigits:2}}),changePct:x.change_pct}}); }});
       if(items.length) StockAppShell.setTicker(items); else caps();
     }}catch(e){{ caps(); }}
   }}
