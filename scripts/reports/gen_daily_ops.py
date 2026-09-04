@@ -143,7 +143,7 @@ th{{color:var(--muted)}}.num{{text-align:right;font-variant-numeric:tabular-nums
   </div>
 </div>
 <div class="wrap">
-  <div class="panel">
+  <div class="panel app-reveal">
     <h2>今日检查清单</h2>
     <h3>核心节奏</h3>
     <div class="checklist">
@@ -159,7 +159,7 @@ th{{color:var(--muted)}}.num{{text-align:right;font-variant-numeric:tabular-nums
     </div>
   </div>
 
-  <div class="panel">
+  <div class="panel app-reveal">
     <h2>缓存更新状态</h2>
     <div class="meta">状态 <b style="color:{state_color}">{_esc(state)}</b> · 目标日 {_esc(str(target))} · 更新 {_esc(str(updated))}</div>
     <table class="app-table">
@@ -168,7 +168,7 @@ th{{color:var(--muted)}}.num{{text-align:right;font-variant-numeric:tabular-nums
     </table>
   </div>
 
-  <div class="panel">
+  <div class="panel app-reveal">
     <h2>申万一级板块强度快照</h2>
     <div class="meta">市场日 {_esc(str((sector or {}).get('market_date') or '—'))} · 生成 {(sector or {}).get('generated_at') or '—'}</div>
     <table class="app-table">
@@ -177,7 +177,7 @@ th{{color:var(--muted)}}.num{{text-align:right;font-variant-numeric:tabular-nums
     </table>
   </div>
 
-  <div class="panel">
+  <div class="panel app-reveal">
     <h2>推荐命令</h2>
     <div class="cmds">python -m scripts.update_cache
 python -m scripts.update_cache --only watchlist_track
@@ -186,6 +186,27 @@ python -m scripts.serve start web   # 若 8765 未启动</div>
   </div>
 </div>
 <script src="/assets/app-shell.js"></script>
+<script>
+(function(){{
+  var CAPS=[{{label:'训练'}},{{label:'回测'}},{{label:'选股'}},{{label:'防剧透'}}];
+  function caps(){{ if(window.StockAppShell&&StockAppShell.setTicker) StockAppShell.setTicker(CAPS); }}
+  async function loadTicker(){{
+    if(!window.StockAppShell||!StockAppShell.setTicker) return;
+    var today=new Date().toLocaleDateString('sv-SE',{{timeZone:'Asia/Shanghai'}});
+    var now=new Date().toLocaleTimeString('en-GB',{{timeZone:'Asia/Shanghai',hour12:false}});
+    try{{
+      var r=await fetch('/api/market/context?date='+encodeURIComponent(today)+'&as_of='+encodeURIComponent((now||'15:00:00').slice(0,8)),{{cache:'no-store'}});
+      if(!r.ok) throw new Error('http');
+      var data=await r.json();
+      var items=[];
+      (data.a_share||[]).forEach(function(x){{ items.push({{label:x.name,price:x.price==null?'—':Number(x.price).toFixed(2),changePct:x.change_pct}}); }});
+      (data.overseas||[]).filter(function(x){{ return x.region_label==='港股'||x.region==='HK'||String(x.code||'').toUpperCase()==='HSI'; }}).forEach(function(x){{ items.push({{label:x.name,price:x.price==null?'—':Number(x.price).toLocaleString(undefined,{{maximumFractionDigits:2}}),changePct:x.change_pct}}); }});
+      if(items.length) StockAppShell.setTicker(items); else caps();
+    }}catch(e){{ caps(); }}
+  }}
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',loadTicker); else loadTicker();
+}})();
+</script>
 </body>
 </html>"""
 

@@ -197,6 +197,95 @@
     if (key) host.setAttribute('data-active', key);
   }
 
+  function escHtml(v) {
+    return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) {
+      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
+    });
+  }
+
+  function prefersReducedMotion() {
+    try {
+      return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function ensureTickerHost(shellHost) {
+    var host = shellHost || document.getElementById('app-shell');
+    if (!host) return null;
+    var el = document.getElementById('app-ticker');
+    if (el) return el;
+    el = document.createElement('div');
+    el.id = 'app-ticker';
+    el.className = 'app-ticker';
+    el.hidden = true;
+    el.setAttribute('aria-label', '行情滚动');
+    var clock = host.querySelector('.app-clock') || document.getElementById('app-clock');
+    if (clock && clock.parentNode === host) {
+      if (clock.nextSibling) host.insertBefore(el, clock.nextSibling);
+      else host.appendChild(el);
+    } else {
+      host.appendChild(el);
+    }
+    return el;
+  }
+
+  function formatTickerPct(pct) {
+    if (pct == null || pct === '') return '';
+    var n = Number(pct);
+    if (!isFinite(n)) return '';
+    return (n >= 0 ? '+' : '') + n.toFixed(2) + '%';
+  }
+
+  function tickerItemHtml(it) {
+    var pct = it.changePct;
+    if (pct == null && it.change_pct != null) pct = it.change_pct;
+    var n = pct == null || pct === '' ? NaN : Number(pct);
+    var cls = '';
+    if (isFinite(n)) {
+      if (n > 0) cls = ' up';
+      else if (n < 0) cls = ' down';
+    }
+    var price = it.price != null && it.price !== '' ? String(it.price) : '';
+    var chg = formatTickerPct(pct);
+    var label = it.label != null ? it.label : (it.name || '');
+    var inner =
+      '<span class="app-ticker__name">' + escHtml(label) + '</span>' +
+      (price ? '<span class="app-ticker__price">' + escHtml(price) + '</span>' : '') +
+      (chg ? '<span class="app-ticker__chg">' + escHtml(chg) + '</span>' : '');
+    if (it.href) {
+      return '<a class="app-ticker__item' + cls + '" href="' + escHtml(it.href) + '">' + inner + '</a>';
+    }
+    return '<span class="app-ticker__item' + cls + '">' + inner + '</span>';
+  }
+
+  function setTicker(items) {
+    items = Array.isArray(items) ? items.filter(Boolean) : [];
+    var host = ensureShellHost();
+    if (!host) return;
+    if (!host.querySelector('.app-shell')) {
+      fillShell(host, host.getAttribute('data-active'));
+    }
+    var ticker = ensureTickerHost(host);
+    if (!ticker) return;
+    if (!items.length) {
+      ticker.hidden = true;
+      ticker.classList.remove('is-visible');
+      ticker.innerHTML = '';
+      return;
+    }
+    var reduced = prefersReducedMotion();
+    var row = items.map(tickerItemHtml).join('');
+    // Duplicate for seamless loop; reduced-motion → single static wrap
+    ticker.classList.toggle('app-ticker--static', reduced);
+    ticker.innerHTML =
+      '<div class="app-ticker__track">' + row + (reduced ? '' : row) + '</div>';
+    ticker.hidden = false;
+    ticker.classList.add('is-visible');
+    ticker.removeAttribute('hidden');
+  }
+
   function setClock(opts) {
     opts = opts || {};
     var host = document.getElementById('app-shell');
@@ -223,6 +312,32 @@
     clock.hidden = !show;
     clock.classList.toggle('is-visible', show);
     if (show) clock.removeAttribute('hidden');
+    ensureTickerHost(host);
+  }
+
+  function observeReveal(root) {
+    root = root || document;
+    var nodes = root.querySelectorAll('.app-reveal, [data-reveal]');
+    if (!nodes.length) return;
+    var list = Array.prototype.slice.call(nodes);
+    list.forEach(function (el) {
+      if (!el.classList.contains('app-reveal')) el.classList.add('app-reveal');
+    });
+    if (prefersReducedMotion() || !window.IntersectionObserver) {
+      list.forEach(function (el) { el.classList.add('is-in'); });
+      return;
+    }
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (!entry.isIntersecting) return;
+        entry.target.classList.add('is-in');
+        io.unobserve(entry.target);
+      });
+    }, { rootMargin: '0px 0px -6% 0px', threshold: 0.06 });
+    list.forEach(function (el) {
+      if (el.classList.contains('is-in')) return;
+      io.observe(el);
+    });
   }
 
   function mount(options) {
@@ -232,8 +347,11 @@
     if (!host) return;
     if (options.active) host.setAttribute('data-active', options.active);
     fillShell(host, options.active || host.getAttribute('data-active'));
+    ensureTickerHost(host);
     if (options.clock) setClock(options.clock);
+    if (options.ticker) setTicker(options.ticker);
     ensureToastHost();
+    observeReveal(document);
   }
 
   function autoMount() {
@@ -245,6 +363,8 @@
   window.StockAppShell = {
     mount: mount,
     setClock: setClock,
+    setTicker: setTicker,
+    observeReveal: observeReveal,
     toast: toast,
     setTheme: applyTheme,
     setDensity: applyDensity,

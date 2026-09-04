@@ -158,7 +158,7 @@ def generate():
             mtime = datetime.fromtimestamp(os.path.getmtime(path)).strftime("%m-%d %H:%M")
             service_hint = " · 本地服务" if filename in SERVICE_URLS else ""
             cards += f"""
-            <a href="{href}" class="card">
+            <a href="{href}" class="card app-reveal">
               <div class="icon" aria-hidden="true">{icon}</div>
               <div class="info">
                 <div class="card-heading">
@@ -172,7 +172,7 @@ def generate():
             </a>"""
 
         sections += f"""
-        <section class="section section-{group['tone']}" id="{group['id']}">
+        <section class="section section-{group['tone']} app-reveal" id="{group['id']}">
           <div class="section-heading">
             <div>
               <div class="kicker">{group['kicker']}</div>
@@ -277,7 +277,8 @@ main{{max-width:1300px;margin:0 auto;padding:8px 32px 20px}}
   .tools-label{{padding:0 14px}}
   .ops-cta{{height:38px;padding:0 12px;font-size:12px}}
 }}
-@media (prefers-reduced-motion:reduce){{html{{scroll-behavior:auto}}.card{{transition:none}}}}
+.app-caps-fallback{{display:none}}
+@media (prefers-reduced-motion:reduce){{html{{scroll-behavior:auto}}.card{{transition:none}}.app-reveal{{opacity:1;transform:none}}}}
 </style>
 </head>
 <body id="top">
@@ -289,7 +290,7 @@ main{{max-width:1300px;margin:0 auto;padding:8px 32px 20px}}
   </div>
 </header>
 <section class="ops-hero" aria-label="今日操盘">
-  <div class="ops-hero-card">
+  <div class="ops-hero-card app-reveal">
     <div class="ops-hero-kicker">今日操盘</div>
     <h2>从清单开始，而不是从卡片堆里找入口</h2>
     <p class="lead">先过每日操盘清单，再进入训练、观察池与资讯。下面保留完整工具归档，需要时再展开。</p>
@@ -312,6 +313,42 @@ main{{max-width:1300px;margin:0 auto;padding:8px 32px 20px}}
 <main>{sections}</main>
 <footer class="footer">运行选股、回测或模拟后会自动刷新对应报告 · 交互工具需启动本地服务</footer>
 <script src="/assets/app-shell.js"></script>
+<script>
+(function(){{
+  var CAPS=[{{label:'训练'}},{{label:'回测'}},{{label:'选股'}},{{label:'防剧透'}},{{label:'观察池'}},{{label:'资讯复盘'}}];
+  function caps(){{
+    if(window.StockAppShell&&StockAppShell.setTicker) StockAppShell.setTicker(CAPS);
+  }}
+  function mapCtx(data){{
+    var items=[];
+    (data.a_share||[]).forEach(function(x){{
+      items.push({{label:x.name,price:x.price==null?'—':Number(x.price).toFixed(2),changePct:x.change_pct}});
+    }});
+    (data.overseas||[]).filter(function(x){{
+      return x.region==='HK'||x.region_label==='港股'||String(x.code||'').toUpperCase()==='HSI';
+    }}).forEach(function(x){{
+      items.push({{label:x.name,price:x.price==null?'—':Number(x.price).toLocaleString(undefined,{{maximumFractionDigits:2}}),changePct:x.change_pct}});
+    }});
+    return items;
+  }}
+  async function loadTicker(){{
+    if(!window.StockAppShell||!StockAppShell.setTicker) return caps();
+    var today=new Date().toLocaleDateString('sv-SE',{{timeZone:'Asia/Shanghai'}});
+    var now=new Date().toLocaleTimeString('en-GB',{{timeZone:'Asia/Shanghai',hour12:false}});
+    var asOf=(now||'15:00:00').slice(0,8);
+    try{{
+      var r=await fetch('/api/market/context?date='+encodeURIComponent(today)+'&as_of='+encodeURIComponent(asOf),{{cache:'no-store'}});
+      if(!r.ok) throw new Error('http '+r.status);
+      var data=await r.json();
+      var items=mapCtx(data);
+      if(items.length) StockAppShell.setTicker(items);
+      else caps();
+    }}catch(e){{ caps(); }}
+  }}
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',loadTicker);
+  else loadTicker();
+}})();
+</script>
 </body>
 </html>"""
 
