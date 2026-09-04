@@ -167,8 +167,8 @@ class TradingTrainerService:
             raise ValueError("起始交易日不在该标的分钟缓存中")
 
         capital = _number(payload, "capital", 100_000, minimum=1)
-        commission_bps = _number(payload, "commission_bps", 3, minimum=0)
-        min_commission = _number(payload, "min_commission", 5, minimum=0)
+        commission_bps = _number(payload, "commission_bps", 0.9, minimum=0)
+        min_commission = _number(payload, "min_commission", 0, minimum=0)
         is_etf = meta["code"][2:].startswith(("1", "5"))
         sell_tax_bps = _number(
             payload, "sell_tax_bps", 0 if is_etf else 5, minimum=0

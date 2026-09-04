@@ -50,8 +50,8 @@
     <div class="field search"><label>标的代码或名称</label><input id="code" value="" autocomplete="off" placeholder="例如 浦发银行 / 600000" data-clear-once="1"><div class="results" id="results"></div></div>
     <div class="field date-field"><label>起始交易日</label><div class="date-row"><input id="startDate" type="date" autocomplete="off" disabled title="先选择标的"><label class="random-toggle"><input id="startRandom" type="checkbox" checked> 随机</label></div><div class="date-hint" id="startDateHint">先选标的；有分时的交易日可在日历中点选</div></div>
     <div class="field"><label>初始资金</label><input id="capital" type="number" value="100000" min="1" step="10000"></div>
-    <div class="field"><label>佣金（bp）</label><input id="commission" type="number" value="3" min="0" step="0.1"></div>
-    <div class="field"><label>最低佣金</label><input id="minCommission" type="number" value="5" min="0" step="1"></div>
+    <div class="field"><label>佣金（bp，万分之）</label><input id="commission" type="number" value="0.9" min="0" step="0.1"></div>
+    <div class="field"><label>最低佣金</label><input id="minCommission" type="number" value="0" min="0" step="1"></div>
     <div class="field"><label>卖出税费（bp）</label><input id="sellTax" type="number" value="5" min="0" step="0.1"></div>
     <button class="primary" id="start">开始训练</button>
   </div>
