@@ -493,14 +493,14 @@ async function collectVisibleContext(){
 async function submitCondition(){stop();const ok=await mutate('/api/trainer/condition',{side:conditionSide,condition_type:$('conditionType').value,trigger_value:$('triggerValue').value,secondary_trigger_value:$('secondaryTriggerField').hidden?null:$('secondaryTriggerValue').value,shares:$('conditionShares').value,note:$('conditionNote').value,validity:$('conditionValidity').value});if(ok){$('conditionNote').value='';closeTradeModal()}}
 
 async function loadDates(code){try{const meta=await request('/api/trainer/dates?code='+encodeURIComponent(code));$('code').value=`${meta.name} ${meta.code}`;$('sellTax').value=meta.code.slice(2).match(/^[15]/)?0:5;$('startDate').innerHTML='<option value="random">随机挑战（保留后续交易日）</option>'+meta.dates.map(d=>`<option value="${d}">${d}</option>`).join('')}catch(e){notice(e.message,true)}}
-async function startGame(){stop();loading(true);try{const payload={code:$('code').value,start_date:$('startDate').value,capital:$('capital').value,commission_bps:$('commission').value,min_commission:$('minCommission').value,sell_tax_bps:$('sellTax').value};render(await request('/api/trainer/session','POST',payload));$('setup').hidden=true;$('game').hidden=false;setTimeout(()=>{dailyChart.resize();minuteChart.resize()},20)}catch(e){notice(e.message,true)}finally{loading(false)}}
+async function startGame(){stop();const code=$('code').value.trim();if(!code){notice('请先输入或选择标的代码',true);return}loading(true);try{const payload={code:code,start_date:$('startDate').value,capital:$('capital').value,commission_bps:$('commission').value,min_commission:$('minCommission').value,sell_tax_bps:$('sellTax').value};render(await request('/api/trainer/session','POST',payload));$('setup').hidden=true;$('game').hidden=false;setTimeout(()=>{dailyChart.resize();minuteChart.resize()},20)}catch(e){notice(e.message,true)}finally{loading(false)}}
 
 function openPlanModal(){
   if(!state)return;
   $('planModalDate').textContent=state.date;
   const plan=state.day_plan||{};
   $('livePlanThesis').value=plan.thesis||$('planThesis').value||'';
-  $('livePlanMaxLoss').value=plan.max_loss_pct??$('planMaxLoss').value||'';
+  $('livePlanMaxLoss').value=(plan.max_loss_pct ?? $('planMaxLoss').value ?? '');
   $('livePlanStyle').value=plan.entry_style||$('planStyle').value||'';
   $('livePlanNotes').value=plan.notes||$('planNotes').value||'';
   $('planModal').hidden=false;$('planModal').setAttribute('aria-hidden','false');document.body.classList.add('body-modal-open');
@@ -551,23 +551,30 @@ async function cancelFromClick(e){const normal=e.target.closest('[data-cancel-or
 $('records').onclick=cancelFromClick;$('pendingManage').onclick=cancelFromClick;$('conditionManage').onclick=cancelFromClick;
 $('code').addEventListener('input',()=>{clearTimeout(searchTimer);const q=$('code').value.trim();if(q.length<2){$('results').style.display='none';return}searchTimer=setTimeout(async()=>{try{const rows=await request('/api/minute/search?q='+encodeURIComponent(q));$('results').innerHTML=rows.map(r=>`<div class="result" data-code="${r.code}"><b>${escapeHtml(r.name)} ${r.code}</b><span>${r.latest_date}</span></div>`).join('')||'<div class="result">未找到分钟缓存标的</div>';$('results').style.display='block'}catch(e){}},220)});
 $('results').onclick=e=>{const row=e.target.closest('[data-code]');if(row){$('results').style.display='none';loadDates(row.dataset.code)}};$('code').addEventListener('keydown',e=>{if(e.key==='Enter')loadDates($('code').value)});document.addEventListener('click',e=>{if(!e.target.closest('.search'))$('results').style.display='none'});document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!$('tradeModal').hidden)closeTradeModal();if(!$('reviewModal').hidden)closeReviewModal();if(!$('planModal').hidden)closePlanModal()}});window.addEventListener('resize',()=>{dailyChart.resize();minuteChart.resize()});
-async function init(){selectConditionSide('buy');
-(function(){
+async function init(){
+  selectConditionSide('buy');
   const input=$('code');
-  if(!input)return;
-  let cleared=false;
-  const clearOnce=()=>{
-    if(cleared)return;
-    cleared=true;
-    if(input.dataset.clearOnce==='1' || input.value){
+  if(input){
+    let cleared=false;
+    const clearOnce=()=>{
+      if(cleared)return;
+      cleared=true;
       input.value='';
       input.dataset.clearOnce='0';
-    }
-  };
-  input.addEventListener('focus',clearOnce);
-  input.addEventListener('pointerdown',clearOnce);
-})();
-const saved=sessionStorage.getItem('tradingTrainerSession');if(saved){try{render(await request('/api/trainer/state?session_id='+encodeURIComponent(saved)));$('setup').hidden=true;$('game').hidden=false;setTimeout(()=>{dailyChart.resize();minuteChart.resize()},20);return}catch(e){sessionStorage.removeItem('tradingTrainerSession')}}/* 不预填代码，避免用户手动删缺省值；日期列表等选中标的后再加载 */}
+    };
+    input.addEventListener('focus',clearOnce);
+    input.addEventListener('pointerdown',clearOnce);
+  }
+  const saved=sessionStorage.getItem('tradingTrainerSession');
+  if(saved){
+    try{
+      render(await request('/api/trainer/state?session_id='+encodeURIComponent(saved)));
+      $('setup').hidden=true;$('game').hidden=false;
+      setTimeout(()=>{dailyChart.resize();minuteChart.resize()},20);
+      return;
+    }catch(e){sessionStorage.removeItem('tradingTrainerSession')}
+  }
+}
 init();
 </script>
 </body>
