@@ -18,7 +18,8 @@
 @media(max-width:1100px){.setup-grid{grid-template-columns:repeat(4,1fr)}.search{grid-column:span 2}.metrics,.factor-grid{grid-template-columns:repeat(4,1fr)}.main{grid-template-columns:1fr}.side{display:grid;grid-template-columns:1fr 1fr}.records{min-height:300px}}
 @media(max-width:680px){.page{padding:8px}.top h1{font-size:16px}.setup-grid{grid-template-columns:1fr 1fr}.search{grid-column:1/-1}.metrics,.factor-grid{grid-template-columns:1fr 1fr}.playbar{flex-wrap:wrap}.playbar .identity{width:100%}.main{display:block}.charts{grid-template-rows:380px 340px}.side{display:block}.news-feed,.trade-box,.records{margin-top:10px}.field input,.field select,.field textarea{font-size:16px}.top .links{gap:8px}.sheet{max-height:92vh}.modal.manage-mode{padding:12px 8px max(16px,env(safe-area-inset-bottom))}.modal.manage-mode .sheet{max-height:calc(100vh - 28px);max-height:calc(100dvh - 28px)}.sheet-head{padding-left:12px;padding-right:12px}.trade-tabs,.sheet-body{padding-left:12px;padding-right:12px}.modal-account{grid-template-columns:1fr 1fr}.condition-grid{grid-template-columns:1fr}.condition-help,.condition-note{grid-column:auto}.quick-grid{gap:5px}.quick-grid button{font-size:10px}.trade-launch small{display:none}}
 
-.plan-bar{display:flex;gap:8px;align-items:stretch;padding:10px 12px;margin-bottom:10px;flex-wrap:wrap}.plan-bar .plan-summary{flex:1;min-width:220px;background:var(--soft);border-radius:8px;padding:8px 10px;font-size:11px;line-height:1.55;color:#445066}.plan-bar .plan-summary b{color:var(--text)}.plan-actions{display:flex;gap:6px;flex-wrap:wrap;align-items:center}.mindset-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:8px 12px;border-top:1px solid var(--border);background:#fafbfc}.mindset-row span{color:var(--muted);font-size:10px;font-weight:700;margin-right:4px}.mindset-row button{height:28px;padding:0 8px;font-size:11px;background:#fff;color:#4a5568}.mindset-row button:hover{border-color:#f0b429;color:#8a5b00}.violation{margin-top:6px;padding:6px 8px;border-radius:6px;background:#fff0ee;color:#9b2c2c;font-size:10px}.decision-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px}.review-body{padding:12px 18px 20px}.review-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.review-card{background:var(--soft);border-radius:10px;padding:10px 12px}.review-card h3{margin:0 0 6px;font-size:12px}.review-card p,.review-list{margin:0;font-size:11px;line-height:1.55;color:#4a5568}.review-list{max-height:180px;overflow:auto}.chip{display:inline-block;padding:2px 7px;border-radius:10px;background:#edf3ff;color:var(--blue);font-size:10px;margin:2px 4px 2px 0}
+.plan-bar{display:flex;gap:8px;align-items:stretch;padding:10px 12px;margin-bottom:10px;flex-wrap:wrap}.plan-bar .plan-summary{flex:1;min-width:220px;background:var(--soft);border-radius:8px;padding:8px 10px;font-size:11px;line-height:1.55;color:#445066}.plan-bar .plan-summary b{color:var(--text)}.plan-actions{display:flex;gap:6px;flex-wrap:wrap;align-items:center}.mindset-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:8px 12px;border-top:1px solid var(--border);background:#fafbfc}.mindset-row span{color:var(--muted);font-size:10px;font-weight:700;margin-right:4px}.mindset-row button{height:28px;padding:0 8px;font-size:11px;background:#fff;color:#4a5568}.mindset-row button:hover{border-color:#f0b429;color:#8a5b00}.violation{margin-top:6px;padding:6px 8px;border-radius:6px;background:#fff0ee;color:#9b2c2c;font-size:10px}.decision-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px}.review-body{padding:12px 18px 20px}.review-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.review-card{background:var(--soft);border-radius:10px;padding:10px 12px}.review-card h3{margin:0 0 6px;font-size:12px}.review-card p,.review-list{margin:0;font-size:11px;line-height:1.55;color:#4a5568}.review-list{max-height:180px;overflow:auto}.setup-plan,.setup-plan-grid,.plan-bar,#planModal{display:none!important}
+.chip{display:inline-block;padding:2px 7px;border-radius:10px;background:#edf3ff;color:var(--blue);font-size:10px;margin:2px 4px 2px 0}
 .setup-plan{margin-top:10px;padding-top:10px;border-top:1px dashed var(--border)}.setup-plan-grid{display:grid;grid-template-columns:2fr 1fr 1fr 1.2fr;gap:8px}
 @media(max-width:680px){.decision-grid,.review-grid,.setup-plan-grid{grid-template-columns:1fr 1fr}.plan-bar{display:block}}
 </style>
@@ -29,7 +30,7 @@
   <div class="top"><h1>🎯 T+1 无剧透交易训练</h1><div class="links"><a id="newsLink" href="market_news.html" target="_blank" rel="noopener">市场资讯</a><a id="journalLink" href="stock_journal.html?code=sh600000">记录决策</a><a id="symbolLink" href="symbol.html?code=sh600000">标的上下文</a><a href="minute_view.html">分时查询</a><a href="index.html">返回导航</a></div></div>
   <div class="notice" id="notice"></div>
   <section class="panel setup" id="setup"><div class="setup-grid">
-    <div class="field search"><label>标的代码或名称</label><input id="code" value="600000" autocomplete="off" placeholder="例如 浦发银行 / 600000"><div class="results" id="results"></div></div>
+    <div class="field search"><label>标的代码或名称</label><input id="code" value="" autocomplete="off" placeholder="例如 浦发银行 / 600000" data-clear-once="1"><div class="results" id="results"></div></div>
     <div class="field"><label>起始交易日</label><select id="startDate"><option value="random">随机挑战</option></select></div>
     <div class="field"><label>初始资金</label><input id="capital" type="number" value="100000" min="1" step="10000"></div>
     <div class="field"><label>佣金（bp）</label><input id="commission" type="number" value="3" min="0" step="0.1"></div>
@@ -492,7 +493,7 @@ async function collectVisibleContext(){
 async function submitCondition(){stop();const ok=await mutate('/api/trainer/condition',{side:conditionSide,condition_type:$('conditionType').value,trigger_value:$('triggerValue').value,secondary_trigger_value:$('secondaryTriggerField').hidden?null:$('secondaryTriggerValue').value,shares:$('conditionShares').value,note:$('conditionNote').value,validity:$('conditionValidity').value});if(ok){$('conditionNote').value='';closeTradeModal()}}
 
 async function loadDates(code){try{const meta=await request('/api/trainer/dates?code='+encodeURIComponent(code));$('code').value=`${meta.name} ${meta.code}`;$('sellTax').value=meta.code.slice(2).match(/^[15]/)?0:5;$('startDate').innerHTML='<option value="random">随机挑战（保留后续交易日）</option>'+meta.dates.map(d=>`<option value="${d}">${d}</option>`).join('')}catch(e){notice(e.message,true)}}
-async function startGame(){stop();loading(true);try{const payload={code:$('code').value,start_date:$('startDate').value,capital:$('capital').value,commission_bps:$('commission').value,min_commission:$('minCommission').value,sell_tax_bps:$('sellTax').value,day_plan:{thesis:$('planThesis').value,max_loss_pct:$('planMaxLoss').value||null,entry_style:$('planStyle').value,notes:$('planNotes').value}};render(await request('/api/trainer/session','POST',payload));$('setup').hidden=true;$('game').hidden=false;setTimeout(()=>{dailyChart.resize();minuteChart.resize()},20)}catch(e){notice(e.message,true)}finally{loading(false)}}
+async function startGame(){stop();loading(true);try{const payload={code:$('code').value,start_date:$('startDate').value,capital:$('capital').value,commission_bps:$('commission').value,min_commission:$('minCommission').value,sell_tax_bps:$('sellTax').value};render(await request('/api/trainer/session','POST',payload));$('setup').hidden=true;$('game').hidden=false;setTimeout(()=>{dailyChart.resize();minuteChart.resize()},20)}catch(e){notice(e.message,true)}finally{loading(false)}}
 
 function openPlanModal(){
   if(!state)return;
@@ -550,7 +551,23 @@ async function cancelFromClick(e){const normal=e.target.closest('[data-cancel-or
 $('records').onclick=cancelFromClick;$('pendingManage').onclick=cancelFromClick;$('conditionManage').onclick=cancelFromClick;
 $('code').addEventListener('input',()=>{clearTimeout(searchTimer);const q=$('code').value.trim();if(q.length<2){$('results').style.display='none';return}searchTimer=setTimeout(async()=>{try{const rows=await request('/api/minute/search?q='+encodeURIComponent(q));$('results').innerHTML=rows.map(r=>`<div class="result" data-code="${r.code}"><b>${escapeHtml(r.name)} ${r.code}</b><span>${r.latest_date}</span></div>`).join('')||'<div class="result">未找到分钟缓存标的</div>';$('results').style.display='block'}catch(e){}},220)});
 $('results').onclick=e=>{const row=e.target.closest('[data-code]');if(row){$('results').style.display='none';loadDates(row.dataset.code)}};$('code').addEventListener('keydown',e=>{if(e.key==='Enter')loadDates($('code').value)});document.addEventListener('click',e=>{if(!e.target.closest('.search'))$('results').style.display='none'});document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!$('tradeModal').hidden)closeTradeModal();if(!$('reviewModal').hidden)closeReviewModal();if(!$('planModal').hidden)closePlanModal()}});window.addEventListener('resize',()=>{dailyChart.resize();minuteChart.resize()});
-async function init(){selectConditionSide('buy');const saved=sessionStorage.getItem('tradingTrainerSession');if(saved){try{render(await request('/api/trainer/state?session_id='+encodeURIComponent(saved)));$('setup').hidden=true;$('game').hidden=false;setTimeout(()=>{dailyChart.resize();minuteChart.resize()},20);return}catch(e){sessionStorage.removeItem('tradingTrainerSession')}}loadDates('600000')}
+async function init(){selectConditionSide('buy');
+(function(){
+  const input=$('code');
+  if(!input)return;
+  let cleared=false;
+  const clearOnce=()=>{
+    if(cleared)return;
+    cleared=true;
+    if(input.dataset.clearOnce==='1' || input.value){
+      input.value='';
+      input.dataset.clearOnce='0';
+    }
+  };
+  input.addEventListener('focus',clearOnce);
+  input.addEventListener('pointerdown',clearOnce);
+})();
+const saved=sessionStorage.getItem('tradingTrainerSession');if(saved){try{render(await request('/api/trainer/state?session_id='+encodeURIComponent(saved)));$('setup').hidden=true;$('game').hidden=false;setTimeout(()=>{dailyChart.resize();minuteChart.resize()},20);return}catch(e){sessionStorage.removeItem('tradingTrainerSession')}}/* 不预填代码，避免用户手动删缺省值；日期列表等选中标的后再加载 */}
 init();
 </script>
 </body>
