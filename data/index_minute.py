@@ -2,7 +2,7 @@
 
 覆盖训练页市场情境所需的少数宽基指数，与股票分钟缓存分离。
 数据源：腾讯五日分时（web.ifzq.gtimg.cn），与 data/minute.py 主源一致。
-接口只返回最近约 5 个交易日，靠每日增量积累近期覆盖。
+接口只返回最近约 5 个交易日，靠每日增量积累；本地保留约一年（KEEP_DAYS=370）。
 
 港股恒生（hkHSI）共用同一缓存与解析器；美股/韩国分钟源不可用，仍走日线。
 """
@@ -25,7 +25,7 @@ from data.storage import atomic_write_parquet
 
 CACHE_FILE = os.path.join(PROJECT_DIR, "cache", "index_minute_cache.parquet")
 TENCENT_DAY_URL = "https://web.ifzq.gtimg.cn/appstock/app/day/query"
-KEEP_DAYS = 65
+KEEP_DAYS = 370
 DELAY = 0.05
 COLUMNS = ["代码", "时间", "开盘", "最高", "最低", "收盘", "成交量", "成交额"]
 

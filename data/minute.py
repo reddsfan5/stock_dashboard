@@ -3,7 +3,7 @@
 
 数据源：腾讯五日分时主源 + 新浪分钟 K 线备源（东财被本机代理阻断）
 覆盖：接口只返回最近 5~9 个交易日——无法回补更早历史，靠每日收盘后增量
-      "养数据"积累近两个月（KEEP_DAYS=65 自然日 ≈ 44 交易日）
+      "养数据"积累近一年（KEEP_DAYS=370 自然日 ≈ 250 交易日 + 缓冲）
 
 数据格式
 --------
@@ -40,7 +40,7 @@ sys.path.insert(0, PROJECT_DIR)
 from data.storage import atomic_write_parquet
 
 CACHE_FILE = os.path.join(PROJECT_DIR, "cache", "minute_kline_cache.parquet")
-KEEP_DAYS = 65          # 保留自然日（近两个月 ≈ 44 交易日 + 缓冲）
+KEEP_DAYS = 370         # 保留自然日（近一年 ≈ 250 交易日 + 缓冲）
 THREADS = 8
 DELAY = 0.02            # 腾讯主源请求的轻量节流
 CHECKPOINT_CODES = 1000 # 每完成 N 只原子落盘一次；超时后下次可续跑
