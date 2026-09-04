@@ -8,7 +8,7 @@
 <style>
 :root{--bg:var(--app-bg,#f3f5f8);--panel:var(--app-surface,#fff);--text:var(--app-text,#172033);--muted:var(--app-muted,#778196);--border:var(--app-border,#e0e5ed);--blue:var(--app-accent,#3478f6);--red:var(--app-up,#e5484d);--green:var(--app-down,#159568);--sell:#3979bf;--gold:#d99200;--soft:var(--app-surface-2,#f6f8fb);--shadow:var(--app-shadow,0 18px 55px rgba(17,27,46,.22))}
 *{box-sizing:border-box}html,body{min-height:100%}body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;font-size:14px}.page{max-width:1480px;margin:auto;padding:14px}.top{display:flex;align-items:center;gap:12px;margin-bottom:10px}.top h1{font-size:20px;margin:0}.top .links{margin-left:auto;display:flex;gap:14px}.top a{color:var(--blue);text-decoration:none}.panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;box-shadow:0 2px 8px rgba(30,45,75,.04)}
-.setup{padding:13px;margin-bottom:10px}.setup-grid{display:grid;grid-template-columns:minmax(220px,1.7fr) repeat(5,minmax(110px,1fr)) auto;gap:8px;align-items:end}.field{display:flex;flex-direction:column;gap:6px;min-width:0}.field>label{color:var(--muted);font-size:11px;font-weight:600;letter-spacing:.04em;line-height:1.35}.field input,.field select,.field textarea,button{border:1px solid #cbd3df;border-radius:8px;background:#fff;color:var(--text);font:inherit}.field input,.field select{height:40px;padding:0 11px;font-weight:600}.field textarea{min-height:74px;padding:10px 11px;resize:vertical;line-height:1.55}.field input:focus,.field select:focus,.field textarea:focus{outline:2px solid rgba(52,120,246,.16);border-color:var(--blue)}button{height:40px;padding:0 11px;cursor:pointer;font-weight:600}button.primary{background:var(--blue);border-color:var(--blue);color:#fff}button:disabled{opacity:.4;cursor:not-allowed}.search{position:relative}.results{position:absolute;top:64px;left:0;right:0;z-index:30;display:none;max-height:260px;overflow:auto;background:#fff;border:1px solid var(--border);border-radius:8px;box-shadow:0 12px 28px rgba(20,30,50,.16)}.result{display:flex;justify-content:space-between;padding:10px;border-bottom:1px solid #eef1f5;cursor:pointer}.result:hover{background:#eef4ff}.result span:last-child{color:var(--muted);font-size:11px}
+.setup{padding:13px;margin-bottom:10px}.setup-grid{display:grid;grid-template-columns:minmax(220px,1.7fr) repeat(5,minmax(110px,1fr)) auto;gap:8px;align-items:end}.field{display:flex;flex-direction:column;gap:6px;min-width:0}.field>label{color:var(--muted);font-size:11px;font-weight:600;letter-spacing:.04em;line-height:1.35}.field input,.field select,.field textarea,button{border:1px solid #cbd3df;border-radius:8px;background:#fff;color:var(--text);font:inherit}.field input,.field select{height:40px;padding:0 11px;font-weight:600}.field textarea{min-height:74px;padding:10px 11px;resize:vertical;line-height:1.55}.field input:focus,.field select:focus,.field textarea:focus{outline:2px solid rgba(52,120,246,.16);border-color:var(--blue)}button{height:40px;padding:0 11px;cursor:pointer;font-weight:600}button.primary{background:var(--blue);border-color:var(--blue);color:#fff}button:disabled{opacity:.4;cursor:not-allowed}.date-field{display:flex;flex-direction:column;gap:6px;min-width:0}.date-field .date-row{display:flex;gap:6px;align-items:center}.date-field input[type=date]{flex:1;min-width:0;height:40px;padding:0 10px;border:1px solid #cbd3df;border-radius:8px;background:#fff;font:inherit;font-weight:600}.date-field input[type=date]:disabled{opacity:.45}.date-field .random-toggle{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;font-size:11px;color:var(--muted);font-weight:600;user-select:none}.date-field .random-toggle input{width:14px;height:14px}.date-field .date-hint{font-size:10px;color:var(--muted);line-height:1.35}.search{position:relative}.results{position:absolute;top:64px;left:0;right:0;z-index:30;display:none;max-height:260px;overflow:auto;background:#fff;border:1px solid var(--border);border-radius:8px;box-shadow:0 12px 28px rgba(20,30,50,.16)}.result{display:flex;justify-content:space-between;padding:10px;border-bottom:1px solid #eef1f5;cursor:pointer}.result:hover{background:#eef4ff}.result span:last-child{color:var(--muted);font-size:11px}
 .notice{display:none;padding:9px 12px;margin-bottom:10px;background:#fff4d8;color:#775600;border-radius:8px}.metrics{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;background:var(--border);margin-bottom:10px;overflow:hidden}.metric{background:#fff;padding:10px 12px;min-width:0}.metric .label{display:block;color:var(--muted);font-size:10px;font-weight:600;letter-spacing:.04em;margin-bottom:4px}.metric .value{display:block;color:var(--text);font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.metric .context{display:block;color:var(--muted);font-size:10px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.up{color:var(--red)!important}.down{color:var(--green)!important}.factor-panel{margin-bottom:10px;overflow:hidden}.factor-head{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid var(--border);font-size:11px;font-weight:700}.factor-head span{color:var(--muted);font-size:9px;font-weight:500}.factor-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;background:var(--border)}.factor{background:#fff;padding:8px 10px;min-width:0}.factor .label{display:block;color:var(--muted);font-size:9px;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.factor .value{font-size:14px;font-weight:700;font-variant-numeric:tabular-nums}.factor .context{display:block;color:#929bad;font-size:8px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.factor.hot .value{color:var(--gold)}.factor.strong .value{color:var(--red)}.factor.weak .value{color:var(--green)}
 .playbar{display:flex;align-items:center;gap:8px;padding:9px 12px;margin-bottom:10px}.playbar .identity{font-weight:700;margin-right:auto}.playbar .clock{color:var(--blue);font-variant-numeric:tabular-nums;font-weight:700}.playbar .progress{color:var(--muted);font-size:11px}.playbar select{height:40px;border:1px solid #cbd3df;border-radius:8px;padding:0 8px;background:#fff}.main{display:grid;grid-template-columns:minmax(0,1fr) 370px;gap:10px}.charts{display:grid;grid-template-rows:430px 390px;overflow:hidden}.chart-block{min-width:0;position:relative}.chart-block:first-child{border-bottom:1px solid var(--border)}.chart-title{position:absolute;left:14px;top:10px;z-index:2;font-size:12px;font-weight:700}.chart-title small{color:var(--muted);font-weight:400;margin-left:7px}.chart{height:100%;width:100%}
 .side{display:flex;flex-direction:column;gap:10px}.trade-box{padding:12px}.trade-box h2,.records h2{font-size:14px;margin:0 0 11px}.account-line{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}.account-item{background:var(--soft);padding:9px 10px;border-radius:8px;min-width:0}.account-item .label{display:block;color:var(--muted);font-size:10px;line-height:1.35;margin-bottom:4px}.account-item .value{display:block;font-size:14px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.35;overflow-wrap:anywhere}.trade-launch{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.trade-launch button{height:62px;padding:7px 4px;color:#fff;border:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;white-space:nowrap}.trade-launch b{font-size:15px}.trade-launch small{font-size:9px;font-weight:500;opacity:.84;max-width:100%;overflow:hidden;text-overflow:ellipsis}.launch-buy{background:var(--red)}.launch-sell{background:var(--sell)}.launch-condition{background:#6a5bb4}.badge{display:inline-flex;min-width:17px;height:17px;padding:0 5px;margin-left:3px;border-radius:9px;align-items:center;justify-content:center;background:rgba(255,255,255,.22);font-size:10px}.manage-launch{width:100%;height:38px;margin-top:8px;background:#fff;color:#43516a;border-color:#ccd5e2}.manage-launch .badge{background:#eaf1ff;color:var(--blue);vertical-align:middle}.rule{margin-top:10px;padding:8px 9px;background:#eef4ff;color:#34517b;border-radius:7px;font-size:11px;line-height:1.55}.records{overflow:hidden}.record-list{max-height:520px;overflow:auto}.record-section-title{display:flex;align-items:center;justify-content:space-between;padding:9px 11px 6px;color:#566176;font-size:10px;font-weight:700;letter-spacing:.08em;background:#fafbfc;border-top:1px solid #eef1f5}.record-section-title span{font-weight:500;letter-spacing:0;color:var(--muted)}.order,.condition-card{padding:9px 11px;border-top:1px solid #eef1f5}.order-head,.condition-head{display:flex;justify-content:space-between;gap:8px;font-size:12px;align-items:center}.order-head span,.condition-head span{color:var(--muted);font-size:10px}.buy-text{color:var(--red)}.sell-text{color:var(--sell)}.condition-detail,.order-detail{color:var(--muted);font-size:11px;line-height:1.55;margin-top:4px}.condition-meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:6px}.status{padding:2px 6px;border-radius:10px;font-size:9px;font-weight:700}.status-active,.status-pending{background:#eef4ff;color:var(--blue)}.status-triggered,.status-filled,.status-partial{background:#eaf8f1;color:var(--green)}.status-failed{background:#fff0ee;color:#b73b35}.status-cancelled,.status-expired{background:#f0f2f5;color:#7a8393}.cancel-condition{height:26px;padding:0 8px;color:var(--blue);border-color:#bfd1f5;background:#f7faff;font-size:10px}.empty{padding:28px 12px;color:var(--muted);text-align:center}
@@ -48,7 +48,7 @@
   <div class="notice" id="notice"></div>
   <section class="panel setup" id="setup"><div class="setup-grid">
     <div class="field search"><label>标的代码或名称</label><input id="code" value="" autocomplete="off" placeholder="例如 浦发银行 / 600000" data-clear-once="1"><div class="results" id="results"></div></div>
-    <div class="field"><label>起始交易日</label><select id="startDate"><option value="random">随机挑战</option></select></div>
+    <div class="field date-field"><label>起始交易日</label><div class="date-row"><input id="startDate" type="date" autocomplete="off" disabled title="先选择标的"><label class="random-toggle"><input id="startRandom" type="checkbox" checked> 随机</label></div><div class="date-hint" id="startDateHint">先选标的；有分时的交易日可在日历中点选</div></div>
     <div class="field"><label>初始资金</label><input id="capital" type="number" value="100000" min="1" step="10000"></div>
     <div class="field"><label>佣金（bp）</label><input id="commission" type="number" value="3" min="0" step="0.1"></div>
     <div class="field"><label>最低佣金</label><input id="minCommission" type="number" value="5" min="0" step="1"></div>
@@ -571,8 +571,55 @@ async function collectVisibleContext(){
 }
 async function submitCondition(){stop();const ok=await mutate('/api/trainer/condition',{side:conditionSide,condition_type:$('conditionType').value,trigger_value:$('triggerValue').value,secondary_trigger_value:$('secondaryTriggerField').hidden?null:$('secondaryTriggerValue').value,shares:$('conditionShares').value,note:$('conditionNote').value,validity:$('conditionValidity').value});if(ok){$('conditionNote').value='';closeTradeModal()}}
 
-async function loadDates(code){try{const meta=await request('/api/trainer/dates?code='+encodeURIComponent(code));$('code').value=formatSymbolLabel(meta.name,meta.code); if(window.__trainerCodeClear) window.__trainerCodeClear.arm();$('sellTax').value=meta.code.slice(2).match(/^[15]/)?0:5;$('startDate').innerHTML='<option value="random">随机挑战（保留后续交易日）</option>'+meta.dates.map(d=>`<option value="${d}">${d}</option>`).join('');if(meta.index_minute_warning){notice('可选日已按股票分时放开；部分日期指数分钟不足时，宽基可能仅显示开盘价',true)}else{notice('')}}catch(e){notice(e.message,true)}}
-async function startGame(){stop();const code=$('code').value.trim();if(!code){notice('请先输入或选择标的代码',true);return}loading(true);try{const payload={code:code,start_date:$('startDate').value,capital:$('capital').value,commission_bps:$('commission').value,min_commission:$('minCommission').value,sell_tax_bps:$('sellTax').value};render(await request('/api/trainer/session','POST',payload));$('setup').hidden=true;$('game').hidden=false;setTimeout(()=>{dailyChart.resize();minuteChart.resize()},20)}catch(e){notice(e.message,true)}finally{loading(false)}}
+let availableStartDates=[];
+function syncStartDateMode(){
+  const random=$('startRandom').checked, input=$('startDate');
+  input.disabled=random || !availableStartDates.length;
+  if(random){
+    $('startDateHint').textContent=availableStartDates.length
+      ? `随机挑战（约 ${availableStartDates.length} 个可练交易日）`
+      : '先选标的后再开始；勾选随机则从可练日中抽取';
+  }else if(!availableStartDates.length){
+    $('startDateHint').textContent='当前标的暂无完整分时交易日';
+  }else{
+    $('startDateHint').textContent=`可练区间 ${availableStartDates[0]} ~ ${availableStartDates[availableStartDates.length-1]} · 非交易日会自动吸附到最近有分时的一天`;
+  }
+}
+function nearestAvailableDate(value){
+  if(!availableStartDates.length) return '';
+  if(availableStartDates.includes(value)) return value;
+  let best=availableStartDates[0], bestDist=Infinity;
+  const t=Date.parse(value);
+  availableStartDates.forEach(d=>{
+    const dist=Math.abs(Date.parse(d)-t);
+    if(dist<bestDist){bestDist=dist;best=d}
+  });
+  return best;
+}
+function setAvailableStartDates(dates){
+  availableStartDates=(dates||[]).slice().sort();
+  const input=$('startDate');
+  if(availableStartDates.length){
+    input.min=availableStartDates[0];
+    input.max=availableStartDates[availableStartDates.length-1];
+    if(!input.value || !availableStartDates.includes(input.value)){
+      input.value=availableStartDates[availableStartDates.length-1];
+    }
+  }else{
+    input.removeAttribute('min'); input.removeAttribute('max'); input.value='';
+  }
+  syncStartDateMode();
+}
+async function loadDates(code){try{const meta=await request('/api/trainer/dates?code='+encodeURIComponent(code));$('code').value=formatSymbolLabel(meta.name,meta.code); if(window.__trainerCodeClear) window.__trainerCodeClear.arm();$('sellTax').value=meta.code.slice(2).match(/^[15]/)?0:5;setAvailableStartDates(meta.dates||[]);if(meta.index_minute_warning){notice('可选日已按股票分时放开；部分日期指数分钟不足时，宽基可能仅显示开盘价',true)}else{notice('')}}catch(e){notice(e.message,true)}}
+async function startGame(){stop();const code=$('code').value.trim();if(!code){notice('请先输入或选择标的代码',true);return}
+  let startDate='random';
+  if(!$('startRandom').checked){
+    if(!availableStartDates.length){notice('当前标的没有可练交易日',true);return}
+    startDate=nearestAvailableDate($('startDate').value);
+    if(!startDate){notice('请选择起始交易日',true);return}
+    if(startDate!==$('startDate').value){$('startDate').value=startDate;notice(`已调整为最近可练日 ${startDate}`)}
+  }
+  loading(true);try{const payload={code:code,start_date:startDate,capital:$('capital').value,commission_bps:$('commission').value,min_commission:$('minCommission').value,sell_tax_bps:$('sellTax').value};render(await request('/api/trainer/session','POST',payload));$('setup').hidden=true;$('game').hidden=false;setTimeout(()=>{dailyChart.resize();minuteChart.resize()},20)}catch(e){notice(e.message,true)}finally{loading(false)}}
 
 function openPlanModal(){
   if(!state)return;
@@ -616,7 +663,7 @@ async function openReview(){
   }catch(e){notice(e.message,true)}
 }
 
-$('start').onclick=startGame;$('play').onclick=play;$('step').onclick=()=>advance(1);$('closeDay').onclick=()=>advance(10000);$('nextDay').onclick=async()=>{stop();await mutate('/api/trainer/next-day')};
+$('startRandom').onchange=syncStartDateMode;$('startDate').onchange=()=>{if(!$('startRandom').checked&&$('startDate').value){const n=nearestAvailableDate($('startDate').value);if(n&&n!==$('startDate').value){$('startDate').value=n;notice(`已调整为最近可练日 ${n}`)}};syncStartDateMode()};$('start').onclick=startGame;$('play').onclick=play;$('step').onclick=()=>advance(1);$('closeDay').onclick=()=>advance(10000);$('nextDay').onclick=async()=>{stop();await mutate('/api/trainer/next-day')};
 $('newGame').onclick=()=>{stop();closeTradeModal();closeReviewModal();closePlanModal();sessionStorage.removeItem('tradingTrainerSession');sessionId=null;state=null;$('game').hidden=true;$('setup').hidden=false};
 $('openReview').onclick=openReview;$('closeReview').onclick=closeReviewModal;$('reviewBackdrop').onclick=closeReviewModal;
 $('editPlan').onclick=openPlanModal;$('savePlan').onclick=openPlanModal;$('closePlanModal').onclick=closePlanModal;$('planBackdrop').onclick=closePlanModal;$('confirmPlan').onclick=saveLivePlan;
@@ -643,6 +690,7 @@ $('results').onclick=e=>{const row=e.target.closest('[data-code]');if(row){$('re
 });window.addEventListener('resize',()=>{dailyChart.resize();minuteChart.resize()});
 async function init(){
   selectConditionSide('buy');
+  syncStartDateMode();
   const input=$('code');
   if(input){
     // 有内容时首次聚焦清空，方便改标的；空框聚焦不消耗机会。选中标的后重新武装。
