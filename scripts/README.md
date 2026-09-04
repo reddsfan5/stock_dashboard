@@ -35,6 +35,7 @@ python -m scripts.simulations.sim_portfolio
 python -m scripts.research.weekday_stats
 python -m scripts.research.backtest_market_proverbs     # 市场口诀前七条事件回测
 python -m scripts.research.backtest_slow_rise           # 缓涨3～5日开盘买入、5日止盈回测
+python -m scripts.research.backtest_screen_to_trade     # 选股信号→次日买入持有（基线对照）
 python -m scripts.research.optimize_intraday_grid          # 520500 最近10日网格调参
 python -m scripts.serve                                    # 一键启动全部 HTTP 服务
 python -m scripts.serve start trainer                      # 单独启动训练入口

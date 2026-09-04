@@ -74,6 +74,7 @@ stock/
 │   ├── trading_trainer.py        # T+1 手动交易状态机
 │   ├── proverbs.py / proverb_report.py
 │   ├── slow_rise.py / slow_rise_report.py
+│   ├── screen_to_trade.py / screen_to_trade_report.py  # 选股→交易链接回测
 │   └── renderer.py / templates/
 │
 ├── pipeline/                     # 管线编排
