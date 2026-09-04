@@ -119,6 +119,28 @@ def previous_close_from_bars(bars: pd.DataFrame, bar_date) -> Optional[float]:
     return float(earlier.iloc[-1]["收盘"])
 
 
+
+def _sparkline_closes(frame, max_points: int = 48) -> list:
+    """Downsample minute closes for compact SVG sparklines."""
+    if frame is None or len(frame) == 0:
+        return []
+    closes = [float(x) for x in frame["收盘"].tolist() if x is not None]
+    if not closes:
+        return []
+    if len(closes) <= max_points:
+        return [_round_price(v) for v in closes]
+    step = (len(closes) - 1) / (max_points - 1)
+    picked = []
+    for i in range(max_points):
+        idx = int(round(i * step))
+        picked.append(_round_price(closes[idx]))
+    return picked
+
+
+# 市场情境缩略分时：仅这些标的在有分钟缓存时附带 sparkline
+SPARKLINE_A_SHARE = {"sh000300"}  # 沪深300
+SPARKLINE_OVERSEAS = {"KS11", "HSI"}  # 韩国KOSPI；恒生有缓存时一并给出
+
 class MarketContextService:
     """组装训练页市场情境载荷。"""
 
@@ -201,6 +223,11 @@ class MarketContextService:
                 point_time = None
                 source = "prev_close"
 
+            sparkline = (
+                _sparkline_closes(minute_points)
+                if code in SPARKLINE_A_SHARE and source == "minute" and len(minute_points)
+                else []
+            )
             cards.append({
                 "code": code,
                 "name": name,
@@ -221,6 +248,7 @@ class MarketContextService:
                         if len(prev_rows) else None
                     )
                 ),
+                "sparkline": sparkline,
             })
         return cards
 
@@ -254,6 +282,7 @@ class MarketContextService:
             if known is None and len(bars):
                 note = "缓存中尚无在该模拟时刻可知的收盘"
 
+            minute_points = None
             # 港股恒生：有分钟缓存时按当地时刻截断，与 A 股分时同步
             if code == "HSI":
                 hk_date = local.strftime("%Y-%m-%d")
@@ -273,6 +302,27 @@ class MarketContextService:
                     if prev is None and known is not None:
                         prev = previous_close_from_bars(bars, known["日期"])
 
+            sparkline = []
+            if code in SPARKLINE_OVERSEAS:
+                if code == "HSI" and source == "minute":
+                    sparkline = _sparkline_closes(minute_points)
+                elif code == "KS11":
+                    # 韩国暂无稳定分钟源；若日后 index_minute 写入 krKS11 等即可显示
+                    for kr_code in ("krKS11", "ksKS11", "KS11"):
+                        kr_date = local.strftime("%Y-%m-%d")
+                        kr_clock = local.strftime("%H:%M:%S")
+                        kr_points = self.index_minute.points_as_of(kr_code, kr_date, kr_clock)
+                        if len(kr_points):
+                            sparkline = _sparkline_closes(kr_points)
+                            if source != "minute":
+                                last = kr_points.iloc[-1]
+                                price = float(last["收盘"])
+                                point_time = pd.Timestamp(last["时间"]).strftime("%H:%M")
+                                bar_date = kr_date
+                                source = "minute"
+                                note = "分时；按模拟时刻截断"
+                                prev = previous_close_from_bars(bars, kr_date) or prev
+                            break
             cards.append({
                 "code": code,
                 "name": meta["name"],
@@ -289,6 +339,7 @@ class MarketContextService:
                 "timezone": meta["timezone"],
                 "source": source,
                 "note": note,
+                "sparkline": sparkline,
             })
         return cards
 
