@@ -4,8 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>T+1 无剧透交易训练</title>
+<link rel="stylesheet" href="/assets/app.css">
 <style>
-:root{--bg:#f3f5f8;--panel:#fff;--text:#172033;--muted:#778196;--border:#e0e5ed;--blue:#3478f6;--red:#e5484d;--green:#159568;--sell:#3979bf;--gold:#d99200;--soft:#f6f8fb;--shadow:0 18px 55px rgba(17,27,46,.22)}
+:root{--bg:var(--app-bg,#f3f5f8);--panel:var(--app-surface,#fff);--text:var(--app-text,#172033);--muted:var(--app-muted,#778196);--border:var(--app-border,#e0e5ed);--blue:var(--app-accent,#3478f6);--red:var(--app-up,#e5484d);--green:var(--app-down,#159568);--sell:#3979bf;--gold:#d99200;--soft:var(--app-surface-2,#f6f8fb);--shadow:var(--app-shadow,0 18px 55px rgba(17,27,46,.22))}
 *{box-sizing:border-box}html,body{min-height:100%}body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;font-size:14px}.page{max-width:1480px;margin:auto;padding:14px}.top{display:flex;align-items:center;gap:12px;margin-bottom:10px}.top h1{font-size:20px;margin:0}.top .links{margin-left:auto;display:flex;gap:14px}.top a{color:var(--blue);text-decoration:none}.panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;box-shadow:0 2px 8px rgba(30,45,75,.04)}
 .setup{padding:13px;margin-bottom:10px}.setup-grid{display:grid;grid-template-columns:minmax(220px,1.7fr) repeat(5,minmax(110px,1fr)) auto;gap:8px;align-items:end}.field{display:flex;flex-direction:column;gap:6px;min-width:0}.field>label{color:var(--muted);font-size:11px;font-weight:600;letter-spacing:.04em;line-height:1.35}.field input,.field select,.field textarea,button{border:1px solid #cbd3df;border-radius:8px;background:#fff;color:var(--text);font:inherit}.field input,.field select{height:40px;padding:0 11px;font-weight:600}.field textarea{min-height:74px;padding:10px 11px;resize:vertical;line-height:1.55}.field input:focus,.field select:focus,.field textarea:focus{outline:2px solid rgba(52,120,246,.16);border-color:var(--blue)}button{height:40px;padding:0 11px;cursor:pointer;font-weight:600}button.primary{background:var(--blue);border-color:var(--blue);color:#fff}button:disabled{opacity:.4;cursor:not-allowed}.search{position:relative}.results{position:absolute;top:64px;left:0;right:0;z-index:30;display:none;max-height:260px;overflow:auto;background:#fff;border:1px solid var(--border);border-radius:8px;box-shadow:0 12px 28px rgba(20,30,50,.16)}.result{display:flex;justify-content:space-between;padding:10px;border-bottom:1px solid #eef1f5;cursor:pointer}.result:hover{background:#eef4ff}.result span:last-child{color:var(--muted);font-size:11px}
 .notice{display:none;padding:9px 12px;margin-bottom:10px;background:#fff4d8;color:#775600;border-radius:8px}.metrics{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;background:var(--border);margin-bottom:10px;overflow:hidden}.metric{background:#fff;padding:10px 12px;min-width:0}.metric .label{display:block;color:var(--muted);font-size:10px;font-weight:600;letter-spacing:.04em;margin-bottom:4px}.metric .value{display:block;color:var(--text);font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.metric .context{display:block;color:var(--muted);font-size:10px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.up{color:var(--red)!important}.down{color:var(--green)!important}.factor-panel{margin-bottom:10px;overflow:hidden}.factor-head{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid var(--border);font-size:11px;font-weight:700}.factor-head span{color:var(--muted);font-size:9px;font-weight:500}.factor-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;background:var(--border)}.factor{background:#fff;padding:8px 10px;min-width:0}.factor .label{display:block;color:var(--muted);font-size:9px;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.factor .value{font-size:14px;font-weight:700;font-variant-numeric:tabular-nums}.factor .context{display:block;color:#929bad;font-size:8px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.factor.hot .value{color:var(--gold)}.factor.strong .value{color:var(--red)}.factor.weak .value{color:var(--green)}
@@ -22,12 +23,28 @@
 .chip{display:inline-block;padding:2px 7px;border-radius:10px;background:#edf3ff;color:var(--blue);font-size:10px;margin:2px 4px 2px 0}
 .setup-plan{margin-top:10px;padding-top:10px;border-top:1px dashed var(--border)}.setup-plan-grid{display:grid;grid-template-columns:2fr 1fr 1fr 1.2fr;gap:8px}
 @media(max-width:680px){.decision-grid,.review-grid,.setup-plan-grid{grid-template-columns:1fr 1fr}.plan-bar{display:block}}
+/* densise defaults + typography floor */
+.metric .label,.metric .context{font-size:11px}.factor-head{font-size:12px}.factor-head span{font-size:11px}.factor .label{font-size:11px}.factor .context{font-size:11px}
+.market-status,.news-feed-status,.news-feed-head p,.live-news-meta,.live-news-digest{font-size:11px}.idx-card .name,.idx-card .meta,.ov-card .meta{font-size:11px}
+.trade-launch small{font-size:11px}.status{font-size:11px}.cancel-condition{font-size:11px}.record-section-title{font-size:11px}
+.account-item .label{font-size:11px}.field>label{font-size:12px}
+.denoise-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:8px 12px;margin-bottom:10px;background:var(--panel);border:1px solid var(--border);border-radius:10px}
+.denoise-bar .hint{color:var(--muted);font-size:12px;margin-right:auto}
+.denoise-bar button{height:32px;padding:0 10px;font-size:12px;background:#fff;color:#43516a}
+.denoise-bar button.is-on{background:#edf3ff;color:var(--blue);border-color:#c5d6f8}
+.factor-panel.is-collapsed .factor-grid{display:none}
+.factor-panel.is-collapsed .factor-head{border-bottom:0}
+.market-block.overseas-block.is-collapsed .ov-list{display:none}
+.market-block .block-toggle{margin-left:8px;height:26px;padding:0 8px;font-size:11px;background:#fff;color:#43516a}
+.top .links{display:none}
+
 </style>
 </head>
 <body>
+<div id="app-shell" data-active="trainer"></div>
 <div class="loading" id="loading"><span>正在建立无剧透训练会话…</span></div>
 <main class="page">
-  <div class="top"><h1>🎯 T+1 无剧透交易训练</h1><div class="links"><a id="newsLink" href="market_news.html" target="_blank" rel="noopener">市场资讯</a><a id="journalLink" href="stock_journal.html?code=sh600000">记录决策</a><a id="symbolLink" href="symbol.html?code=sh600000">标的上下文</a><a href="minute_view.html">分时查询</a><a href="index.html">返回导航</a></div></div>
+  <div class="top"><h1>T+1 无剧透交易训练</h1><div class="links"><a id="newsLink" href="market_news.html" target="_blank" rel="noopener">市场资讯</a><a id="journalLink" href="stock_journal.html?code=sh600000">记录决策</a><a id="symbolLink" href="symbol.html?code=sh600000">标的上下文</a><a href="minute_view.html">分时查询</a><a href="index.html">返回导航</a></div></div>
   <div class="notice" id="notice"></div>
   <section class="panel setup" id="setup"><div class="setup-grid">
     <div class="field search"><label>标的代码或名称</label><input id="code" value="" autocomplete="off" placeholder="例如 浦发银行 / 600000" data-clear-once="1"><div class="results" id="results"></div></div>
@@ -58,7 +75,12 @@
       <div class="metric"><span class="label">已实现</span><span class="value" id="mRealized">—</span><span class="context">已卖出交易</span></div>
       <div class="metric"><span class="label">未实现</span><span class="value" id="mUnrealized">—</span><span class="context" id="mFees">—</span></div>
     </section>
-    <section class="panel factor-panel">
+    <div class="denoise-bar" id="denoiseBar">
+      <span class="hint">默认精简视图 · 核心交易区保持展开</span>
+      <button type="button" id="toggleFactors" aria-pressed="false">展开因子</button>
+      <button type="button" id="toggleOverseas" aria-pressed="false">展开海外指数</button>
+    </div>
+    <section class="panel factor-panel is-collapsed" id="factorPanel">
       <div class="factor-head">当前可见行情指标 <span>只使用当前模拟分钟及此前数据，数值随播放变化</span></div>
       <div class="factor-grid">
         <div class="factor" id="factorVolume" title="当日截至当前分钟累计成交量 ÷ 前5日同一分钟平均累计成交量"><span class="label">盘中量比（5日同分钟）</span><span class="value" id="fVolumeRatio">—</span><span class="context">量能节奏</span></div>
@@ -237,6 +259,7 @@
   </section>
 </div>
 
+<script src="/assets/app-shell.js"></script>
 <script src="vendor/echarts.min.js"></script><script>window.echarts||document.write(`<script src='https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js'><\/script>`);</script>
 <script>
 const $=id=>document.getElementById(id);
@@ -284,7 +307,7 @@ function render(next){
   $('newsLink').href='market_news.html?mode=replay&date='+encodeURIComponent(next.date)+'&as_of='+encodeURIComponent(next.time)+'&code='+encodeURIComponent(next.code);
   $('liveNewsMore').href=$('newsLink').href;
   const a=next.account,m=next.market,p=next.progress;
-  $('identity').textContent=`${next.name} ${next.code} · ${next.date}`;$('clock').textContent=next.time;$('progress').textContent=`已显示 ${p.revealed}/${p.total} 分钟`;
+  $('identity').textContent=`${next.name} ${next.code} · ${next.date}`;$('clock').textContent=next.time;$('progress').textContent=`已显示 ${p.revealed}/${p.total} 分钟`;if(window.StockAppShell)StockAppShell.setClock({date:next.date,time:next.time,label:'模拟时钟',spoilerSafe:true});
   $('mPrice').textContent=price(m.price);$('mPrice').className='value '+pnlClass(m.change_pct);$('mChange').textContent=`较昨收 ${signed(m.change_pct,'%')}`;$('mChange').className='context '+pnlClass(m.change_pct);
   $('mCash').textContent=money(a.available_cash);$('mCashContext').textContent=`总额 ${money(a.cash)} · 冻结 ${money(a.reserved_cash)}`;$('mShares').textContent=`${a.total_shares.toLocaleString()} 股`;$('mAvailable').textContent=`可卖 ${a.available_shares.toLocaleString()} · 委托冻结 ${a.reserved_shares.toLocaleString()} · T+1锁定 ${a.locked_shares.toLocaleString()}`;
   $('mEquity').textContent=money(a.equity);$('mPnl').textContent=money(a.total_pnl);$('mPnl').className='value '+pnlClass(a.total_pnl);$('mReturn').textContent=signed(a.return_pct,'%');$('mReturn').className='context '+pnlClass(a.return_pct);
@@ -573,6 +596,43 @@ async function init(){
     }catch(e){sessionStorage.removeItem('tradingTrainerSession')}
   }
 }
+
+(function setupDenoise(){
+  const KEY_F='trainerShowFactors', KEY_O='trainerShowOverseas';
+  const showF=localStorage.getItem(KEY_F)==='1';
+  const showO=localStorage.getItem(KEY_O)==='1';
+  document.documentElement.dataset.showOverseas=showO?'1':'0';
+  const panel=$('factorPanel');
+  const btnF=$('toggleFactors'), btnO=$('toggleOverseas');
+  function syncFactors(on){
+    if(!panel||!btnF)return;
+    panel.classList.toggle('is-collapsed',!on);
+    btnF.textContent=on?'收起因子':'展开因子';
+    btnF.classList.toggle('is-on',on);
+    btnF.setAttribute('aria-pressed',on?'true':'false');
+    localStorage.setItem(KEY_F,on?'1':'0');
+  }
+  function syncOverseas(on){
+    document.documentElement.dataset.showOverseas=on?'1':'0';
+    if(btnO){
+      btnO.textContent=on?'收起海外指数':'展开海外指数';
+      btnO.classList.toggle('is-on',on);
+      btnO.setAttribute('aria-pressed',on?'true':'false');
+    }
+    localStorage.setItem(KEY_O,on?'1':'0');
+    const block=$('overseasBlock');
+    if(block){
+      block.classList.toggle('is-collapsed',!on);
+      const inline=$('toggleOverseasInline');
+      if(inline)inline.textContent=on?'收起':'展开';
+    }
+  }
+  if(btnF)btnF.onclick=()=>syncFactors(panel.classList.contains('is-collapsed'));
+  if(btnO)btnO.onclick=()=>syncOverseas(document.documentElement.dataset.showOverseas!=='1');
+  syncFactors(showF);
+  syncOverseas(showO);
+})();
+
 init();
 </script>
 </body>

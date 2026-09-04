@@ -4,8 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>标的上下文</title>
+<link rel="stylesheet" href="/assets/app.css">
 <style>
-:root{--bg:#f3f5f8;--card:#fff;--line:#e3e8f0;--blue:#2563eb;--muted:#758096;--red:#d32f2f;--green:#159568;--amber:#b54708}
+:root{--bg:var(--app-bg,#f3f5f8);--card:var(--app-surface,#fff);--line:var(--app-border,#e3e8f0);--blue:var(--app-accent,#2563eb);--muted:var(--app-muted,#758096);--red:var(--app-up,#d32f2f);--green:var(--app-down,#159568);--amber:#b54708}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:#182033;font-size:14px}
 .header{background:linear-gradient(135deg,#121b31,#1d3158);color:#fff;padding:18px 22px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center}
@@ -46,6 +47,7 @@ th{color:var(--muted);font-weight:600}
 </style>
 </head>
 <body>
+<div id="app-shell" data-active="symbol"></div>
 <div class="notice" id="notice"></div>
 <div class="header">
   <div>
@@ -279,5 +281,6 @@ const init = new URL(location.href).searchParams.get('code') || 'sh600519';
 $('codeInput').value = init;
 loadCode(init);
 </script>
+<script src="/assets/app-shell.js"></script>
 </body>
 </html>

@@ -14,6 +14,7 @@ import argparse
 import gc
 import json
 import math
+import mimetypes
 import os
 import re
 import sys
@@ -33,6 +34,7 @@ from features.intraday import add_intraday_volume_ratio
 from scripts.services.intraday_replay import inject_intraday_replay
 
 OUT_HTML = os.path.join(PROJECT_DIR, "output", "minute_view.html")
+STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 DEFAULT_CODE = "sh600519"
 
 
@@ -362,9 +364,10 @@ def build_html(initial_payload: dict) -> str:
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>分时行情查询</title>
+<link rel="stylesheet" href="/assets/app.css">
 <style>
-:root{{--bg:#f4f6f9;--card:#fff;--text:#202124;--muted:#7b8190;--border:#e5e8ef;--blue:#3478f6;--red:#e5484d;--green:#16a36a;--gold:#e5a000}}
-*{{box-sizing:border-box}}body{{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif}}
+:root{{--bg:var(--app-bg,#f4f6f9);--card:var(--app-surface,#fff);--text:var(--app-text,#202124);--muted:var(--app-muted,#7b8190);--border:var(--app-border,#e5e8ef);--blue:var(--app-accent,#3478f6);--red:var(--app-up,#e5484d);--green:var(--app-down,#16a36a);--gold:#e5a000}}
+*{{box-sizing:border-box}}body{{margin:0;background:var(--bg);color:var(--text);font-family:var(--app-font,-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif)}}
 .page{{max-width:1280px;margin:0 auto;padding:18px}}.topbar{{display:flex;gap:14px;align-items:center;justify-content:space-between;margin-bottom:12px}}.brand{{font-size:20px;font-weight:700;white-space:nowrap}}
 .search-wrap{{position:relative;flex:1;max-width:620px}}.search-box{{display:flex;background:#fff;border:1px solid var(--border);border-radius:10px;overflow:hidden;box-shadow:0 2px 8px rgba(30,45,75,.05)}}
 #searchInput{{flex:1;border:0;outline:0;padding:12px 14px;font-size:14px;min-width:0}}#searchBtn{{border:0;background:var(--blue);color:#fff;padding:0 20px;font-weight:600;cursor:pointer}}
@@ -378,9 +381,12 @@ def build_html(initial_payload: dict) -> str:
 .loading{{position:fixed;inset:0;background:rgba(244,246,249,.55);display:none;align-items:center;justify-content:center;z-index:50}}.loading span{{background:#1f2937;color:#fff;padding:10px 18px;border-radius:8px}}.up{{color:var(--red)}}.down{{color:var(--green)}}
 __INTRADAY_REPLAY_CSS__
 @media(max-width:760px){{.page{{padding:10px}}.topbar{{align-items:stretch;flex-direction:column}}.brand{{font-size:17px}}.search-wrap{{max-width:none}}.toolbar{{justify-content:flex-end}}.identity{{min-width:100%}}.stats{{grid-template-columns:repeat(3,1fr);min-width:100%}}.stat{{border-left:0;padding:8px;background:#f7f8fa;border-radius:8px}}#chart{{height:520px}}.status{{flex-direction:column}}}}
-</style></head><body>
+</style>
+<script src="/assets/app-shell.js" defer></script>
+</head><body>
+<div id="app-shell" data-active="minute"></div>
 <div class="loading" id="loading"><span>正在读取分钟缓存…</span></div>
-<main class="page"><div class="topbar"><div class="brand">🕐 分时行情查询</div><div class="search-wrap"><div class="search-box"><input id="searchInput" autocomplete="off" placeholder="输入股票名称或代码，如 贵州茅台 / 600519"><button id="searchBtn">查询</button></div><div class="results" id="results"></div></div><div class="toolbar"><a id="journalLink" href="/stock_journal.html">📓 记日记</a><button id="prevDay" title="前一交易日">‹</button><select id="dateSelect" aria-label="选择交易日"></select><button id="nextDay" title="后一交易日">›</button></div></div>
+<main class="page"><div class="topbar"><div class="brand">分时行情查询</div><div class="search-wrap"><div class="search-box"><input id="searchInput" autocomplete="off" placeholder="输入股票名称或代码，如 贵州茅台 / 600519"><button id="searchBtn">查询</button></div><div class="results" id="results"></div></div><div class="toolbar"><a id="journalLink" href="/stock_journal.html">📓 记日记</a><button id="prevDay" title="前一交易日">‹</button><select id="dateSelect" aria-label="选择交易日"></select><button id="nextDay" title="后一交易日">›</button></div></div>
 <div class="notice" id="notice"></div><section class="card"><div class="quote"><div class="identity"><h1 id="symbolName">—</h1><div class="sub" id="symbolMeta">—</div></div><div><span class="last" id="lastPrice">—</span> <span class="change" id="changePct">—</span></div><div class="stats"><div class="stat"><span class="label">今开</span><span class="value" id="openPrice">—</span></div><div class="stat"><span class="label">最高</span><span class="value" id="highPrice">—</span></div><div class="stat"><span class="label">最低</span><span class="value" id="lowPrice">—</span></div><div class="stat"><span class="label">成交量</span><span class="value" id="totalVolume">—</span></div><div class="stat"><span class="label">成交额</span><span class="value" id="totalAmount">—</span></div><div class="stat"><span class="label">盘中量比(5日)</span><span class="value" id="intradayVolumeRatio">—</span></div></div></div><div class="intraday-replay" aria-label="动态分时回放"><button class="replay-primary" id="replayPlay">▶ 动态分时</button><button id="replayStep">推进1分钟</button><button id="replayReset">回到开盘</button><select id="replaySpeed" aria-label="动态分时速度"><option value="1">1×</option><option value="2">2×</option><option value="5" selected>5×</option><option value="10">10×</option></select><button id="replayAll">查看全日</button><span class="replay-clock" id="replayClock">全日</span><span class="replay-progress" id="replayProgress">—</span></div><div id="chart"></div><div class="status"><span>动态分时固定全天时间轴，只向右揭示已播放行情；鼠标悬停查看分钟价格</span><span>数据源：本地 minute_kline_cache.parquet</span></div></section></main>
 <script src="vendor/echarts.min.js"></script><script>window.echarts||document.write(`<script src='https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js'><\\/script>`);</script>
 <script>__INTRADAY_REPLAY_JS__</script>
@@ -410,6 +416,21 @@ $('searchBtn').onclick=doSearch;$('searchInput').addEventListener('keydown',e=>{
     return inject_intraday_replay(html)
 
 
+def _safe_static_path(url_path: str):
+    """Map /assets/... to scripts/services/static/... with path-traversal guards."""
+    rel = url_path[len("/assets/"):].lstrip("/")
+    if not rel or ".." in rel.split("/"):
+        return None
+    root = os.path.realpath(STATIC_DIR)
+    candidate = os.path.realpath(os.path.join(root, *rel.split("/")))
+    if candidate != root and not candidate.startswith(root + os.sep):
+        return None
+    if not os.path.isfile(candidate):
+        return None
+    return candidate
+
+
+
 class MinuteRequestHandler(SimpleHTTPRequestHandler):
     repository = None
     trainer = None
@@ -425,6 +446,24 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
         self.send_header("Pragma", "no-cache")
         self.send_header("Expires", "0")
         super().end_headers()
+
+    def _serve_static_asset(self, url_path: str):
+        file_path = _safe_static_path(url_path)
+        if not file_path:
+            self.send_error(404, "Asset not found")
+            return
+        ctype = mimetypes.guess_type(file_path)[0] or "application/octet-stream"
+        try:
+            with open(file_path, "rb") as handle:
+                payload = handle.read()
+        except OSError:
+            self.send_error(404, "Asset not found")
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
 
     def do_GET(self):
         parsed = urlparse(self.path)
@@ -537,6 +576,8 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
             return self._watchlist_get(parsed)
         if parsed.path in ("/api/symbol/context", "/api/symbol/hypothesis"):
             return self._symbol_get(parsed)
+        if parsed.path.startswith("/assets/"):
+            return self._serve_static_asset(parsed.path)
         return super().do_GET()
 
     def do_POST(self):

@@ -97,8 +97,9 @@ def build_html(*, status: dict, sector: dict | None, generated_at: str) -> str:
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>每日操盘清单</title>
+<link rel="stylesheet" href="/assets/app.css">
 <style>
-:root{{--bg:#f3f5f8;--card:#fff;--line:#e3e8f0;--blue:#2563eb;--muted:#758096}}
+:root{{--bg:var(--app-bg,#f3f5f8);--card:var(--app-surface,#fff);--line:var(--app-border,#e3e8f0);--blue:var(--app-accent,#2563eb);--muted:var(--app-muted,#758096)}}
 *{{box-sizing:border-box;margin:0;padding:0}}
 body{{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:#182033;font-size:14px}}
 .header{{background:linear-gradient(135deg,#121b31,#1d3158);color:#fff;padding:20px 24px}}
@@ -121,10 +122,11 @@ a.top{{color:#9ec1ff;text-decoration:none;font-size:13px;margin-right:12px}}
 </style>
 </head>
 <body>
+<div id="app-shell" data-active="daily"></div>
 <div class="header">
   <div style="max-width:980px;margin:0 auto;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-end">
     <div>
-      <h1>🗓️ 每日操盘清单</h1>
+      <h1>每日操盘清单</h1>
       <div class="sub">生成于 {generated_at}（上海）· 缓存更新后优先走完下列入口</div>
     </div>
     <div><a class="top" href="/index.html">工作台</a><a class="top" href="/symbol.html">标的上下文</a></div>
@@ -169,6 +171,7 @@ python -m scripts.reports.gen_daily_ops
 python -m scripts.serve start web   # 若 8765 未启动</div>
   </div>
 </div>
+<script src="/assets/app-shell.js"></script>
 </body>
 </html>"""
 

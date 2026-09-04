@@ -4,8 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>观察池与次日跟踪</title>
+<link rel="stylesheet" href="/assets/app.css">
 <style>
-:root{--bg:#f4f6fa;--card:#fff;--line:#e4e8f0;--blue:#1a73e8;--red:#d32f2f;--green:#159568;--muted:#7b8495}
+:root{--bg:var(--app-bg,#f4f6fa);--card:var(--app-surface,#fff);--line:var(--app-border,#e4e8f0);--blue:var(--app-accent,#1a73e8);--red:var(--app-up,#d32f2f);--green:var(--app-down,#159568);--muted:var(--app-muted,#7b8495)}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:#1f2937}
 .header{background:linear-gradient(135deg,#1a1a2e,#16213e);color:#fff;padding:18px 24px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
@@ -36,6 +37,7 @@ th{color:var(--muted);font-weight:600}
 </style>
 </head>
 <body>
+<div id="app-shell" data-active="watchlist"></div>
 <div class="header">
   <div><h1>👀 观察池 / 待买池 · 次日跟踪</h1><div style="opacity:.7;font-size:12px;margin-top:4px">从选股结果加入 · 跟踪次日收益 · 申万一级板块强度</div></div>
   <div style="display:flex;gap:14px">
@@ -209,5 +211,6 @@ loadWatch().catch(e=>$('watchNotice').textContent=e.message);
 loadTracks().catch(e=>$('trackNotice').textContent=e.message);
 loadSectors().catch(e=>$('sectorNotice').textContent=e.message);
 </script>
+<script src="/assets/app-shell.js"></script>
 </body>
 </html>

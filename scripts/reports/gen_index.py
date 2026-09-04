@@ -190,16 +190,17 @@ def generate():
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>A股量化系统 — 工作台导航</title>
+<link rel="stylesheet" href="/assets/app.css">
 <style>
-:root{{--bg:#f3f5f8;--card:#fff;--blue:#2563eb;--text:#182033;--muted:#687386;--border:#e4e8ef;--daily:#2563eb;--training:#7c3aed;--results:#0f9f6e;--simulation:#d97706;--research:#536277;--archive:#7b8494}}
+:root{{--bg:var(--app-bg,#f3f5f8);--card:var(--app-surface,#fff);--blue:var(--app-accent,#2563eb);--text:var(--app-text,#182033);--muted:var(--app-muted,#687386);--border:var(--app-border,#e4e8ef);--daily:#2563eb;--training:#7c3aed;--results:#0f9f6e;--simulation:#d97706;--research:#536277;--archive:#7b8494}}
 *{{margin:0;padding:0;box-sizing:border-box}}
-html{{scroll-behavior:smooth;scroll-padding-top:76px}}
+html{{scroll-behavior:smooth;scroll-padding-top:120px}}
 body{{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei","Helvetica Neue",sans-serif;background:var(--bg);color:var(--text);font-size:14px;min-height:100vh}}
 .header{{background:linear-gradient(135deg,#121b31,#1d3158);color:#fff;padding:30px 32px 28px}}
 .header-inner{{max-width:1300px;margin:0 auto}}
 .header h1{{font-size:26px;font-weight:700;letter-spacing:.01em}}
 .header .sub{{color:#b5c1d9;font-size:13px;line-height:1.7;margin-top:7px}}
-.quick-nav-wrap{{position:sticky;top:0;z-index:10;background:rgba(243,245,248,.94);backdrop-filter:blur(12px);border-bottom:1px solid var(--border)}}
+.quick-nav-wrap{{position:sticky;top:48px;z-index:10;background:rgba(243,245,248,.94);backdrop-filter:blur(12px);border-bottom:1px solid var(--border)}}
 .quick-nav{{max-width:1300px;margin:0 auto;padding:10px 32px;display:flex;gap:8px;overflow-x:auto;scrollbar-width:none}}
 .quick-nav::-webkit-scrollbar{{display:none}}
 .nav-link{{display:inline-flex;align-items:center;gap:7px;white-space:nowrap;text-decoration:none;color:#475267;background:#fff;border:1px solid var(--border);border-radius:999px;padding:8px 12px;font-size:12px;font-weight:600}}
@@ -259,6 +260,7 @@ main{{max-width:1300px;margin:0 auto;padding:8px 32px 20px}}
 </style>
 </head>
 <body id="top">
+<div id="app-shell" data-active="home"></div>
 <header class="header">
   <div class="header-inner">
     <h1>A股量化系统 · 工作台</h1>
@@ -270,6 +272,7 @@ main{{max-width:1300px;margin:0 auto;padding:8px 32px 20px}}
 </div>
 <main>{sections}</main>
 <footer class="footer">运行选股、回测或模拟后会自动刷新对应报告 · 交互工具需启动本地服务</footer>
+<script src="/assets/app-shell.js"></script>
 </body>
 </html>"""
 
