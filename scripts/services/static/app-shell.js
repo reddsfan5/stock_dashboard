@@ -1,16 +1,19 @@
 (function () {
   'use strict';
 
+  var THEME_KEY = 'stockAppTheme';
+  var DENSITY_KEY = 'stockAppDensity';
+
   var NAV = [
     { key: 'trainer', href: '/trading_trainer.html', label: '交易训练' },
+    { key: 'daily', href: '/daily_ops.html', label: '每日操盘' },
+    { key: 'watchlist', href: '/watchlist.html', label: '观察池' },
     { key: 'minute', href: '/minute_view.html', label: '分时查询' },
     { key: 'journal', href: '/stock_journal.html', label: '选股日记' },
-    { key: 'watchlist', href: '/watchlist.html', label: '观察池' },
     { key: 'news', href: '/market_news.html', label: '市场资讯' },
     { key: 'symbol', href: '/symbol.html', label: '标的上下文' },
-    { key: 'daily', href: '/daily_ops.html', label: '每日操盘' },
     { key: 'grid', href: '/grid_simulator.html', label: '网格回放' },
-    { key: 'home', href: '/index.html', label: '导航' }
+    { key: 'home', href: '/index.html', label: '全部导航' }
   ];
 
   var PATH_KEY = {
@@ -39,6 +42,38 @@
     }
   }
 
+  function readPref(key, fallback) {
+    try {
+      var v = localStorage.getItem(key);
+      return v || fallback;
+    } catch (e) {
+      return fallback;
+    }
+  }
+
+  function writePref(key, value) {
+    try { localStorage.setItem(key, value); } catch (e) { /* ignore */ }
+  }
+
+  function applyTheme(theme) {
+    var next = theme === 'dark' ? 'dark' : 'light';
+    document.documentElement.dataset.theme = next;
+    writePref(THEME_KEY, next);
+    return next;
+  }
+
+  function applyDensity(density) {
+    var next = density === 'compact' ? 'compact' : 'comfortable';
+    document.documentElement.dataset.density = next;
+    writePref(DENSITY_KEY, next);
+    return next;
+  }
+
+  function initPrefs() {
+    applyTheme(readPref(THEME_KEY, 'light'));
+    applyDensity(readPref(DENSITY_KEY, 'comfortable'));
+  }
+
   function ensureShellHost() {
     var host = document.getElementById('app-shell');
     if (host) return host;
@@ -47,6 +82,86 @@
     host.id = 'app-shell';
     document.body.insertBefore(host, document.body.firstChild);
     return host;
+  }
+
+  function ensureToastHost() {
+    var host = document.getElementById('app-toast-host');
+    if (host) return host;
+    if (!document.body) return null;
+    host = document.createElement('div');
+    host.id = 'app-toast-host';
+    host.setAttribute('aria-live', 'polite');
+    host.setAttribute('aria-relevant', 'additions');
+    document.body.appendChild(host);
+    return host;
+  }
+
+  function toast(message, opts) {
+    opts = opts || {};
+    var text = String(message == null ? '' : message).trim();
+    if (!text) return;
+    var tone = opts.tone || 'info';
+    if (['info', 'ok', 'warn', 'error'].indexOf(tone) < 0) tone = 'info';
+    var ms = opts.ms != null ? +opts.ms : (tone === 'error' ? 4200 : 3200);
+    var host = ensureToastHost();
+    if (!host) return;
+    var el = document.createElement('div');
+    el.className = 'app-toast app-toast--' + tone;
+    el.setAttribute('role', tone === 'error' ? 'alert' : 'status');
+    el.textContent = text;
+    host.appendChild(el);
+    requestAnimationFrame(function () { el.classList.add('is-visible'); });
+    var remove = function () {
+      el.classList.remove('is-visible');
+      setTimeout(function () {
+        if (el.parentNode) el.parentNode.removeChild(el);
+      }, 200);
+    };
+    if (ms > 0) setTimeout(remove, ms);
+    el.addEventListener('click', remove);
+    return el;
+  }
+
+  function toolButtonsHtml() {
+    var theme = document.documentElement.dataset.theme || 'light';
+    var density = document.documentElement.dataset.density || 'comfortable';
+    var themeLabel = theme === 'dark' ? '浅色' : '深色';
+    var densityLabel = density === 'compact' ? '舒适' : '紧凑';
+    return (
+      '<div class="app-shell__tools" role="group" aria-label="显示设置">' +
+        '<button type="button" class="app-shell__tool" data-shell-action="theme" title="切换浅色/深色">' + themeLabel + '</button>' +
+        '<button type="button" class="app-shell__tool" data-shell-action="density" title="切换舒适/紧凑密度">' + densityLabel + '</button>' +
+      '</div>'
+    );
+  }
+
+  function syncToolLabels(host) {
+    if (!host) return;
+    var theme = document.documentElement.dataset.theme || 'light';
+    var density = document.documentElement.dataset.density || 'comfortable';
+    var themeBtn = host.querySelector('[data-shell-action="theme"]');
+    var densBtn = host.querySelector('[data-shell-action="density"]');
+    if (themeBtn) themeBtn.textContent = theme === 'dark' ? '浅色' : '深色';
+    if (densBtn) densBtn.textContent = density === 'compact' ? '舒适' : '紧凑';
+  }
+
+  function bindTools(host) {
+    if (!host || host._shellToolsBound) return;
+    host._shellToolsBound = true;
+    host.addEventListener('click', function (e) {
+      var btn = e.target.closest('[data-shell-action]');
+      if (!btn) return;
+      var action = btn.getAttribute('data-shell-action');
+      if (action === 'theme') {
+        var cur = document.documentElement.dataset.theme || 'light';
+        applyTheme(cur === 'dark' ? 'light' : 'dark');
+        syncToolLabels(host);
+      } else if (action === 'density') {
+        var dens = document.documentElement.dataset.density || 'comfortable';
+        applyDensity(dens === 'compact' ? 'comfortable' : 'compact');
+        syncToolLabels(host);
+      }
+    });
   }
 
   function fillShell(host, active) {
@@ -61,6 +176,7 @@
         '<header class="app-shell" role="banner">' +
           '<a class="app-shell__brand" href="/index.html">股票工作台</a>' +
           '<nav class="app-shell__nav" aria-label="主导航">' + navHtml + '</nav>' +
+          toolButtonsHtml() +
         '</header>' +
         '<div class="app-clock" id="app-clock" hidden>' +
           '<span class="app-clock__label">模拟时钟</span>' +
@@ -71,7 +187,13 @@
       host.querySelectorAll('[data-nav]').forEach(function (el) {
         el.classList.toggle('is-active', el.getAttribute('data-nav') === key);
       });
+      if (!host.querySelector('.app-shell__tools')) {
+        var shell = host.querySelector('.app-shell');
+        if (shell) shell.insertAdjacentHTML('beforeend', toolButtonsHtml());
+      }
+      syncToolLabels(host);
     }
+    bindTools(host);
     if (key) host.setAttribute('data-active', key);
   }
 
@@ -105,14 +227,17 @@
 
   function mount(options) {
     options = options || {};
+    initPrefs();
     var host = ensureShellHost();
     if (!host) return;
     if (options.active) host.setAttribute('data-active', options.active);
     fillShell(host, options.active || host.getAttribute('data-active'));
     if (options.clock) setClock(options.clock);
+    ensureToastHost();
   }
 
   function autoMount() {
+    initPrefs();
     var host = document.getElementById('app-shell');
     mount({ active: host && host.getAttribute('data-active') });
   }
@@ -120,6 +245,9 @@
   window.StockAppShell = {
     mount: mount,
     setClock: setClock,
+    toast: toast,
+    setTheme: applyTheme,
+    setDensity: applyDensity,
     nav: NAV
   };
 

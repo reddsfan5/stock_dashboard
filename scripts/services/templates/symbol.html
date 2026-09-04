@@ -6,18 +6,23 @@
 <title>标的上下文</title>
 <link rel="stylesheet" href="/assets/app.css">
 <style>
-:root{--bg:var(--app-bg,#f3f5f8);--card:var(--app-surface,#fff);--line:var(--app-border,#e3e8f0);--blue:var(--app-accent,#2563eb);--muted:var(--app-muted,#758096);--red:var(--app-up,#d32f2f);--green:var(--app-down,#159568);--amber:#b54708}
+:root{--bg:var(--app-bg,#f3f5f8);--card:var(--app-surface,#fff);--line:var(--app-border,#e3e8f0);--blue:var(--app-accent,#2563eb);--muted:var(--app-muted,#758096);--red:var(--app-up,#d32f2f);--green:var(--app-down,#159568);--amber:#b54708;--text:var(--app-text,#182033)}
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:#182033;font-size:14px}
-.header{background:linear-gradient(135deg,#121b31,#1d3158);color:#fff;padding:18px 22px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center}
-.header h1{font-size:20px}.header .sub{opacity:.72;font-size:12px;margin-top:4px}
-.header a{color:#9ec1ff;text-decoration:none;font-size:13px;margin-left:12px}
-.wrap{max-width:1100px;margin:0 auto;padding:16px 18px 40px;display:grid;gap:14px}
+body{font-family:var(--app-font,-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif);background:var(--bg);color:var(--text);font-size:14px}
+.page-head{max-width:1100px;margin:0 auto;padding:14px 18px 0}
+.page-head h1{font-size:18px;font-weight:750;margin:0}
+.page-head .sub{color:var(--muted);font-size:12px;margin-top:4px}
+.symbol-tabs{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;margin-top:12px;padding-bottom:2px}
+.symbol-tabs::-webkit-scrollbar{display:none}
+.symbol-tabs a{flex-shrink:0;padding:7px 12px;border-radius:8px;border:1px solid transparent;color:var(--muted);font-size:12px;font-weight:650;text-decoration:none;background:transparent}
+.symbol-tabs a:hover{background:var(--app-surface-2,#f1f5f9);color:var(--text);text-decoration:none}
+.symbol-tabs a.is-active{background:var(--app-accent-soft,#edf4ff);color:var(--blue);border-color:color-mix(in srgb,var(--blue) 28%,transparent)}
+.wrap{max-width:1100px;margin:0 auto;padding:14px 18px 40px;display:grid;gap:14px}
 .search{display:flex;gap:8px;flex-wrap:wrap}
 .search input{flex:1;min-width:180px;border:1px solid #ccd3df;border-radius:8px;padding:10px 12px}
-button,.ghost{border:1px solid #bfc9d8;background:#fff;border-radius:8px;padding:9px 12px;cursor:pointer;font:inherit;text-decoration:none;color:inherit;display:inline-flex;align-items:center}
+button,.ghost{border:1px solid #bfc9d8;background:var(--card);border-radius:8px;padding:9px 12px;cursor:pointer;font:inherit;text-decoration:none;color:inherit;display:inline-flex;align-items:center}
 button.primary{background:var(--blue);color:#fff;border-color:var(--blue)}
-.panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;box-shadow:var(--app-shadow,none)}
 .panel h2{font-size:15px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:8px}
 .meta{color:var(--muted);font-size:12px}
 .identity{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
@@ -34,7 +39,7 @@ th,td{padding:8px 6px;border-bottom:1px solid var(--line);text-align:left;vertic
 th{color:var(--muted);font-weight:600}
 .num{text-align:right;font-variant-numeric:tabular-nums}
 .up{color:var(--red)}.down{color:var(--green)}
-.empty{color:var(--muted);background:#f7f8fa;border:1px dashed #d7dde7;border-radius:8px;padding:14px;text-align:center;font-size:12px}
+.empty,.app-empty{color:var(--muted);background:var(--app-surface-2,#f7f8fa);border:1px dashed var(--line);border-radius:8px;padding:14px;text-align:center;font-size:12px}
 .err{color:var(--red);font-size:12px;margin-top:6px}
 .chips{display:flex;gap:6px;flex-wrap:wrap}
 .chip{background:#eef2f7;border-radius:999px;padding:4px 10px;font-size:12px}
@@ -42,23 +47,21 @@ th{color:var(--muted);font-weight:600}
 .form label{font-size:11px;color:var(--muted);display:flex;flex-direction:column;gap:4px}
 .form input,.form select,.form textarea{border:1px solid #ccd3df;border-radius:8px;padding:8px 10px;min-width:120px;font:inherit}
 .form textarea{min-width:220px;min-height:38px}
-.notice{position:fixed;right:16px;top:16px;background:#172033;color:#fff;padding:10px 14px;border-radius:8px;display:none;z-index:20;max-width:360px}
-@media(max-width:700px){.wrap{padding:12px}.header{padding:14px 16px}}
+@media(max-width:700px){.wrap,.page-head{padding-left:12px;padding-right:12px}}
 </style>
 </head>
 <body>
 <div id="app-shell" data-active="symbol"></div>
-<div class="notice" id="notice"></div>
-<div class="header">
-  <div>
-    <h1>📎 标的上下文</h1>
-    <div class="sub">选股命中 · 观察池 · 训练 · 日记 · 假设生命周期</div>
-  </div>
-  <div>
-    <a href="/index.html">工作台</a>
-    <a href="/watchlist.html">观察池</a>
-    <a href="/daily_ops.html">每日操盘清单</a>
-  </div>
+<div class="page-head">
+  <h1>标的上下文</h1>
+  <div class="sub">选股命中 · 观察池 · 训练 · 日记 · 假设生命周期</div>
+  <nav class="symbol-tabs" id="symbolTabs" aria-label="标的页签" hidden>
+    <a class="is-active" data-tab="overview" href="#">概览</a>
+    <a data-tab="minute" href="#">分时</a>
+    <a data-tab="trainer" href="#">训练</a>
+    <a data-tab="journal" href="#">日记</a>
+    <a data-tab="watchlist" href="#">观察池</a>
+  </nav>
 </div>
 <div class="wrap">
   <div class="panel">
@@ -125,7 +128,13 @@ th{color:var(--muted);font-weight:600}
 <script>
 const $ = id => document.getElementById(id);
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-function notice(msg,isErr){$('notice').style.display='block';$('notice').style.background=isErr?'#9b1c1c':'#172033';$('notice').textContent=msg;clearTimeout(notice._t);notice._t=setTimeout(()=>$('notice').style.display='none',3200)}
+function notice(msg,isErr){
+  if(window.StockAppShell&&StockAppShell.toast){
+    StockAppShell.toast(msg,{tone:isErr?'error':'ok'});
+    return;
+  }
+  console.log(msg);
+}
 async function api(path, opts){
   const r = await fetch(path, Object.assign({cache:'no-store'}, opts||{}));
   const body = await r.json().catch(()=>({}));
@@ -137,13 +146,37 @@ function badge(status,label){return `<span class="badge ${esc(status)}">${esc(la
 
 let currentCode = '';
 
+function updateTabs(code){
+  const tabs=$('symbolTabs');
+  if(!code){tabs.hidden=true;return}
+  tabs.hidden=false;
+  const q=encodeURIComponent(code);
+  const map={
+    overview:'/symbol.html?code='+q,
+    minute:'/minute_view.html?code='+q,
+    trainer:'/trading_trainer.html?code='+q,
+    journal:'/stock_journal.html?code='+q,
+    watchlist:'/watchlist.html'
+  };
+  tabs.querySelectorAll('[data-tab]').forEach(a=>{
+    const key=a.getAttribute('data-tab');
+    a.href=map[key]||'#';
+    a.classList.toggle('is-active', key==='overview');
+  });
+}
+
 function render(data){
   currentCode = data.code;
+  updateTabs(data.code);
   $('symbolName').textContent = data.name || data.code;
   $('symbolCode').textContent = data.code;
   const L = data.links || {};
   $('quickLinks').innerHTML = [
-    ['分时', L.minute],['日记', L.journal],['训练', L.trainer],['观察池', L.watchlist],['仪表盘', L.dashboard]
+    ['分时', L.minute || ('/minute_view.html?code='+encodeURIComponent(data.code))],
+    ['日记', L.journal || ('/stock_journal.html?code='+encodeURIComponent(data.code))],
+    ['训练', L.trainer || ('/trading_trainer.html?code='+encodeURIComponent(data.code))],
+    ['观察池', L.watchlist || '/watchlist.html'],
+    ['仪表盘', L.dashboard || '/dashboard.html']
   ].map(([t,h])=>`<a href="${esc(h)}">${t}</a>`).join('');
 
   const hits = data.screen_hits || {};
@@ -159,7 +192,7 @@ function render(data){
   const w = data.watchlist || {};
   if((w.items||[]).length){
     $('watchBlock').className='';
-    $('watchBlock').innerHTML = `<table><thead><tr><th>状态</th><th>来源</th><th>筛出日</th><th>论点</th></tr></thead><tbody>${
+    $('watchBlock').innerHTML = `<table class="app-table"><thead><tr><th>状态</th><th>来源</th><th>筛出日</th><th>论点</th></tr></thead><tbody>${
       w.items.map(it=>`<tr><td>${badge(it.status, it.status_label)}</td><td>${esc(it.source_module||'—')}</td><td>${esc(it.screen_date||'—')}</td><td>${esc(it.thesis||it.note||'—')}</td></tr>`).join('')
     }</tbody></table>`;
   } else {
@@ -168,7 +201,7 @@ function render(data){
   }
   const tracks = (data.tracks||{}).items||[];
   if(tracks.length){
-    $('trackBlock').innerHTML = `<table><thead><tr><th>筛出日</th><th>跟踪日</th><th class="num">次日%</th><th>失效</th></tr></thead><tbody>${
+    $('trackBlock').innerHTML = `<table class="app-table"><thead><tr><th>筛出日</th><th>跟踪日</th><th class="num">次日%</th><th>失效</th></tr></thead><tbody>${
       tracks.map(t=>`<tr><td>${esc(t.screen_date)}</td><td>${esc(t.track_date)}</td><td class="num">${pct(t.return_pct)}</td><td>${t.pattern_failed?'是':'否'}</td></tr>`).join('')
     }</tbody></table>`;
   } else {
@@ -179,7 +212,7 @@ function render(data){
   if((tr.runs||[]).length){
     $('trainBlock').className='';
     $('trainBlock').innerHTML = `<div class="meta" style="margin-bottom:8px">会话 ${tr.count} · 决策合计 ${tr.decision_count||0}</div>
-      <table><thead><tr><th>起始日</th><th>状态</th><th class="num">决策</th><th class="num">日计划</th><th>更新</th></tr></thead><tbody>${
+      <table class="app-table"><thead><tr><th>起始日</th><th>状态</th><th class="num">决策</th><th class="num">日计划</th><th>更新</th></tr></thead><tbody>${
         tr.runs.map(r=>`<tr><td>${esc(r.start_date)}</td><td>${esc(r.status)}</td><td class="num">${r.decision_count||0}</td><td class="num">${r.plan_count||0}</td><td>${esc((r.updated_at||'').slice(0,16))}</td></tr>`).join('')
       }</tbody></table>`;
   } else {
@@ -190,7 +223,7 @@ function render(data){
   const j = data.journal || {};
   if((j.cases||[]).length){
     $('journalBlock').className='';
-    $('journalBlock').innerHTML = `<table><thead><tr><th>案例</th><th>状态</th><th class="num">记录</th><th>最近行情日</th><th></th></tr></thead><tbody>${
+    $('journalBlock').innerHTML = `<table class="app-table"><thead><tr><th>案例</th><th>状态</th><th class="num">记录</th><th>最近行情日</th><th></th></tr></thead><tbody>${
       j.cases.map(c=>`<tr><td><b>${esc(c.title)}</b></td><td>${esc(c.status)}</td><td class="num">${c.entry_count||0}</td><td>${esc(c.latest_market_date||'—')}</td>
       <td><a href="/stock_journal.html?code=${encodeURIComponent(data.code)}&case=${c.id}">打开</a></td></tr>`).join('')
     }</tbody></table>`;
@@ -202,7 +235,7 @@ function render(data){
   const h = data.hypotheses || {};
   if((h.items||[]).length){
     $('hypoBlock').className='';
-    $('hypoBlock').innerHTML = `<table><thead><tr><th>标题</th><th>状态</th><th>论点</th><th>更新</th><th>推进</th></tr></thead><tbody>${
+    $('hypoBlock').innerHTML = `<table class="app-table"><thead><tr><th>标题</th><th>状态</th><th>论点</th><th>更新</th><th>推进</th></tr></thead><tbody>${
       h.items.map(it=>{
         const opts = (h.statuses||[]).map(s=>`<option value="${s}" ${s===it.status?'selected':''}>${esc((h.status_labels||{})[s]||s)}</option>`).join('');
         return `<tr>
@@ -233,7 +266,7 @@ function render(data){
   if(stt.available && (stt.recent_trades||[]).length){
     $('sttBlock').className='';
     $('sttBlock').innerHTML = `<div class="meta" style="margin-bottom:8px">${esc(stt.module_title||stt.module||'')} · 样本 ${stt.trade_count} · 平均净收益 ${stt.avg_net_return_pct??'—'}%</div>
-      <table><thead><tr><th>信号日</th><th>入场</th><th>退出</th><th class="num">净收益%</th><th>原因</th></tr></thead><tbody>${
+      <table class="app-table"><thead><tr><th>信号日</th><th>入场</th><th>退出</th><th class="num">净收益%</th><th>原因</th></tr></thead><tbody>${
         stt.recent_trades.map(t=>`<tr><td>${esc(t.signal_date)}</td><td>${esc(t.entry_date)}</td><td>${esc(t.exit_date)}</td><td class="num">${pct(t.net_return_pct)}</td><td>${esc(t.exit_reason)}</td></tr>`).join('')
       }</tbody></table>`;
   } else {
@@ -279,6 +312,7 @@ $('hypoCreate').onclick = async ()=>{
 
 const init = new URL(location.href).searchParams.get('code') || 'sh600519';
 $('codeInput').value = init;
+updateTabs(init);
 loadCode(init);
 </script>
 <script src="/assets/app-shell.js"></script>

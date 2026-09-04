@@ -256,6 +256,27 @@ main{{max-width:1300px;margin:0 auto;padding:8px 32px 20px}}
   .badge{{display:inline-block;margin-top:4px}}
   .desc{{margin-right:14px}}
 }}
+
+.ops-hero{{max-width:1300px;margin:0 auto;padding:22px 32px 8px}}
+.ops-hero-card{{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:22px 24px;box-shadow:0 1px 2px rgba(18,27,49,.04),0 10px 28px rgba(18,27,49,.05)}}
+.ops-hero-kicker{{font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--daily);margin-bottom:6px}}
+.ops-hero h2{{font-size:24px;line-height:1.25;margin:0}}
+.ops-hero .lead{{color:var(--muted);font-size:13px;line-height:1.65;margin-top:8px;max-width:720px}}
+.ops-ctas{{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}}
+.ops-cta{{display:inline-flex;align-items:center;justify-content:center;height:40px;padding:0 16px;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;border:1px solid var(--border);background:#fff;color:var(--text)}}
+.ops-cta:hover{{text-decoration:none;border-color:#b7caf5;background:#f3f7ff}}
+.ops-cta-primary{{background:var(--blue);border-color:var(--blue);color:#fff}}
+.ops-cta-primary:hover{{filter:brightness(1.05);background:var(--blue);color:#fff}}
+.ops-tips{{display:flex;flex-wrap:wrap;gap:10px 18px;margin-top:14px;color:var(--muted);font-size:12px;line-height:1.5}}
+.ops-tips span{{display:inline-flex;align-items:center;gap:6px}}
+.tools-label{{max-width:1300px;margin:18px auto 0;padding:0 32px;font-size:12px;font-weight:700;letter-spacing:.06em;color:#8a94a6;text-transform:none}}
+@media (max-width:700px){{
+  .ops-hero{{padding:16px 14px 4px}}
+  .ops-hero-card{{padding:16px}}
+  .ops-hero h2{{font-size:20px}}
+  .tools-label{{padding:0 14px}}
+  .ops-cta{{height:38px;padding:0 12px;font-size:12px}}
+}}
 @media (prefers-reduced-motion:reduce){{html{{scroll-behavior:auto}}.card{{transition:none}}}}
 </style>
 </head>
@@ -267,6 +288,24 @@ main{{max-width:1300px;margin:0 auto;padding:8px 32px 20px}}
     <div class="sub">{datetime.now().strftime('%Y-%m-%d %H:%M')} 更新 · 日常看盘与训练优先，长期研究和历史实验归档在后</div>
   </div>
 </header>
+<section class="ops-hero" aria-label="今日操盘">
+  <div class="ops-hero-card">
+    <div class="ops-hero-kicker">今日操盘</div>
+    <h2>从清单开始，而不是从卡片堆里找入口</h2>
+    <p class="lead">先过每日操盘清单，再进入训练、观察池与资讯。下面保留完整工具归档，需要时再展开。</p>
+    <div class="ops-ctas">
+      <a class="ops-cta ops-cta-primary" href="/daily_ops.html">打开每日清单</a>
+      <a class="ops-cta" href="{TRADING_TRAINER_URL}">进入交易训练</a>
+      <a class="ops-cta" href="{WATCHLIST_URL}">观察池</a>
+      <a class="ops-cta" href="{MARKET_NEWS_URL}">市场资讯</a>
+    </div>
+    <div class="ops-tips">
+      <span>提示：样式或脚本更新后若未生效，请强制刷新（⌘/Ctrl + Shift + R）</span>
+      <span>交互页依赖本地服务 · 默认 http://127.0.0.1:8765</span>
+    </div>
+  </div>
+</section>
+<div class="tools-label" id="all-tools">全部工具</div>
 <div class="quick-nav-wrap" aria-label="页面分类导航">
   <nav class="quick-nav">{nav_links}</nav>
 </div>

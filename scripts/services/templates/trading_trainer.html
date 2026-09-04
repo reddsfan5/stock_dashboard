@@ -44,7 +44,7 @@
 <div id="app-shell" data-active="trainer"></div>
 <div class="loading" id="loading"><span>正在建立无剧透训练会话…</span></div>
 <main class="page">
-  <div class="top"><h1>T+1 无剧透交易训练</h1><div class="links"><a id="newsLink" href="market_news.html" target="_blank" rel="noopener">市场资讯</a><a id="journalLink" href="stock_journal.html?code=sh600000">记录决策</a><a id="symbolLink" href="symbol.html?code=sh600000">标的上下文</a><a href="minute_view.html">分时查询</a><a href="index.html">返回导航</a></div></div>
+  <div class="top"><h1>T+1 无剧透交易训练</h1><div class="links"><a id="newsLink" href="market_news.html" target="_blank" rel="noopener">市场资讯</a><a id="journalLink" href="stock_journal.html?code=sh600000">记录决策</a><a id="symbolLink" href="/symbol.html?code=sh600000">标的上下文</a><a href="minute_view.html">分时查询</a><a href="index.html">返回导航</a></div></div>
   <div class="notice" id="notice"></div>
   <section class="panel setup" id="setup"><div class="setup-grid">
     <div class="field search"><label>标的代码或名称</label><input id="code" value="" autocomplete="off" placeholder="例如 浦发银行 / 600000" data-clear-once="1"><div class="results" id="results"></div></div>
@@ -64,6 +64,11 @@
     </div>
   </div>
   </section>
+
+    <details class="shortcut-hint" style="margin:0 0 10px;padding:8px 12px;background:var(--panel);border:1px solid var(--border);border-radius:10px;font-size:12px;color:var(--muted)">
+    <summary style="cursor:pointer;font-weight:700;color:#43516a">快捷键</summary>
+    <div style="margin-top:8px;line-height:1.7">Space 播放/暂停 · ← / → 后退/前进一分钟 · B 买入 · S 卖出 · Esc 关闭弹窗（输入框内不触发）</div>
+  </details>
 
   <section id="game" hidden>
     <section class="panel metrics">
@@ -295,15 +300,15 @@ function optional(v,digits=2,suffix=''){return v===null||v===undefined||!Number.
 function escapeHtml(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function dailyChangePct(bars,index){const bar=bars[index],close=+bar?.close,direct=bar?.change_pct;if(direct!==null&&direct!==undefined&&direct!==''&&Number.isFinite(+direct))return+direct;const previous=bar?.pre_close??bars[index-1]?.close,base=+previous;return Number.isFinite(close)&&Number.isFinite(base)&&base>0?(close/base-1)*100:null}
 function klineIntervalHtml(bars,index){const start=bars[index],end=bars[bars.length-1],startPrice=+start?.open,endPrice=+end?.close;if(!start||!end||!Number.isFinite(startPrice)||startPrice<=0||!Number.isFinite(endPrice))return'';const delta=endPrice-startPrice,pct=delta/startPrice*100,color=delta>0?'#e5484d':delta<0?'#159568':'#758096',endLabel=end.partial?'当前可见收':'最新可见收';return`<div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(128,128,128,.35)">区间涨跌 <b style="color:${color}">${delta>=0?'+':''}${delta.toFixed(startPrice<10?3:2)}（${pct>=0?'+':''}${pct.toFixed(2)}%）</b><br><span style="color:#8a94a6">${start.date} 开 ${price(startPrice)} → ${end.date} ${endLabel} ${price(endPrice)} · ${bars.length-index}根K线</span></div>`}
-function notice(msg,sticky=false){$('notice').textContent=msg;$('notice').style.display=msg?'block':'none';if(msg&&!sticky)setTimeout(()=>{$('notice').style.display='none'},3500)}
+function notice(msg,important=false){if(window.StockAppShell&&StockAppShell.toast){const n=$('notice');if(n)n.style.display='none';if(!msg)return;StockAppShell.toast(msg,{tone:important?'warn':'info',ms:important?4200:3200});return}const n=$('notice');if(!n)return;n.textContent=msg;n.style.display=msg?'block':'none';if(msg&&!important)setTimeout(()=>{n.style.display='none'},3500)}
 function loading(on){$('loading').style.display=on?'flex':'none'}
 async function request(path,method='GET',body=null){const options={method,cache:'no-store',headers:{}};if(body){options.headers['Content-Type']='application/json';options.body=JSON.stringify(body)}const response=await fetch(path,options);let payload={};try{payload=await response.json()}catch(e){}if(!response.ok)throw new Error(payload.error||`HTTP ${response.status}`);return payload}
 function tradingTimes(){const out=[];for(let h=9,m=31;h<12;){out.push(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);m++;if(m===60){h++;m=0}if(h===11&&m===31)break}for(let h=13,m=1;h<16;){out.push(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);m++;if(m===60){h++;m=0}if(h===15&&m===1)break}return out}
 
 function render(next){
   state=next;sessionId=next.session_id;sessionStorage.setItem('tradingTrainerSession',sessionId);
-  $('journalLink').href='stock_journal.html?code='+encodeURIComponent(next.code);
-  if($('symbolLink'))$('symbolLink').href='symbol.html?code='+encodeURIComponent(next.code);
+  $('journalLink').href='/stock_journal.html?code='+encodeURIComponent(next.code);
+  if($('symbolLink'))$('symbolLink').href='/symbol.html?code='+encodeURIComponent(next.code);
   $('newsLink').href='market_news.html?mode=replay&date='+encodeURIComponent(next.date)+'&as_of='+encodeURIComponent(next.time)+'&code='+encodeURIComponent(next.code);
   $('liveNewsMore').href=$('newsLink').href;
   const a=next.account,m=next.market,p=next.progress;
@@ -571,7 +576,18 @@ $('manualSubmit').onclick=placeManual;$('conditionSubmit').onclick=submitConditi
 async function cancelFromClick(e){const normal=e.target.closest('[data-cancel-order]'),condition=e.target.closest('[data-cancel-condition]');if(normal&&confirm('确认撤销这笔待成交限价委托？'))await mutate('/api/trainer/order/cancel',{order_id:normal.dataset.cancelOrder});if(condition&&confirm('确认撤销这笔监控中的条件单？'))await mutate('/api/trainer/condition/cancel',{condition_id:condition.dataset.cancelCondition})}
 $('records').onclick=cancelFromClick;$('pendingManage').onclick=cancelFromClick;$('conditionManage').onclick=cancelFromClick;
 $('code').addEventListener('input',()=>{clearTimeout(searchTimer);const q=$('code').value.trim();if(q.length<2){$('results').style.display='none';return}searchTimer=setTimeout(async()=>{try{const rows=await request('/api/minute/search?q='+encodeURIComponent(q));$('results').innerHTML=rows.map(r=>`<div class="result" data-code="${r.code}"><b>${escapeHtml(r.name)} ${r.code}</b><span>${r.latest_date}</span></div>`).join('')||'<div class="result">未找到分钟缓存标的</div>';$('results').style.display='block'}catch(e){}},220)});
-$('results').onclick=e=>{const row=e.target.closest('[data-code]');if(row){$('results').style.display='none';loadDates(row.dataset.code)}};$('code').addEventListener('keydown',e=>{if(e.key==='Enter')loadDates($('code').value)});document.addEventListener('click',e=>{if(!e.target.closest('.search'))$('results').style.display='none'});document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!$('tradeModal').hidden)closeTradeModal();if(!$('reviewModal').hidden)closeReviewModal();if(!$('planModal').hidden)closePlanModal()}});window.addEventListener('resize',()=>{dailyChart.resize();minuteChart.resize()});
+$('results').onclick=e=>{const row=e.target.closest('[data-code]');if(row){$('results').style.display='none';loadDates(row.dataset.code)}};$('code').addEventListener('keydown',e=>{if(e.key==='Enter')loadDates($('code').value)});document.addEventListener('click',e=>{if(!e.target.closest('.search'))$('results').style.display='none'});document.addEventListener('keydown',e=>{
+  const tag=(e.target&&e.target.tagName||'').toLowerCase();
+  const typing=tag==='input'||tag==='textarea'||tag==='select'||(e.target&&e.target.isContentEditable);
+  if(e.key==='Escape'){if(!$('tradeModal').hidden)closeTradeModal();if(!$('reviewModal').hidden)closeReviewModal();if(!$('planModal').hidden)closePlanModal();return}
+  if(typing)return;
+  if(!$('game')||$('game').hidden)return;
+  if(e.code==='Space'||e.key===' '){e.preventDefault();if(typeof play==='function')play();return}
+  if(e.key==='ArrowRight'){e.preventDefault();if(!$('step').disabled)advance(1);return}
+  if(e.key==='ArrowLeft'){e.preventDefault();notice('当前会话仅支持向前推进一分钟');return}
+  if(e.key==='b'||e.key==='B'){e.preventDefault();openTradeModal('buy');return}
+  if(e.key==='s'||e.key==='S'){e.preventDefault();openTradeModal('sell');return}
+});window.addEventListener('resize',()=>{dailyChart.resize();minuteChart.resize()});
 async function init(){
   selectConditionSide('buy');
   const input=$('code');
