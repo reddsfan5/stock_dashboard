@@ -20,7 +20,7 @@ class ServiceControlTest(unittest.TestCase):
         good = {
             "status": "ok",
             "service": "stock-interactive-web",
-            "features": ["minute", "grid", "trainer", "journal", "news", "market_context"],
+            "features": ["minute", "grid", "trainer", "journal", "news", "market_context", "training_loop"],
         }
         with patch.object(serve, "_http_json", return_value=(200, good)):
             self.assertTrue(serve.web_is_healthy())

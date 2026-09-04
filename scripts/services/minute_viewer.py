@@ -431,7 +431,7 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
                 "status": "ok",
                 "service": "stock-interactive-web",
                 "version": 1,
-                "features": ["minute", "grid", "trainer", "journal", "news", "market_context"],
+                "features": ["minute", "grid", "trainer", "journal", "news", "market_context", "training_loop"],
                 "pid": os.getpid(),
             })
         if parsed.path == "/api/minute/search":
@@ -494,6 +494,37 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
                 return self._send_json({"error": str(exc)}, status=400)
             except Exception as exc:
                 return self._send_json({"error": f"读取训练会话失败: {exc}"}, status=500)
+        if parsed.path == "/api/trainer/meta":
+            return self._send_json(self.trainer.meta_options())
+        if parsed.path == "/api/trainer/review":
+            params = parse_qs(parsed.query)
+            try:
+                return self._send_json(self.trainer.review(
+                    params.get("session_id", [""])[0],
+                    market_date=params.get("date", [None])[0],
+                ))
+            except LookupError as exc:
+                return self._send_json({"error": str(exc)}, status=404)
+            except ValueError as exc:
+                return self._send_json({"error": str(exc)}, status=400)
+            except Exception as exc:
+                return self._send_json({"error": f"读取训练复盘失败: {exc}"}, status=500)
+        if parsed.path == "/api/trainer/plan":
+            params = parse_qs(parsed.query)
+            try:
+                state = self.trainer.state(params.get("session_id", [""])[0])
+                return self._send_json({
+                    "session_id": state.get("session_id"),
+                    "run_id": state.get("run_id"),
+                    "day_plan": state.get("day_plan"),
+                    "plan_violations": state.get("plan_violations") or [],
+                })
+            except LookupError as exc:
+                return self._send_json({"error": str(exc)}, status=404)
+            except ValueError as exc:
+                return self._send_json({"error": str(exc)}, status=400)
+            except Exception as exc:
+                return self._send_json({"error": f"读取日计划失败: {exc}"}, status=500)
         if parsed.path.startswith("/api/news/"):
             return self._news_get(parsed)
         if parsed.path in ("/api/trainer/market-context", "/api/market/context"):
@@ -523,13 +554,22 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
             elif parsed.path == "/api/trainer/order":
                 result = self.trainer.order(
                     payload.get("session_id", ""), payload.get("side", ""),
-                    payload.get("shares", 0), payload.get("note", ""),
+                    payload.get("shares", 0),
+                    payload.get("note") or payload.get("reason") or "",
                     payload.get("order_type", "market"),
                     payload.get("limit_price"), payload.get("validity", "day"),
+                    emotion=payload.get("emotion", ""),
+                    planned_stop=payload.get("planned_stop"),
+                    planned_target=payload.get("planned_target"),
+                    context=payload.get("context"),
+                    require_decision=bool(payload.get("require_decision", True)),
                 )
             elif parsed.path == "/api/trainer/order/cancel":
                 result = self.trainer.cancel_pending_order(
-                    payload.get("session_id", ""), payload.get("order_id", "")
+                    payload.get("session_id", ""), payload.get("order_id", ""),
+                    note=payload.get("note") or payload.get("reason") or "",
+                    emotion=payload.get("emotion", ""),
+                    context=payload.get("context"),
                 )
             elif parsed.path == "/api/trainer/condition":
                 result = self.trainer.conditional_order(
@@ -543,6 +583,17 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
                 result = self.trainer.cancel_conditional_order(
                     payload.get("session_id", ""),
                     payload.get("condition_id", ""),
+                )
+            elif parsed.path == "/api/trainer/plan":
+                result = self.trainer.set_day_plan(payload.get("session_id", ""), payload)
+            elif parsed.path == "/api/trainer/mindset":
+                result = self.trainer.add_mindset_marker(
+                    payload.get("session_id", ""), payload
+                )
+            elif parsed.path == "/api/trainer/review":
+                result = self.trainer.review(
+                    payload.get("session_id", ""),
+                    market_date=payload.get("market_date") or payload.get("date"),
                 )
             else:
                 return self._send_json({"error": "接口不存在"}, status=404)
@@ -711,7 +762,7 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
             length = int(self.headers.get("Content-Length", "0"))
         except ValueError:
             raise ValueError("Content-Length 格式错误")
-        if length <= 0 or length > 64 * 1024:
+        if length <= 0 or length > 256 * 1024:
             raise ValueError("请求体为空或过大")
         return json.loads(self.rfile.read(length).decode("utf-8"))
 

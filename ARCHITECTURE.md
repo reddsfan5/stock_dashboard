@@ -12,6 +12,9 @@ stock/
 │   ├── index_kline_cache.parquet # 指数日 K
 │   ├── index_minute_cache.parquet# A股指数分钟（训练情境）
 │   ├── global_markets_cache.parquet # 海外指数日线
+│   ├── trading_calendar.parquet  # A股交易日历（半日市标记）
+│   ├── daily_limit_facts.parquet # 日度涨跌停/停牌事实
+│   ├── stock_status.parquet      # ST/名称状态
 │   ├── minute_kline_cache.parquet# 1 分钟 K（股票+ETF）
 │   ├── daily_basic_cache.parquet # 估值/市值/供应商量比快照
 │   ├── stock_info.parquet        # 申万 2021 行业 + 名称
@@ -24,6 +27,7 @@ stock/
 ├── state/                        # 个人 SQLite（不可再生研究数据，不提交）
 │   ├── stock_journal.sqlite3     # 选股日记案例与事件
 │   ├── market_news.sqlite3       # 市场资讯缓存与影响记录
+│   ├── training_sessions.sqlite3 # T+1 训练闭环（计划/决策/心态）
 │   └── backups/                  # 日记一致性备份
 │
 ├── data/                         # 数据层（事实读写，不含特征公式）
@@ -119,12 +123,12 @@ data.rebuild(start_date="20100101")  # 全量重建
 ```
 
 日常任务由 `pipeline.daily_update` 按阶段执行：
-`stocks → etfs → index → minute → enrich → validate → news → reports`。
+`stocks → etfs → index → minute → enrich → validate → news → market_context → stock_facts → reports`。
 状态写入 `cache/daily_update_status.json`；关键数据未达到覆盖率门禁时命令返回非零退出码。
 分钟线每 1000 只原子落盘，可在中断后续跑。
 
 缓存范围：2010-01-01 ~ 至今，排除北交所（bj）和科创板（sh688）。
-股票/ETF/指数/分钟/日度基础快照分文件存放于 `cache/`；选股日记与市场资讯落在 `state/*.sqlite3`。
+股票/ETF/指数/分钟/日度基础快照分文件存放于 `cache/`；选股日记、市场资讯与训练闭环落在 `state/*.sqlite3`。交易日历与涨跌停事实亦在 `cache/`。
 外部行情主源为腾讯（AkShare + qt.gtimg.cn 快照），BaoStock 为失败子集备源；
 首次全量重建与分钟备源可用新浪。行业分类来自申万 2021。
 

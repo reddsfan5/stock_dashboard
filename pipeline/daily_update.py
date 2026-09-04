@@ -36,7 +36,7 @@ from data.storage import atomic_write_json
 
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STATUS_FILE = os.path.join(PROJECT_DIR, "cache", "daily_update_status.json")
-STAGES = ("stocks", "etfs", "index", "minute", "enrich", "validate", "news", "market_context", "reports")
+STAGES = ("stocks", "etfs", "index", "minute", "enrich", "validate", "news", "market_context", "stock_facts", "reports")
 REPORT_JOBS = (
     ("行情与板块报告", (sys.executable, "-m", "scripts.reports.gen_market")),
     ("选股仪表盘", (sys.executable, "-m", "scripts.screen")),
@@ -698,7 +698,45 @@ class DailyUpdatePipeline:
             "message": payload["message"],
         }
 
-    # ------------------------------------------------------------------
+
+    def _stock_facts_stage(self):
+        """非关键：交易日历、涨跌停事实、ST 状态。失败不阻断主链路。"""
+        from data.calendar import TradingCalendar
+        from data.stock_facts import update_limit_facts, update_stock_status
+
+        target = self.target_date or pd.Timestamp.today().normalize()
+        market_date = pd.Timestamp(target).strftime("%Y-%m-%d")
+        calendar_result = TradingCalendar().update()
+        status_result = update_stock_status()
+        daily = None
+        try:
+            from data.kline import StockData
+            daily = StockData().cache
+        except Exception as exc:  # noqa: BLE001
+            daily = None
+            kline_error = str(exc)
+        else:
+            kline_error = None
+        limit_result = update_limit_facts(
+            daily, market_date=market_date, enrich_pool=True
+        )
+        details = {
+            "market_date": market_date,
+            "calendar": calendar_result,
+            "status": status_result,
+            "limits": limit_result,
+            "kline_error": kline_error,
+        }
+        message = (
+            f"日历 {calendar_result.get('rows', 0)} 日；"
+            f"状态 {status_result.get('rows', 0)}；"
+            f"涨跌停事实 {limit_result.get('rows', 0)}"
+        )
+        # 非关键：只要日历或本地推导有结果即可
+        ok = bool(calendar_result.get("ok") or limit_result.get("rows"))
+        return ok, message, details
+
+        # ------------------------------------------------------------------
     # 对外入口
     # ------------------------------------------------------------------
 
@@ -713,6 +751,7 @@ class DailyUpdatePipeline:
             ("validate", True, self._validate_stage),
             ("news", False, self._news_stage),
             ("market_context", False, self._market_context_stage),
+            ("stock_facts", False, self._stock_facts_stage),
             ("reports", False, self._reports_stage),
         ]
         for name, critical, function in stage_functions:

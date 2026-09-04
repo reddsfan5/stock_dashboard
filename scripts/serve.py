@@ -84,7 +84,8 @@ def web_is_healthy():
         and payload.get("status") == "ok"
         and payload.get("service") == "stock-interactive-web"
         and set(payload.get("features", [])) >= {
-            "minute", "grid", "trainer", "journal", "news", "market_context"
+            "minute", "grid", "trainer", "journal", "news", "market_context",
+            "training_loop",
         }
     )
 

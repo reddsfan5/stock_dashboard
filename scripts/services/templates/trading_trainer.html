@@ -17,6 +17,10 @@
 .loading{position:fixed;inset:0;z-index:110;display:none;align-items:center;justify-content:center;background:rgba(243,245,248,.65)}.loading span{background:#172033;color:#fff;padding:10px 16px;border-radius:8px}
 @media(max-width:1100px){.setup-grid{grid-template-columns:repeat(4,1fr)}.search{grid-column:span 2}.metrics,.factor-grid{grid-template-columns:repeat(4,1fr)}.main{grid-template-columns:1fr}.side{display:grid;grid-template-columns:1fr 1fr}.records{min-height:300px}}
 @media(max-width:680px){.page{padding:8px}.top h1{font-size:16px}.setup-grid{grid-template-columns:1fr 1fr}.search{grid-column:1/-1}.metrics,.factor-grid{grid-template-columns:1fr 1fr}.playbar{flex-wrap:wrap}.playbar .identity{width:100%}.main{display:block}.charts{grid-template-rows:380px 340px}.side{display:block}.news-feed,.trade-box,.records{margin-top:10px}.field input,.field select,.field textarea{font-size:16px}.top .links{gap:8px}.sheet{max-height:92vh}.modal.manage-mode{padding:12px 8px max(16px,env(safe-area-inset-bottom))}.modal.manage-mode .sheet{max-height:calc(100vh - 28px);max-height:calc(100dvh - 28px)}.sheet-head{padding-left:12px;padding-right:12px}.trade-tabs,.sheet-body{padding-left:12px;padding-right:12px}.modal-account{grid-template-columns:1fr 1fr}.condition-grid{grid-template-columns:1fr}.condition-help,.condition-note{grid-column:auto}.quick-grid{gap:5px}.quick-grid button{font-size:10px}.trade-launch small{display:none}}
+
+.plan-bar{display:flex;gap:8px;align-items:stretch;padding:10px 12px;margin-bottom:10px;flex-wrap:wrap}.plan-bar .plan-summary{flex:1;min-width:220px;background:var(--soft);border-radius:8px;padding:8px 10px;font-size:11px;line-height:1.55;color:#445066}.plan-bar .plan-summary b{color:var(--text)}.plan-actions{display:flex;gap:6px;flex-wrap:wrap;align-items:center}.mindset-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:8px 12px;border-top:1px solid var(--border);background:#fafbfc}.mindset-row span{color:var(--muted);font-size:10px;font-weight:700;margin-right:4px}.mindset-row button{height:28px;padding:0 8px;font-size:11px;background:#fff;color:#4a5568}.mindset-row button:hover{border-color:#f0b429;color:#8a5b00}.violation{margin-top:6px;padding:6px 8px;border-radius:6px;background:#fff0ee;color:#9b2c2c;font-size:10px}.decision-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px}.review-body{padding:12px 18px 20px}.review-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.review-card{background:var(--soft);border-radius:10px;padding:10px 12px}.review-card h3{margin:0 0 6px;font-size:12px}.review-card p,.review-list{margin:0;font-size:11px;line-height:1.55;color:#4a5568}.review-list{max-height:180px;overflow:auto}.chip{display:inline-block;padding:2px 7px;border-radius:10px;background:#edf3ff;color:var(--blue);font-size:10px;margin:2px 4px 2px 0}
+.setup-plan{margin-top:10px;padding-top:10px;border-top:1px dashed var(--border)}.setup-plan-grid{display:grid;grid-template-columns:2fr 1fr 1fr 1.2fr;gap:8px}
+@media(max-width:680px){.decision-grid,.review-grid,.setup-plan-grid{grid-template-columns:1fr 1fr}.plan-bar{display:block}}
 </style>
 </head>
 <body>
@@ -32,7 +36,16 @@
     <div class="field"><label>最低佣金</label><input id="minCommission" type="number" value="5" min="0" step="1"></div>
     <div class="field"><label>卖出税费（bp）</label><input id="sellTax" type="number" value="5" min="0" step="0.1"></div>
     <button class="primary" id="start">开始训练</button>
-  </div></section>
+  </div>
+  <div class="setup-plan">
+    <div class="setup-plan-grid">
+      <div class="field"><label>当日计划论点（建议开训前写）</label><input id="planThesis" maxlength="500" placeholder="例如：只做回踩不追高，错了就认"></div>
+      <div class="field"><label>最大亏损 %</label><input id="planMaxLoss" type="number" min="0" max="100" step="0.1" placeholder="例如 1.5"></div>
+      <div class="field"><label>入场风格</label><select id="planStyle"><option value="">不指定</option><option>等待回踩</option><option>突破跟进</option><option>不追涨</option><option>趋势持有</option><option>反弹短做</option><option>其他</option></select></div>
+      <div class="field"><label>计划备注</label><input id="planNotes" maxlength="200" placeholder="仓位上限、禁用动作等"></div>
+    </div>
+  </div>
+  </section>
 
   <section id="game" hidden>
     <section class="panel metrics">
@@ -59,12 +72,29 @@
     <section class="panel playbar">
       <span class="identity" id="identity">—</span><span class="clock" id="clock">—</span><span class="progress" id="progress">—</span>
       <select id="speed"><option value="1">慢速 · 1分钟/拍</option><option value="5" selected>正常 · 5分钟/拍</option><option value="15">快速 · 15分钟/拍</option></select>
-      <button id="step">推进一格</button><button class="primary" id="play">▶ 动态分时</button><button id="closeDay">直达收盘</button><button id="nextDay" disabled>下一交易日</button><button id="newGame">新训练</button>
+      <button id="step">推进一格</button><button class="primary" id="play">▶ 动态分时</button><button id="closeDay">直达收盘</button><button id="nextDay" disabled>下一交易日</button><button id="openReview">复盘</button><button id="newGame">新训练</button>
+    </section>
+    <section class="panel plan-bar">
+      <div class="plan-summary" id="planSummary">尚未填写当日计划</div>
+      <div class="plan-actions">
+        <button id="editPlan">编辑日计划</button>
+        <button id="savePlan">保存日计划</button>
+      </div>
+      <div id="planViolationBox" style="width:100%"></div>
     </section>
     <div class="main">
       <section class="panel charts">
         <div class="chart-block"><div class="chart-title">日 K <small>仅显示到当前模拟分钟</small></div><div class="chart" id="dailyChart"></div></div>
-        <div class="chart-block"><div class="chart-title">当日分时 <small>曲线随播放向右出现</small></div><div class="chart" id="minuteChart"></div></div>
+        <div class="chart-block"><div class="chart-title">当日分时 <small>曲线随播放向右出现 · 可标记心态</small></div><div class="chart" id="minuteChart"></div>
+          <div class="mindset-row"><span>心态标记</span>
+            <button type="button" data-mindset="犹豫">犹豫</button>
+            <button type="button" data-mindset="FOMO">FOMO</button>
+            <button type="button" data-mindset="后悔">后悔</button>
+            <button type="button" data-mindset="自信">自信</button>
+            <button type="button" data-mindset="恐惧">恐惧</button>
+            <button type="button" data-mindset="追涨">追涨</button>
+          </div>
+        </div>
       </section>
       <aside class="side">
         <section class="panel news-feed">
@@ -138,7 +168,12 @@
       <div class="quick-grid">
         <button data-manual-ratio="0.25">1/4 仓</button><button data-manual-ratio="0.5">1/2 仓</button><button data-manual-ratio="0.75">3/4 仓</button><button id="manualAll">全量</button>
       </div>
-      <div class="field reason-field"><label>交易理由（复盘用）</label><textarea id="manualNote" maxlength="200" placeholder="例如：缩量回踩支撑，等待放量确认"></textarea></div>
+      <div class="field reason-field"><label>交易理由（必填，复盘用）</label><textarea id="manualNote" maxlength="200" placeholder="例如：缩量回踩支撑，等待放量确认"></textarea></div>
+      <div class="decision-grid">
+        <div class="field"><label>情绪标签</label><select id="manualEmotion"><option value="">请选择</option><option>自信</option><option>恐惧</option><option>追涨</option><option>犹豫</option><option>后悔</option><option>FOMO</option><option>其他</option></select></div>
+        <div class="field"><label>计划止损</label><input id="manualStop" type="number" min="0" step="0.01" placeholder="可选"></div>
+        <div class="field"><label>计划目标</label><input id="manualTarget" type="number" min="0" step="0.01" placeholder="可选"></div>
+      </div>
       <button class="submit-order" id="manualSubmit">确认买入</button>
     </div>
 
@@ -165,6 +200,38 @@
       <p class="manage-intro" id="manageIntro">仅待成交限价委托和监控中的条件单可撤。撤单后，冻结资金或持仓会立即释放。</p>
       <section class="manage-list" id="pendingManage"></section>
       <section class="manage-list" id="conditionManage"></section>
+    </div>
+  </section>
+</div>
+
+<div class="modal" id="reviewModal" hidden aria-hidden="true">
+  <div class="modal-backdrop" id="reviewBackdrop"></div>
+  <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="reviewTitle">
+    <div class="sheet-handle"></div>
+    <header class="sheet-head">
+      <div class="sheet-symbol"><b id="reviewTitle">会话复盘</b><span>计划遵守 · 盈亏归因 · 情绪时间线</span></div>
+      <button class="close-modal" id="closeReview" aria-label="关闭">×</button>
+    </header>
+    <div class="review-body" id="reviewBody"><div class="empty">暂无复盘数据</div></div>
+  </section>
+</div>
+
+<div class="modal" id="planModal" hidden aria-hidden="true">
+  <div class="modal-backdrop" id="planBackdrop"></div>
+  <section class="sheet" role="dialog" aria-modal="true">
+    <div class="sheet-handle"></div>
+    <header class="sheet-head">
+      <div class="sheet-symbol"><b>编辑当日计划</b><span id="planModalDate">—</span></div>
+      <button class="close-modal" id="closePlanModal" aria-label="关闭">×</button>
+    </header>
+    <div class="sheet-body">
+      <div class="field"><label>论点 / 主题</label><textarea id="livePlanThesis" maxlength="2000" placeholder="今天准备怎么做、什么情况认错"></textarea></div>
+      <div class="decision-grid">
+        <div class="field"><label>最大亏损 %</label><input id="livePlanMaxLoss" type="number" min="0" max="100" step="0.1"></div>
+        <div class="field"><label>入场风格</label><select id="livePlanStyle"><option value="">不指定</option><option>等待回踩</option><option>突破跟进</option><option>不追涨</option><option>趋势持有</option><option>反弹短做</option><option>其他</option></select></div>
+        <div class="field"><label>备注</label><input id="livePlanNotes" maxlength="200"></div>
+      </div>
+      <button class="primary" id="confirmPlan" style="width:100%;margin-top:12px">保存日计划</button>
     </div>
   </section>
 </div>
@@ -223,7 +290,24 @@ function render(next){
   renderMarketIndicators(m.indicators||{});
   $('avgCost').textContent=price(a.average_cost);$('availableDetail').textContent=`可卖 ${a.available_shares.toLocaleString()} · 冻结 ${a.reserved_shares.toLocaleString()} · T+1锁定 ${a.locked_shares.toLocaleString()}`;$('conditionCount').textContent=p.active_condition_count||0;$('cancelCount').textContent=(p.pending_order_count||0)+(p.active_condition_count||0);
   $('nextDay').disabled=!p.day_complete||!p.has_next_day;$('step').disabled=p.day_complete;$('closeDay').disabled=p.day_complete;$('play').disabled=p.day_complete;$('play').textContent=timer?'Ⅱ 暂停':'▶ 动态分时';
-  renderModalAccount();renderDaily();renderMinute();renderRecords();renderCancelManager();syncLiveNews(next.date,next.time);syncMarketContext(next.date,next.time);
+  renderModalAccount();renderDaily();renderMinute();renderRecords();renderCancelManager();renderPlanSummary();syncLiveNews(next.date,next.time);syncMarketContext(next.date,next.time);
+}
+
+function renderPlanSummary(){
+  if(!state)return;
+  const plan=state.day_plan,violations=state.plan_violations||[];
+  if(!plan){$('planSummary').innerHTML='尚未填写当日计划 · 可在开训前或盘中写下论点、最大亏损与入场风格';}
+  else{
+    const bits=[
+      `<b>${escapeHtml(plan.market_date)}</b>`,
+      plan.thesis?`论点：${escapeHtml(plan.thesis)}`:'',
+      plan.max_loss_pct!=null?`最大亏损 ${(+plan.max_loss_pct).toFixed(2)}%`:'',
+      plan.entry_style?`风格：${escapeHtml(plan.entry_style)}`:'',
+      plan.notes?`备注：${escapeHtml(plan.notes)}`:''
+    ].filter(Boolean);
+    $('planSummary').innerHTML=bits.join(' · ');
+  }
+  $('planViolationBox').innerHTML=violations.length?violations.map(v=>`<div class="violation">⚠ ${escapeHtml(v.label)}：${escapeHtml(v.detail||'')}</div>`).join(''):'';
 }
 
 function syncLiveNews(date,asOf){
@@ -315,7 +399,11 @@ function renderDaily(){
 
 function renderMinute(){
   const slots=tradingTimes(),map=new Map(state.minute_points.map(x=>[x.time,x])),orders=state.orders.filter(x=>x.date===state.date&&x.filled_shares>0),buys=orders.filter(x=>x.side==='buy').map(x=>[x.time,x.fill_price]),sells=orders.filter(x=>x.side==='sell').map(x=>[x.time,x.fill_price]),closes=slots.map(t=>map.get(t)?.close??null),amounts=slots.map(t=>map.get(t)?.amount??null),base=state.prev_close;
-  minuteChart.setOption({animation:false,grid:[{left:62,right:62,top:42,height:'60%'},{left:62,right:62,top:'76%',height:'14%'}],tooltip:{trigger:'axis',axisPointer:{type:'cross'},formatter:ps=>{const t=slots[ps[0]?.dataIndex??0],x=map.get(t);if(!x)return`${t}<br>尚未播放`;return`${state.date} ${t}<br><b>${price(x.close)}　${signed((x.close/base-1)*100,'%')}</b><br>开 ${price(x.open)}　高 ${price(x.high)}<br>低 ${price(x.low)}　均价 ${price(x.vwap)}<br>成交量 ${(+x.volume||0).toLocaleString()}　量比 ${optional(x.intraday_volume_ratio,2,'×')}<br>成交额 ${money(x.amount)}`}},xAxis:[{type:'category',data:slots,boundaryGap:false,axisLabel:{show:false}},{type:'category',gridIndex:1,data:slots,boundaryGap:true,axisLabel:{formatter:(v,i)=>i%40===0?v:''}}],yAxis:[{scale:true,splitLine:{lineStyle:{color:'#edf0f5',type:'dashed'}}},{position:'right',scale:true,axisLabel:{formatter:v=>signed((v/base-1)*100,'%')},splitLine:{show:false}},{gridIndex:1,axisLabel:{formatter:v=>v>=1e6?(v/1e6).toFixed(0)+'百万':(v/1e4).toFixed(0)+'万'},splitLine:{show:false}}],series:[{name:'价格',type:'line',data:closes,showSymbol:false,connectNulls:false,lineStyle:{width:1.6,color:'#3478f6'},areaStyle:{color:'rgba(52,120,246,.08)'},markLine:{silent:true,symbol:'none',label:{formatter:`昨收 ${price(base)}`},lineStyle:{color:'#9aa3b2',type:'dashed'},data:[{yAxis:base}]}},{name:'涨跌幅',type:'line',yAxisIndex:1,data:closes,showSymbol:false,lineStyle:{opacity:0}},{name:'买入',type:'scatter',data:buys,symbol:'triangle',symbolSize:12,itemStyle:{color:'#e5484d'}},{name:'卖出',type:'scatter',data:sells,symbol:'triangle',symbolRotate:180,symbolSize:12,itemStyle:{color:'#159568'}},{name:'成交额',type:'bar',xAxisIndex:1,yAxisIndex:2,data:amounts,itemStyle:{color:p=>{const x=map.get(slots[p.dataIndex]);return x&&x.close>=x.open?'#e98a8d':'#72bea2'}}}]},true);
+  const markers=(state.mindset_markers||[]).filter(x=>x.market_date===state.date).map(x=>{
+    const pt=map.get(x.as_of)||map.get(String(x.as_of).slice(0,5));
+    return pt?[x.as_of,pt.close,x.tag]:null;
+  }).filter(Boolean);
+  minuteChart.setOption({animation:false,grid:[{left:62,right:62,top:42,height:'56%'},{left:62,right:62,top:'76%',height:'12%'}],tooltip:{trigger:'axis',axisPointer:{type:'cross'},formatter:ps=>{const t=slots[ps[0]?.dataIndex??0],x=map.get(t);if(!x)return`${t}<br>尚未播放`;const marks=markers.filter(m=>m[0]===t).map(m=>m[2]).join('、');return`${state.date} ${t}<br><b>${price(x.close)}　${signed((x.close/base-1)*100,'%')}</b><br>开 ${price(x.open)}　高 ${price(x.high)}<br>低 ${price(x.low)}　均价 ${price(x.vwap)}<br>成交量 ${(+x.volume||0).toLocaleString()}　量比 ${optional(x.intraday_volume_ratio,2,'×')}<br>成交额 ${money(x.amount)}${marks?`<br>心态：${escapeHtml(marks)}`:''}`}},xAxis:[{type:'category',data:slots,boundaryGap:false,axisLabel:{show:false}},{type:'category',gridIndex:1,data:slots,boundaryGap:true,axisLabel:{formatter:(v,i)=>i%40===0?v:''}}],yAxis:[{scale:true,splitLine:{lineStyle:{color:'#edf0f5',type:'dashed'}}},{position:'right',scale:true,axisLabel:{formatter:v=>signed((v/base-1)*100,'%')},splitLine:{show:false}},{gridIndex:1,axisLabel:{formatter:v=>v>=1e6?(v/1e6).toFixed(0)+'百万':(v/1e4).toFixed(0)+'万'},splitLine:{show:false}}],series:[{name:'价格',type:'line',data:closes,showSymbol:false,connectNulls:false,lineStyle:{width:1.6,color:'#3478f6'},areaStyle:{color:'rgba(52,120,246,.08)'},markLine:{silent:true,symbol:'none',label:{formatter:`昨收 ${price(base)}`},lineStyle:{color:'#9aa3b2',type:'dashed'},data:[{yAxis:base}]}},{name:'涨跌幅',type:'line',yAxisIndex:1,data:closes,showSymbol:false,lineStyle:{opacity:0}},{name:'买入',type:'scatter',data:buys,symbol:'triangle',symbolSize:12,itemStyle:{color:'#e5484d'}},{name:'卖出',type:'scatter',data:sells,symbol:'triangle',symbolRotate:180,symbolSize:12,itemStyle:{color:'#159568'}},{name:'心态',type:'scatter',data:markers.map(m=>[m[0],m[1]]),symbol:'pin',symbolSize:14,itemStyle:{color:'#d99200'},label:{show:true,formatter:p=>markers[p.dataIndex]?.[2]||'',fontSize:9,color:'#8a5b00',position:'top'}},{name:'成交额',type:'bar',xAxisIndex:1,yAxisIndex:2,data:amounts,itemStyle:{color:p=>{const x=map.get(slots[p.dataIndex]);return x&&x.close>=x.open?'#e98a8d':'#72bea2'}}}]},true);
 }
 
 function conditionDescription(x){
@@ -360,14 +448,98 @@ async function mutate(path,body={}){if(busy)return false;busy=true;try{render(aw
 async function advance(steps){await mutate('/api/trainer/advance',{steps});if(state?.progress.day_complete)stop()}
 function play(){if(timer){stop();return}if(state.progress.day_complete)return;$('play').textContent='暂停';const loop=async()=>{if(!timer)return;await advance(+$('speed').value);if(timer)timer=setTimeout(loop,500)};timer=setTimeout(loop,0)}
 function stop(){if(timer)clearTimeout(timer);timer=null;$('play').textContent='▶ 动态分时'}
-async function placeManual(){stop();const orderType=$('manualOrderType').value,ok=await mutate('/api/trainer/order',{side:tradeTab,shares:$('manualShares').value,note:$('manualNote').value,order_type:orderType,limit_price:orderType==='limit'?$('manualLimitPrice').value:null,validity:$('manualValidity').value});if(ok){$('manualNote').value='';closeTradeModal()}}
+async function placeManual(){
+  stop();
+  const reason=$('manualNote').value.trim(),emotion=$('manualEmotion').value;
+  if(!reason){notice('请填写交易理由',true);return}
+  if(!emotion){notice('请选择情绪标签',true);return}
+  const orderType=$('manualOrderType').value;
+  const context=await collectVisibleContext();
+  const ok=await mutate('/api/trainer/order',{
+    side:tradeTab,shares:$('manualShares').value,note:reason,emotion,
+    planned_stop:$('manualStop').value||null,planned_target:$('manualTarget').value||null,
+    order_type:orderType,limit_price:orderType==='limit'?$('manualLimitPrice').value:null,
+    validity:$('manualValidity').value,context,require_decision:true
+  });
+  if(ok){$('manualNote').value='';$('manualEmotion').value='';$('manualStop').value='';$('manualTarget').value='';closeTradeModal()}
+}
+async function collectVisibleContext(){
+  if(!state)return{};
+  let news_items=[],market_context=null;
+  try{
+    const news=await request('/api/news/day?'+new URLSearchParams({date:state.date,as_of:state.time}));
+    news_items=news.items||[];
+  }catch(e){}
+  try{
+    const q=new URLSearchParams({date:state.date,as_of:state.time,session_id:sessionId||''});
+    market_context=await request('/api/trainer/market-context?'+q);
+  }catch(e){}
+  return {
+    price:state.market?.price,change_pct:state.market?.change_pct,
+    indicators:state.market?.indicators||{},
+    account:{
+      available_cash:state.account?.available_cash,total_shares:state.account?.total_shares,
+      available_shares:state.account?.available_shares,equity:state.account?.equity,
+      total_pnl:state.account?.total_pnl,return_pct:state.account?.return_pct,
+      average_cost:state.account?.average_cost
+    },
+    news_summary:(news_items||[]).slice(-8).map(x=>({time:String(x.time||'').slice(0,5),title:String(x.title||'').slice(0,120),tags:(x.tags||[]).slice(0,2)})),
+    a_share:(market_context?.a_share||[]).map(x=>({code:x.code,name:x.name,change_pct:x.change_pct,price:x.price,source:x.source})),
+    overseas:(market_context?.overseas||[]).slice(0,6).map(x=>({code:x.code,name:x.name,change_pct:x.change_pct,status:x.status,bar_date:x.bar_date}))
+  };
+}
 async function submitCondition(){stop();const ok=await mutate('/api/trainer/condition',{side:conditionSide,condition_type:$('conditionType').value,trigger_value:$('triggerValue').value,secondary_trigger_value:$('secondaryTriggerField').hidden?null:$('secondaryTriggerValue').value,shares:$('conditionShares').value,note:$('conditionNote').value,validity:$('conditionValidity').value});if(ok){$('conditionNote').value='';closeTradeModal()}}
 
 async function loadDates(code){try{const meta=await request('/api/trainer/dates?code='+encodeURIComponent(code));$('code').value=`${meta.name} ${meta.code}`;$('sellTax').value=meta.code.slice(2).match(/^[15]/)?0:5;$('startDate').innerHTML='<option value="random">随机挑战（保留后续交易日）</option>'+meta.dates.map(d=>`<option value="${d}">${d}</option>`).join('')}catch(e){notice(e.message,true)}}
-async function startGame(){stop();loading(true);try{const payload={code:$('code').value,start_date:$('startDate').value,capital:$('capital').value,commission_bps:$('commission').value,min_commission:$('minCommission').value,sell_tax_bps:$('sellTax').value};render(await request('/api/trainer/session','POST',payload));$('setup').hidden=true;$('game').hidden=false;setTimeout(()=>{dailyChart.resize();minuteChart.resize()},20)}catch(e){notice(e.message,true)}finally{loading(false)}}
+async function startGame(){stop();loading(true);try{const payload={code:$('code').value,start_date:$('startDate').value,capital:$('capital').value,commission_bps:$('commission').value,min_commission:$('minCommission').value,sell_tax_bps:$('sellTax').value,day_plan:{thesis:$('planThesis').value,max_loss_pct:$('planMaxLoss').value||null,entry_style:$('planStyle').value,notes:$('planNotes').value}};render(await request('/api/trainer/session','POST',payload));$('setup').hidden=true;$('game').hidden=false;setTimeout(()=>{dailyChart.resize();minuteChart.resize()},20)}catch(e){notice(e.message,true)}finally{loading(false)}}
+
+function openPlanModal(){
+  if(!state)return;
+  $('planModalDate').textContent=state.date;
+  const plan=state.day_plan||{};
+  $('livePlanThesis').value=plan.thesis||$('planThesis').value||'';
+  $('livePlanMaxLoss').value=plan.max_loss_pct??$('planMaxLoss').value||'';
+  $('livePlanStyle').value=plan.entry_style||$('planStyle').value||'';
+  $('livePlanNotes').value=plan.notes||$('planNotes').value||'';
+  $('planModal').hidden=false;$('planModal').setAttribute('aria-hidden','false');document.body.classList.add('body-modal-open');
+}
+function closePlanModal(){$('planModal').hidden=true;$('planModal').setAttribute('aria-hidden','true');if($('reviewModal').hidden&&$('tradeModal').hidden)document.body.classList.remove('body-modal-open')}
+async function saveLivePlan(){
+  if(!state)return;
+  const ok=await mutate('/api/trainer/plan',{market_date:state.date,thesis:$('livePlanThesis').value,max_loss_pct:$('livePlanMaxLoss').value||null,entry_style:$('livePlanStyle').value,notes:$('livePlanNotes').value});
+  if(ok){closePlanModal();notice('日计划已保存')}
+}
+async function markMindset(tag){
+  if(!state)return;stop();
+  const note=prompt(`标记「${tag}」：可选备注`,'')??'';
+  if(note===null)return;
+  await mutate('/api/trainer/mindset',{tag,note,market_date:state.date,as_of:state.time});
+  notice(`已标记 ${tag}`);
+}
+function closeReviewModal(){$('reviewModal').hidden=true;$('reviewModal').setAttribute('aria-hidden','true');if($('planModal').hidden&&$('tradeModal').hidden)document.body.classList.remove('body-modal-open')}
+async function openReview(){
+  if(!state)return;stop();
+  try{
+    const data=await request('/api/trainer/review?session_id='+encodeURIComponent(sessionId)+'&date='+encodeURIComponent(state.date));
+    const pnl=data.pnl_attribution||{},adh=data.plan_adherence||{},plan=data.plan;
+    const violations=(adh.violations||[]).map(v=>`<div class="violation">${escapeHtml(v.label)}：${escapeHtml(v.detail||'')}</div>`).join('')||'<p>未发现明显违反当日计划的动作</p>';
+    const emotions=(data.emotion_timeline||[]).map(x=>`<div><span class="chip">${escapeHtml(x.as_of)} · ${escapeHtml(x.emotion||x.event_type)}</span>${escapeHtml(x.reason||'')}</div>`).join('')||'<p>暂无情绪/心态记录</p>';
+    const news=(data.linked_news||[]).slice(-12).map(x=>`<div>${escapeHtml(x.as_of)} · ${escapeHtml(x.title||'')}</div>`).join('')||'<p>决策时未见资讯快照</p>';
+    $('reviewBody').innerHTML=`<div class="review-grid">
+      <div class="review-card"><h3>盈亏归因</h3><p>已实现 ${money(pnl.realized_pnl)} · 未实现 ${money(pnl.unrealized_pnl)}<br>总盈亏 ${money(pnl.total_pnl)}（${signed(pnl.return_pct,'%')}）<br>费用 ${money(pnl.fees)} · 成交 ${pnl.fills||0} 笔<br>买入额 ${money(pnl.buy_notional)} · 卖出额 ${money(pnl.sell_notional)}</p></div>
+      <div class="review-card"><h3>计划遵守</h3>${plan?`<p>论点：${escapeHtml(plan.thesis||'—')}<br>最大亏损 ${plan.max_loss_pct??'—'}% · 风格 ${escapeHtml(plan.entry_style||'—')}</p>`:'<p>当日未写计划</p>'}${violations}</div>
+      <div class="review-card"><h3>情绪时间线</h3><div class="review-list">${emotions}</div></div>
+      <div class="review-card"><h3>当时可见资讯</h3><div class="review-list">${news}</div></div>
+    </div>`;
+    $('reviewModal').hidden=false;$('reviewModal').setAttribute('aria-hidden','false');document.body.classList.add('body-modal-open');
+  }catch(e){notice(e.message,true)}
+}
 
 $('start').onclick=startGame;$('play').onclick=play;$('step').onclick=()=>advance(1);$('closeDay').onclick=()=>advance(10000);$('nextDay').onclick=async()=>{stop();await mutate('/api/trainer/next-day')};
-$('newGame').onclick=()=>{stop();closeTradeModal();sessionStorage.removeItem('tradingTrainerSession');sessionId=null;state=null;$('game').hidden=true;$('setup').hidden=false};
+$('newGame').onclick=()=>{stop();closeTradeModal();closeReviewModal();closePlanModal();sessionStorage.removeItem('tradingTrainerSession');sessionId=null;state=null;$('game').hidden=true;$('setup').hidden=false};
+$('openReview').onclick=openReview;$('closeReview').onclick=closeReviewModal;$('reviewBackdrop').onclick=closeReviewModal;
+$('editPlan').onclick=openPlanModal;$('savePlan').onclick=openPlanModal;$('closePlanModal').onclick=closePlanModal;$('planBackdrop').onclick=closePlanModal;$('confirmPlan').onclick=saveLivePlan;
+document.querySelectorAll('[data-mindset]').forEach(b=>b.onclick=()=>markMindset(b.dataset.mindset));
 $('openBuy').onclick=()=>openTradeModal('buy');$('openSell').onclick=()=>openTradeModal('sell');$('openCondition').onclick=()=>openTradeModal('condition');$('openManage').onclick=openManageModal;$('closeModal').onclick=closeTradeModal;$('modalBackdrop').onclick=closeTradeModal;
 document.querySelectorAll('[data-trade-tab]').forEach(b=>b.onclick=()=>selectTradeTab(b.dataset.tradeTab));document.querySelectorAll('[data-condition-side]').forEach(b=>b.onclick=()=>selectConditionSide(b.dataset.conditionSide));
 document.querySelectorAll('[data-manual-ratio]').forEach(b=>b.onclick=()=>setQuantity('manualShares',tradeTab,+b.dataset.manualRatio));$('manualAll').onclick=()=>setQuantity('manualShares',tradeTab,1);
@@ -376,7 +548,7 @@ $('manualSubmit').onclick=placeManual;$('conditionSubmit').onclick=submitConditi
 async function cancelFromClick(e){const normal=e.target.closest('[data-cancel-order]'),condition=e.target.closest('[data-cancel-condition]');if(normal&&confirm('确认撤销这笔待成交限价委托？'))await mutate('/api/trainer/order/cancel',{order_id:normal.dataset.cancelOrder});if(condition&&confirm('确认撤销这笔监控中的条件单？'))await mutate('/api/trainer/condition/cancel',{condition_id:condition.dataset.cancelCondition})}
 $('records').onclick=cancelFromClick;$('pendingManage').onclick=cancelFromClick;$('conditionManage').onclick=cancelFromClick;
 $('code').addEventListener('input',()=>{clearTimeout(searchTimer);const q=$('code').value.trim();if(q.length<2){$('results').style.display='none';return}searchTimer=setTimeout(async()=>{try{const rows=await request('/api/minute/search?q='+encodeURIComponent(q));$('results').innerHTML=rows.map(r=>`<div class="result" data-code="${r.code}"><b>${escapeHtml(r.name)} ${r.code}</b><span>${r.latest_date}</span></div>`).join('')||'<div class="result">未找到分钟缓存标的</div>';$('results').style.display='block'}catch(e){}},220)});
-$('results').onclick=e=>{const row=e.target.closest('[data-code]');if(row){$('results').style.display='none';loadDates(row.dataset.code)}};$('code').addEventListener('keydown',e=>{if(e.key==='Enter')loadDates($('code').value)});document.addEventListener('click',e=>{if(!e.target.closest('.search'))$('results').style.display='none'});document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('tradeModal').hidden)closeTradeModal()});window.addEventListener('resize',()=>{dailyChart.resize();minuteChart.resize()});
+$('results').onclick=e=>{const row=e.target.closest('[data-code]');if(row){$('results').style.display='none';loadDates(row.dataset.code)}};$('code').addEventListener('keydown',e=>{if(e.key==='Enter')loadDates($('code').value)});document.addEventListener('click',e=>{if(!e.target.closest('.search'))$('results').style.display='none'});document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!$('tradeModal').hidden)closeTradeModal();if(!$('reviewModal').hidden)closeReviewModal();if(!$('planModal').hidden)closePlanModal()}});window.addEventListener('resize',()=>{dailyChart.resize();minuteChart.resize()});
 async function init(){selectConditionSide('buy');const saved=sessionStorage.getItem('tradingTrainerSession');if(saved){try{render(await request('/api/trainer/state?session_id='+encodeURIComponent(saved)));$('setup').hidden=true;$('game').hidden=false;setTimeout(()=>{dailyChart.resize();minuteChart.resize()},20);return}catch(e){sessionStorage.removeItem('tradingTrainerSession')}}loadDates('600000')}
 init();
 </script>

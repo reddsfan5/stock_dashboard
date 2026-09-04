@@ -15,6 +15,13 @@ from backtest.execution import ExecutionConfig
 from backtest.trading_trainer import TrainerConfig, TradingTrainerSession
 from data.minute import CACHE_FILE as MINUTE_CACHE_FILE
 from data.schema import derive_previous_close
+from data.training_sessions import (
+    EMOTION_TAGS,
+    ENTRY_STYLES,
+    MINDSET_TAGS,
+    TrainingSessionRepository,
+    truncate_visible_context,
+)
 
 
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -100,11 +107,12 @@ def load_daily_history(code: str, before_date: str, days: int) -> list:
 class TradingTrainerService:
     """线程安全的本地训练会话仓库。"""
 
-    def __init__(self, minute_repository, max_sessions: int = 100):
+    def __init__(self, minute_repository, max_sessions: int = 100, training_store=None):
         self.repository = minute_repository
         self.max_sessions = max_sessions
         self.sessions: Dict[str, Dict] = {}
         self.lock = threading.RLock()
+        self.training_store = training_store or TrainingSessionRepository()
 
     def dates(self, code: str) -> dict:
         normalized = _normalize_code(code)
@@ -174,29 +182,62 @@ class TradingTrainerService:
             ),
         )
         session_id = secrets.token_urlsafe(24)
+        run = self.training_store.create_run(
+            session_token=session_id,
+            code=meta["code"],
+            name=meta["name"],
+            start_date=start_date,
+            capital=capital,
+            meta={
+                "commission_bps": commission_bps,
+                "min_commission": min_commission,
+                "sell_tax_bps": sell_tax_bps,
+                "slippage_bps": slippage_bps,
+            },
+        )
+        day_plan_payload = payload.get("day_plan") or {}
+        if any(day_plan_payload.get(key) not in (None, "") for key in (
+            "thesis", "max_loss_pct", "max_loss_amount", "entry_style", "notes",
+        )):
+            self.training_store.upsert_day_plan(
+                run_id=run["id"],
+                market_date=start_date,
+                thesis=day_plan_payload.get("thesis", ""),
+                max_loss_pct=day_plan_payload.get("max_loss_pct"),
+                max_loss_amount=day_plan_payload.get("max_loss_amount"),
+                entry_style=day_plan_payload.get("entry_style", ""),
+                notes=day_plan_payload.get("notes", ""),
+            )
         with self.lock:
             self._prune()
             self.sessions[session_id] = {
-                "session": session, "last_access": time.time(),
+                "session": session,
+                "run_id": run["id"],
+                "last_access": time.time(),
             }
-        state = session.state()
-        state["session_id"] = session_id
-        return state
+        return self._enriched_state(session_id, session.state())
 
     def state(self, session_id: str) -> dict:
         with self.lock:
             session = self._get(session_id)
-            return self._with_id(session_id, session.state())
+            return self._enriched_state(session_id, session.state())
 
     def advance(self, session_id: str, steps: int) -> dict:
         with self.lock:
             session = self._get(session_id)
-            return self._with_id(session_id, session.advance(steps))
+            return self._enriched_state(session_id, session.advance(steps))
 
     def next_day(self, session_id: str) -> dict:
         with self.lock:
-            session = self._get(session_id)
-            return self._with_id(session_id, session.next_day())
+            item = self._get_item(session_id)
+            session = item["session"]
+            before = session.current_date
+            state = session.next_day()
+            # 换日后若已有计划则保留；UI 可继续写新一天计划
+            item["last_access"] = time.time()
+            enriched = self._enriched_state(session_id, state)
+            enriched["previous_date"] = before
+            return enriched
 
     def order(
         self,
@@ -207,22 +248,56 @@ class TradingTrainerService:
         order_type: str = "market",
         limit_price=None,
         validity: str = "day",
+        emotion: str = "",
+        planned_stop=None,
+        planned_target=None,
+        context: dict = None,
+        require_decision: bool = False,
+    ) -> dict:
+        note = str(note or "").strip()
+        emotion = str(emotion or "").strip()
+        if require_decision and not note:
+            raise ValueError("请填写交易理由，便于复盘")
+        if require_decision and not emotion:
+            raise ValueError("请选择情绪标签")
+        with self.lock:
+            item = self._get_item(session_id)
+            session = item["session"]
+            before_orders = len(session.orders)
+            before_pending = len(session.pending_orders)
+            state = session.place_order(
+                side, shares, note, order_type, limit_price, validity
+            )
+            self._persist_order_decision(
+                item,
+                state,
+                side=side,
+                note=note,
+                emotion=emotion,
+                planned_stop=planned_stop,
+                planned_target=planned_target,
+                context=context,
+                before_orders=before_orders,
+                before_pending=before_pending,
+            )
+            return self._enriched_state(session_id, state)
+
+    def cancel_pending_order(
+        self,
+        session_id: str,
+        order_id: str,
+        note: str = "",
+        emotion: str = "",
+        context: dict = None,
     ) -> dict:
         with self.lock:
-            session = self._get(session_id)
-            return self._with_id(
-                session_id,
-                session.place_order(
-                    side, shares, note, order_type, limit_price, validity
-                ),
+            item = self._get_item(session_id)
+            session = item["session"]
+            state = session.cancel_pending_order(order_id)
+            self._persist_cancel_decision(
+                item, state, order_ref=order_id, note=note, emotion=emotion, context=context
             )
-
-    def cancel_pending_order(self, session_id: str, order_id: str) -> dict:
-        with self.lock:
-            session = self._get(session_id)
-            return self._with_id(
-                session_id, session.cancel_pending_order(order_id)
-            )
+            return self._enriched_state(session_id, state)
 
     def conditional_order(
         self,
@@ -252,12 +327,174 @@ class TradingTrainerService:
                 session_id, session.cancel_conditional_order(condition_id)
             )
 
-    def _get(self, session_id: str) -> TradingTrainerSession:
+    def _get_item(self, session_id: str) -> Dict:
         item = self.sessions.get(str(session_id or ""))
         if item is None:
             raise LookupError("训练会话不存在或服务已经重启，请重新开始")
         item["last_access"] = time.time()
-        return item["session"]
+        return item
+
+    def _get(self, session_id: str) -> TradingTrainerSession:
+        return self._get_item(session_id)["session"]
+
+    def set_day_plan(self, session_id: str, payload: dict) -> dict:
+        with self.lock:
+            item = self._get_item(session_id)
+            session = item["session"]
+            market_date = str(payload.get("market_date") or session.current_date)
+            plan = self.training_store.upsert_day_plan(
+                run_id=item["run_id"],
+                market_date=market_date,
+                thesis=payload.get("thesis", ""),
+                max_loss_pct=payload.get("max_loss_pct"),
+                max_loss_amount=payload.get("max_loss_amount"),
+                entry_style=payload.get("entry_style", ""),
+                notes=payload.get("notes", ""),
+            )
+            state = self._enriched_state(session_id, session.state())
+            state["day_plan"] = plan
+            return state
+
+    def add_mindset_marker(self, session_id: str, payload: dict) -> dict:
+        with self.lock:
+            item = self._get_item(session_id)
+            session = item["session"]
+            marker = self.training_store.add_mindset_marker(
+                run_id=item["run_id"],
+                market_date=payload.get("market_date") or session.current_date,
+                as_of=payload.get("as_of") or session.current_point["time"],
+                tag=payload.get("tag", ""),
+                note=payload.get("note", ""),
+            )
+            # 同步写入决策流，便于复盘时间线
+            self.training_store.add_decision(
+                run_id=item["run_id"],
+                event_type="mindset",
+                market_date=marker["market_date"],
+                as_of=marker["as_of"],
+                reason=marker.get("note") or marker["tag"],
+                emotion=marker["tag"],
+                require_reason=False,
+                context=truncate_visible_context(
+                    market=session.state().get("market"),
+                    account=session.state().get("account"),
+                ),
+            )
+            state = self._enriched_state(session_id, session.state())
+            state["mindset_marker"] = marker
+            return state
+
+    def review(self, session_id: str, market_date: str = None) -> dict:
+        with self.lock:
+            item = self._get_item(session_id)
+            state = item["session"].state()
+            payload = self.training_store.build_review(
+                item["run_id"],
+                market_date=market_date or None,
+                account=state.get("account"),
+                orders=state.get("orders"),
+            )
+            payload["session_id"] = session_id
+            payload["current_date"] = state.get("date")
+            payload["current_time"] = state.get("time")
+            return payload
+
+    def meta_options(self) -> dict:
+        return {
+            "emotion_tags": list(EMOTION_TAGS),
+            "mindset_tags": list(MINDSET_TAGS),
+            "entry_styles": list(ENTRY_STYLES),
+        }
+
+    def _persist_order_decision(
+        self,
+        item,
+        state,
+        *,
+        side,
+        note,
+        emotion,
+        planned_stop,
+        planned_target,
+        context,
+        before_orders,
+        before_pending,
+    ):
+        order_ref = ""
+        price = state.get("market", {}).get("price")
+        shares = None
+        if len(state.get("orders") or []) > before_orders:
+            order = state["orders"][-1]
+            order_ref = order.get("pending_order_id") or f"F{len(state['orders']):04d}"
+            price = order.get("fill_price") or price
+            shares = order.get("filled_shares") or order.get("requested_shares")
+        elif len(state.get("pending_orders") or []) > before_pending:
+            order = state["pending_orders"][-1]
+            order_ref = order.get("id") or ""
+            price = order.get("limit_price") or price
+            shares = order.get("shares")
+        visible = context if isinstance(context, dict) else None
+        if visible is None:
+            visible = truncate_visible_context(
+                market=state.get("market"),
+                account=state.get("account"),
+            )
+        self.training_store.add_decision(
+            run_id=item["run_id"],
+            event_type=side,
+            market_date=state["date"],
+            as_of=state["time"],
+            side=side,
+            shares=shares,
+            price=price,
+            order_ref=order_ref,
+            reason=note,
+            emotion=emotion,
+            planned_stop=planned_stop,
+            planned_target=planned_target,
+            context=visible,
+            require_reason=False,
+        )
+
+    def _persist_cancel_decision(self, item, state, *, order_ref, note, emotion, context):
+        visible = context if isinstance(context, dict) else truncate_visible_context(
+            market=state.get("market"),
+            account=state.get("account"),
+        )
+        self.training_store.add_decision(
+            run_id=item["run_id"],
+            event_type="cancel",
+            market_date=state["date"],
+            as_of=state["time"],
+            order_ref=str(order_ref or ""),
+            reason=note or "撤销限价委托",
+            emotion=emotion,
+            context=visible,
+            require_reason=False,
+        )
+
+    def _enriched_state(self, session_id: str, state: dict) -> dict:
+        state = self._with_id(session_id, state)
+        item = self.sessions.get(session_id) or {}
+        run_id = item.get("run_id")
+        if not run_id:
+            return state
+        plan = self.training_store.get_day_plan(run_id=run_id, market_date=state["date"])
+        decisions = self.training_store.list_decisions(run_id, market_date=state["date"])
+        markers = self.training_store.list_mindset_markers(run_id, market_date=state["date"])
+        violations = []
+        if plan:
+            from data.training_sessions import check_plan_violations
+            violations = check_plan_violations(
+                plan, decisions, day_return_pct=state.get("account", {}).get("return_pct")
+            )
+        state["run_id"] = run_id
+        state["day_plan"] = plan
+        state["decisions"] = decisions
+        state["mindset_markers"] = markers
+        state["plan_violations"] = violations
+        state["training_meta"] = self.meta_options()
+        return state
 
     def _prune(self) -> None:
         expired_before = time.time() - 6 * 60 * 60
