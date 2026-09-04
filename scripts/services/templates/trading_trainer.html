@@ -269,6 +269,13 @@
 <script>
 const $=id=>document.getElementById(id);
 let state=null,sessionId=null,timer=null,busy=false,searchTimer=null,tradeTab='buy',conditionSide='buy';
+function formatSymbolLabel(name, code){
+  const n=String(name||'').trim(), c=String(code||'').trim();
+  if(!c) return n;
+  if(!n || n.toLowerCase()===c.toLowerCase()) return c;
+  return n+'  '+c;
+}
+
 let newsRequesting=false,newsPending=null,newsLastKey='',newsDate='',newsInitialized=false,newsSeen=new Set();
 const dailyChart=echarts.init($('dailyChart')),minuteChart=echarts.init($('minuteChart'));
 const conditionOptions={
@@ -535,7 +542,7 @@ async function collectVisibleContext(){
 }
 async function submitCondition(){stop();const ok=await mutate('/api/trainer/condition',{side:conditionSide,condition_type:$('conditionType').value,trigger_value:$('triggerValue').value,secondary_trigger_value:$('secondaryTriggerField').hidden?null:$('secondaryTriggerValue').value,shares:$('conditionShares').value,note:$('conditionNote').value,validity:$('conditionValidity').value});if(ok){$('conditionNote').value='';closeTradeModal()}}
 
-async function loadDates(code){try{const meta=await request('/api/trainer/dates?code='+encodeURIComponent(code));$('code').value=`${meta.name} ${meta.code}`;$('sellTax').value=meta.code.slice(2).match(/^[15]/)?0:5;$('startDate').innerHTML='<option value="random">随机挑战（保留后续交易日）</option>'+meta.dates.map(d=>`<option value="${d}">${d}</option>`).join('');if(meta.index_minute_warning){notice('指数分钟覆盖不足，宽基可能仅显示开盘价；可选日已尽量对齐缓存',true)}else{notice('')}}catch(e){notice(e.message,true)}}
+async function loadDates(code){try{const meta=await request('/api/trainer/dates?code='+encodeURIComponent(code));$('code').value=formatSymbolLabel(meta.name,meta.code); if(window.__trainerCodeClear) window.__trainerCodeClear.arm();$('sellTax').value=meta.code.slice(2).match(/^[15]/)?0:5;$('startDate').innerHTML='<option value="random">随机挑战（保留后续交易日）</option>'+meta.dates.map(d=>`<option value="${d}">${d}</option>`).join('');if(meta.index_minute_warning){notice('指数分钟覆盖不足，宽基可能仅显示开盘价；可选日已尽量对齐缓存',true)}else{notice('')}}catch(e){notice(e.message,true)}}
 async function startGame(){stop();const code=$('code').value.trim();if(!code){notice('请先输入或选择标的代码',true);return}loading(true);try{const payload={code:code,start_date:$('startDate').value,capital:$('capital').value,commission_bps:$('commission').value,min_commission:$('minCommission').value,sell_tax_bps:$('sellTax').value};render(await request('/api/trainer/session','POST',payload));$('setup').hidden=true;$('game').hidden=false;setTimeout(()=>{dailyChart.resize();minuteChart.resize()},20)}catch(e){notice(e.message,true)}finally{loading(false)}}
 
 function openPlanModal(){
@@ -592,7 +599,7 @@ document.querySelectorAll('[data-condition-ratio]').forEach(b=>b.onclick=()=>set
 $('manualSubmit').onclick=placeManual;$('conditionSubmit').onclick=submitCondition;$('conditionType').onchange=()=>updateConditionType(true);$('triggerValue').oninput=updateConditionPreview;$('secondaryTriggerValue').oninput=updateConditionPreview;$('manualOrderType').onchange=()=>updateManualOrderType(true);
 async function cancelFromClick(e){const normal=e.target.closest('[data-cancel-order]'),condition=e.target.closest('[data-cancel-condition]');if(normal&&confirm('确认撤销这笔待成交限价委托？'))await mutate('/api/trainer/order/cancel',{order_id:normal.dataset.cancelOrder});if(condition&&confirm('确认撤销这笔监控中的条件单？'))await mutate('/api/trainer/condition/cancel',{condition_id:condition.dataset.cancelCondition})}
 $('records').onclick=cancelFromClick;$('pendingManage').onclick=cancelFromClick;$('conditionManage').onclick=cancelFromClick;
-$('code').addEventListener('input',()=>{clearTimeout(searchTimer);const q=$('code').value.trim();if(q.length<2){$('results').style.display='none';return}searchTimer=setTimeout(async()=>{try{const rows=await request('/api/minute/search?q='+encodeURIComponent(q));$('results').innerHTML=rows.map(r=>`<div class="result" data-code="${r.code}"><b>${escapeHtml(r.name)} ${r.code}</b><span>${r.latest_date}</span></div>`).join('')||'<div class="result">未找到分钟缓存标的</div>';$('results').style.display='block'}catch(e){}},220)});
+$('code').addEventListener('input',()=>{clearTimeout(searchTimer);const q=$('code').value.trim();if(q.length<2){$('results').style.display='none';return}searchTimer=setTimeout(async()=>{try{const rows=await request('/api/minute/search?q='+encodeURIComponent(q));$('results').innerHTML=rows.map(r=>`<div class="result" data-code="${r.code}"><b>${escapeHtml(formatSymbolLabel(r.name,r.code))}</b><span>${r.latest_date}</span></div>`).join('')||'<div class="result">未找到分钟缓存标的</div>';$('results').style.display='block'}catch(e){}},220)});
 $('results').onclick=e=>{const row=e.target.closest('[data-code]');if(row){$('results').style.display='none';loadDates(row.dataset.code)}};$('code').addEventListener('keydown',e=>{if(e.key==='Enter')loadDates($('code').value)});document.addEventListener('click',e=>{if(!e.target.closest('.search'))$('results').style.display='none'});document.addEventListener('keydown',e=>{
   const tag=(e.target&&e.target.tagName||'').toLowerCase();
   const typing=tag==='input'||tag==='textarea'||tag==='select'||(e.target&&e.target.isContentEditable);
@@ -609,12 +616,17 @@ async function init(){
   selectConditionSide('buy');
   const input=$('code');
   if(input){
-    let cleared=false;
+    // 有内容时首次聚焦清空，方便改标的；空框聚焦不消耗机会。选中标的后重新武装。
+    const ctl={armed:true};
+    window.__trainerCodeClear=ctl;
+    ctl.arm=()=>{ctl.armed=true; input.dataset.clearOnce='1';};
     const clearOnce=()=>{
-      if(cleared)return;
-      cleared=true;
+      if(!ctl.armed)return;
+      if(!input.value.trim())return;
+      ctl.armed=false;
       input.value='';
       input.dataset.clearOnce='0';
+      const box=$('results'); if(box) box.style.display='none';
     };
     input.addEventListener('focus',clearOnce);
     input.addEventListener('pointerdown',clearOnce);
