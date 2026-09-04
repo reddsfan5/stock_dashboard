@@ -1,8 +1,10 @@
-"""A 股指数分钟线缓存 — cache/index_minute_cache.parquet
+"""A 股 / 港股指数分钟线缓存 — cache/index_minute_cache.parquet
 
-仅覆盖训练页市场情境所需的少数宽基指数，与股票分钟缓存分离。
+覆盖训练页市场情境所需的少数宽基指数，与股票分钟缓存分离。
 数据源：腾讯五日分时（web.ifzq.gtimg.cn），与 data/minute.py 主源一致。
 接口只返回最近约 5 个交易日，靠每日增量积累近期覆盖。
+
+港股恒生（hkHSI）共用同一缓存与解析器；美股/韩国分钟源不可用，仍走日线。
 """
 
 from __future__ import annotations
@@ -10,7 +12,7 @@ from __future__ import annotations
 import os
 import sys
 import time
-from typing import List, Optional
+from typing import List, Optional, Sequence, Tuple
 
 import pandas as pd
 import requests
@@ -27,14 +29,56 @@ KEEP_DAYS = 65
 DELAY = 0.05
 COLUMNS = ["代码", "时间", "开盘", "最高", "最低", "收盘", "成交量", "成交额"]
 
+# 腾讯 code → 会话时钟过滤（字符串 HHMM 比较）
+A_SHARE_CLOCK = ("0931", "1130", "1301", "1500")
+HK_CLOCK = ("0930", "1200", "1300", "1600")
+HK_MINUTE_CODES = ("hkHSI",)
+
+
+def _clock_allowed(clock: str, code: str) -> bool:
+    if code.startswith("hk"):
+        lo1, hi1, lo2, hi2 = HK_CLOCK
+    else:
+        lo1, hi1, lo2, hi2 = A_SHARE_CLOCK
+    return lo1 <= clock <= hi1 or lo2 <= clock <= hi2
+
+
+def align_trainer_dates(
+    stock_dates: Sequence[str],
+    index_dates: Sequence[str],
+) -> Tuple[List[str], bool, Optional[str]]:
+    """将训练日与指数分钟覆盖对齐。
+
+    有指数分钟日期时优先取交集，使 A 股卡片可用 source=minute。
+    交集为空则回退股票日期，并附带 warning。
+    """
+    stock = [str(d) for d in stock_dates]
+    index = [str(d) for d in index_dates]
+    if not stock:
+        return [], False, None
+    if not index:
+        return stock, True, "index_minute_empty"
+    index_set = set(index)
+    intersection = [d for d in stock if d in index_set]
+    if intersection:
+        return intersection, False, None
+    return stock, True, "index_minute_no_overlap"
+
 
 class IndexMinuteData:
     """宽基指数分钟线管理器（独立于股票分钟缓存）。"""
 
     def __init__(self, codes: Optional[List[str]] = None):
-        self.codes = list(codes or INDEXES.keys())
+        if codes is None:
+            self.codes = list(INDEXES.keys()) + list(HK_MINUTE_CODES)
+        else:
+            self.codes = list(codes)
         self.last_failed: List[str] = []
         self.last_new_rows = 0
+
+    @property
+    def a_share_codes(self) -> List[str]:
+        return [c for c in self.codes if not str(c).startswith("hk")]
 
     @property
     def cache(self) -> pd.DataFrame:
@@ -46,6 +90,19 @@ class IndexMinuteData:
 
     def _save(self, df: pd.DataFrame) -> None:
         atomic_write_parquet(df, CACHE_FILE)
+
+    def available_dates(self, codes: Optional[Sequence[str]] = None) -> List[str]:
+        """返回指定代码（默认 A 股宽基）已有分钟的交易日列表。"""
+        cache = self.cache
+        if cache.empty:
+            return []
+        wanted = list(codes) if codes is not None else self.a_share_codes
+        if not wanted:
+            return []
+        frame = cache[cache["代码"].isin(wanted)]
+        if frame.empty:
+            return []
+        return sorted(frame["时间"].dt.strftime("%Y-%m-%d").unique().tolist())
 
     def _fetch_tencent(self, code: str, after=None,
                        target=None) -> Optional[pd.DataFrame]:
@@ -78,8 +135,7 @@ class IndexMinuteData:
                         if len(parts) < 4:
                             continue
                         clock = parts[0]
-                        if not ("0931" <= clock <= "1130" or
-                                "1301" <= clock <= "1500"):
+                        if not _clock_allowed(clock, code):
                             continue
                         price = float(parts[1])
                         cumulative_volume = float(parts[2])
@@ -171,7 +227,7 @@ class IndexMinuteData:
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="A股指数分钟线管理")
+    parser = argparse.ArgumentParser(description="A股/港股指数分钟线管理")
     parser.add_argument("--update", action="store_true", help="增量更新")
     parser.add_argument("--info", action="store_true", help="查看缓存")
     args = parser.parse_args()

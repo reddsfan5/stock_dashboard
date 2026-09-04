@@ -572,7 +572,7 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
                     planned_stop=payload.get("planned_stop"),
                     planned_target=payload.get("planned_target"),
                     context=payload.get("context"),
-                    require_decision=bool(payload.get("require_decision", True)),
+                    require_decision=bool(payload.get("require_decision", False)),
                 )
             elif parsed.path == "/api/trainer/order/cancel":
                 result = self.trainer.cancel_pending_order(

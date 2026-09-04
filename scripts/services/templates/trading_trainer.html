@@ -169,9 +169,9 @@
       <div class="quick-grid">
         <button data-manual-ratio="0.25">1/4 仓</button><button data-manual-ratio="0.5">1/2 仓</button><button data-manual-ratio="0.75">3/4 仓</button><button id="manualAll">全量</button>
       </div>
-      <div class="field reason-field"><label>交易理由（必填，复盘用）</label><textarea id="manualNote" maxlength="200" placeholder="例如：缩量回踩支撑，等待放量确认"></textarea></div>
+      <div class="field reason-field"><label>交易理由（选填）</label><textarea id="manualNote" maxlength="200" placeholder="例如：缩量回踩支撑，等待放量确认"></textarea></div>
       <div class="decision-grid">
-        <div class="field"><label>情绪标签</label><select id="manualEmotion"><option value="">请选择</option><option>自信</option><option>恐惧</option><option>追涨</option><option>犹豫</option><option>后悔</option><option>FOMO</option><option>其他</option></select></div>
+        <div class="field"><label>情绪标签（选填）</label><select id="manualEmotion"><option value="">可不选</option><option>自信</option><option>恐惧</option><option>追涨</option><option>犹豫</option><option>后悔</option><option>FOMO</option><option>其他</option></select></div>
         <div class="field"><label>计划止损</label><input id="manualStop" type="number" min="0" step="0.01" placeholder="可选"></div>
         <div class="field"><label>计划目标</label><input id="manualTarget" type="number" min="0" step="0.01" placeholder="可选"></div>
       </div>
@@ -366,13 +366,13 @@ function renderMarketContext(data,asOf){
   const a=(data.a_share||[]).map(x=>{
     const cls=pnlClass(x.change_pct);
     const ch=x.change_pct==null?'—':signed(x.change_pct,'%');
-    const meta=[x.time?`分时 ${x.time}`:(x.bar_date||''), x.source==='minute'?'分钟同步':(x.source==='daily_open'?'仅开盘':(x.source==='daily_close'?'日线收盘':'昨收'))].filter(Boolean).join(' · ');
+    const meta=[x.time?`分时 ${x.time}`:(x.bar_date||''), x.source==='minute'?'分钟同步':(x.source==='daily_open'?'无分钟缓存·仅开盘':(x.source==='daily_close'?'日线收盘':'昨收'))].filter(Boolean).join(' · ');
     return `<div class="idx-card"><span class="name">${escapeHtml(x.name)}</span><span class="price ${cls}">${x.price==null?'—':(+x.price).toFixed(2)}</span><span class="meta ${cls}">${ch} · ${escapeHtml(meta)}</span></div>`;
   }).join('');
   const o=(data.overseas||[]).map(x=>{
     const cls=pnlClass(x.change_pct);
     const ch=x.change_pct==null?'—':signed(x.change_pct,'%');
-    return `<div class="ov-card"><span class="name">${escapeHtml(x.region_label)} · ${escapeHtml(x.name)}</span><span class="badge-status ${escapeHtml(x.status)}">${escapeHtml(x.status_label||x.status)}</span><span class="price ${cls}">${x.price==null?'—':(+x.price).toLocaleString(undefined,{maximumFractionDigits:2})}</span><span class="meta ${cls}">${ch} · 可知日 ${escapeHtml(x.bar_date||'—')} · 当地 ${escapeHtml((x.local_time||'').slice(11,16)||'—')}<br>${escapeHtml(x.note||'')}</span></div>`;
+    const ovMeta=x.source==='minute'?`分时 ${escapeHtml(x.time||'')} · 分钟同步`:`可知日 ${escapeHtml(x.bar_date||'—')} · 当地 ${escapeHtml((x.local_time||'').slice(11,16)||'—')}`; return `<div class="ov-card"><span class="name">${escapeHtml(x.region_label)} · ${escapeHtml(x.name)}</span><span class="badge-status ${escapeHtml(x.status)}">${escapeHtml(x.status_label||x.status)}</span><span class="price ${cls}">${x.price==null?'—':(+x.price).toLocaleString(undefined,{maximumFractionDigits:2})}</span><span class="meta ${cls}">${ch} · ${ovMeta}<br>${escapeHtml(x.note||'')}</span></div>`;
   }).join('');
   $('marketContextBody').innerHTML=`<div class="market-block"><h3>A股宽基</h3><div class="idx-grid">${a||'<div class="empty">暂无指数缓存</div>'}</div></div><div class="market-block"><h3>海外摘要</h3><div class="ov-list">${o||'<div class="empty">暂无海外缓存，可运行 update --only market_context</div>'}</div></div>`;
 }
@@ -453,15 +453,13 @@ function stop(){if(timer)clearTimeout(timer);timer=null;$('play').textContent='�
 async function placeManual(){
   stop();
   const reason=$('manualNote').value.trim(),emotion=$('manualEmotion').value;
-  if(!reason){notice('请填写交易理由',true);return}
-  if(!emotion){notice('请选择情绪标签',true);return}
   const orderType=$('manualOrderType').value;
   const context=await collectVisibleContext();
   const ok=await mutate('/api/trainer/order',{
     side:tradeTab,shares:$('manualShares').value,note:reason,emotion,
     planned_stop:$('manualStop').value||null,planned_target:$('manualTarget').value||null,
     order_type:orderType,limit_price:orderType==='limit'?$('manualLimitPrice').value:null,
-    validity:$('manualValidity').value,context,require_decision:true
+    validity:$('manualValidity').value,context,require_decision:false
   });
   if(ok){$('manualNote').value='';$('manualEmotion').value='';$('manualStop').value='';$('manualTarget').value='';closeTradeModal()}
 }
@@ -492,7 +490,7 @@ async function collectVisibleContext(){
 }
 async function submitCondition(){stop();const ok=await mutate('/api/trainer/condition',{side:conditionSide,condition_type:$('conditionType').value,trigger_value:$('triggerValue').value,secondary_trigger_value:$('secondaryTriggerField').hidden?null:$('secondaryTriggerValue').value,shares:$('conditionShares').value,note:$('conditionNote').value,validity:$('conditionValidity').value});if(ok){$('conditionNote').value='';closeTradeModal()}}
 
-async function loadDates(code){try{const meta=await request('/api/trainer/dates?code='+encodeURIComponent(code));$('code').value=`${meta.name} ${meta.code}`;$('sellTax').value=meta.code.slice(2).match(/^[15]/)?0:5;$('startDate').innerHTML='<option value="random">随机挑战（保留后续交易日）</option>'+meta.dates.map(d=>`<option value="${d}">${d}</option>`).join('')}catch(e){notice(e.message,true)}}
+async function loadDates(code){try{const meta=await request('/api/trainer/dates?code='+encodeURIComponent(code));$('code').value=`${meta.name} ${meta.code}`;$('sellTax').value=meta.code.slice(2).match(/^[15]/)?0:5;$('startDate').innerHTML='<option value="random">随机挑战（保留后续交易日）</option>'+meta.dates.map(d=>`<option value="${d}">${d}</option>`).join('');if(meta.index_minute_warning){notice('指数分钟覆盖不足，宽基可能仅显示开盘价；可选日已尽量对齐缓存',true)}else{notice('')}}catch(e){notice(e.message,true)}}
 async function startGame(){stop();const code=$('code').value.trim();if(!code){notice('请先输入或选择标的代码',true);return}loading(true);try{const payload={code:code,start_date:$('startDate').value,capital:$('capital').value,commission_bps:$('commission').value,min_commission:$('minCommission').value,sell_tax_bps:$('sellTax').value};render(await request('/api/trainer/session','POST',payload));$('setup').hidden=true;$('game').hidden=false;setTimeout(()=>{dailyChart.resize();minuteChart.resize()},20)}catch(e){notice(e.message,true)}finally{loading(false)}}
 
 function openPlanModal(){

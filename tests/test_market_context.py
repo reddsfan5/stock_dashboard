@@ -213,5 +213,85 @@ class MarketContextServiceTest(unittest.TestCase):
         self.assertEqual(ndx["status"], "closed")
 
 
+    def test_hk_minute_as_of_truncation(self):
+        """港股分钟按上海 as_of 转当地后截断，不剧透后续点。"""
+        from data.index import INDEXES
+        rows = list(self.stub_minute.cache.to_dict("records"))
+        for minute, price in (("09:31", 25000.0), ("10:15", 25100.0), ("14:00", 25200.0)):
+            rows.append({
+                "代码": "hkHSI",
+                "时间": pd.Timestamp(f"2026-09-03 {minute}"),
+                "开盘": 25000.0,
+                "最高": price,
+                "最低": 24900.0,
+                "收盘": price,
+                "成交量": 1.0,
+                "成交额": 1.0,
+            })
+        frame = pd.DataFrame(rows)
+
+        class StubMinute(IndexMinuteData):
+            def __init__(self, frame):
+                self._frame = frame
+                self.codes = list(INDEXES) + ["hkHSI"]
+                self.last_failed = []
+
+            @property
+            def cache(self):
+                return self._frame.copy()
+
+            def points_as_of(self, code, market_date, as_of):
+                return IndexMinuteData.points_as_of(self, code, market_date, as_of)
+
+        service = MarketContextService(
+            index_data=self.stub_index,
+            index_minute=StubMinute(frame),
+            global_markets=self.stub_global,
+        )
+        early = service.context("2026-09-03", "10:15")
+        hsi = next(x for x in early["overseas"] if x["code"] == "HSI")
+        self.assertEqual(hsi["source"], "minute")
+        self.assertEqual(hsi["time"], "10:15")
+        self.assertEqual(hsi["price"], 25100.0)
+        self.assertEqual(hsi["bar_date"], "2026-09-03")
+        self.assertNotEqual(hsi["price"], 25200.0)
+
+        # 无分钟时仍走日线可知逻辑
+        late_no = self.service.context("2026-09-03", "10:15")
+        hsi_daily = next(x for x in late_no["overseas"] if x["code"] == "HSI")
+        self.assertEqual(hsi_daily["source"], "daily")
+        self.assertEqual(hsi_daily["bar_date"], "2026-09-02")
+
+
+class AlignTrainerDatesTest(unittest.TestCase):
+    def test_intersection_prefers_overlap(self):
+        from data.index_minute import align_trainer_dates
+        dates, warned, code = align_trainer_dates(
+            ["2026-08-25", "2026-09-01", "2026-09-02"],
+            ["2026-09-01", "2026-09-02", "2026-09-03"],
+        )
+        self.assertEqual(dates, ["2026-09-01", "2026-09-02"])
+        self.assertFalse(warned)
+        self.assertIsNone(code)
+
+    def test_empty_intersection_falls_back_with_warning(self):
+        from data.index_minute import align_trainer_dates
+        dates, warned, code = align_trainer_dates(
+            ["2026-08-25", "2026-08-26"],
+            ["2026-09-01"],
+        )
+        self.assertEqual(dates, ["2026-08-25", "2026-08-26"])
+        self.assertTrue(warned)
+        self.assertEqual(code, "index_minute_no_overlap")
+
+    def test_empty_index_dates_falls_back(self):
+        from data.index_minute import align_trainer_dates
+        dates, warned, code = align_trainer_dates(["2026-08-25"], [])
+        self.assertEqual(dates, ["2026-08-25"])
+        self.assertTrue(warned)
+        self.assertEqual(code, "index_minute_empty")
+
+
+
 if __name__ == "__main__":
     unittest.main()

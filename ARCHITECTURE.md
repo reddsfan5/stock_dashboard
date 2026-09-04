@@ -10,7 +10,7 @@ stock/
 │   ├── stock_kline_cache.parquet # 股票日 K
 │   ├── etf_kline_cache.parquet   # ETF 日 K
 │   ├── index_kline_cache.parquet # 指数日 K
-│   ├── index_minute_cache.parquet# A股指数分钟（训练情境）
+│   ├── index_minute_cache.parquet# A股/港股指数分钟（训练情境）
 │   ├── global_markets_cache.parquet # 海外指数日线
 │   ├── trading_calendar.parquet  # A股交易日历（半日市标记）
 │   ├── daily_limit_facts.parquet # 日度涨跌停/停牌事实
@@ -45,7 +45,7 @@ stock/
 │   ├── industry.py               # StockInfo — 申万行业分类
 │   ├── journal.py                # 选股日记 SQLite
 │   ├── market_news.py            # 市场资讯 SQLite + 同花顺公开源
-│   ├── index_minute.py           # A股宽基指数分钟缓存
+│   ├── index_minute.py           # A股宽基+港股恒生分钟缓存
 │   ├── global_markets.py         # 海外指数日线（港/美/韩）
 │   ├── market_context.py         # 训练页市场情境 as_of 组装
 │   ├── watchlist.py              # 观察池 / 次日跟踪

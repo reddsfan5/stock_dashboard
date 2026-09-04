@@ -13,6 +13,7 @@ import pandas as pd
 
 from backtest.execution import ExecutionConfig
 from backtest.trading_trainer import TrainerConfig, TradingTrainerSession
+from data.index_minute import IndexMinuteData, align_trainer_dates
 from data.minute import CACHE_FILE as MINUTE_CACHE_FILE
 from data.schema import derive_previous_close
 from data.training_sessions import (
@@ -116,14 +117,23 @@ class TradingTrainerService:
 
     def dates(self, code: str) -> dict:
         normalized = _normalize_code(code)
-        dates = self._complete_dates(normalized)
-        if not dates:
+        stock_dates = self._complete_dates(normalized)
+        if not stock_dates:
             raise LookupError(f"{normalized} 在分钟缓存中没有完整交易日数据")
-        return {
+        index_dates = IndexMinuteData().available_dates()
+        dates, warned, warning_code = align_trainer_dates(stock_dates, index_dates)
+        payload = {
             "code": normalized,
             "name": self.repository.name_map.get(normalized, normalized),
             "dates": dates,
+            "index_minute_aligned": bool(index_dates) and not warned,
+            "index_minute_warning": warned,
         }
+        if warning_code:
+            payload["index_minute_warning_code"] = warning_code
+        if warned and index_dates:
+            payload["index_minute_dates"] = index_dates
+        return payload
 
     @staticmethod
     def _complete_dates(code: str) -> list:

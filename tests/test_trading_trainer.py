@@ -395,6 +395,59 @@ class TradingTrainerServiceTest(unittest.TestCase):
         self.assertIn("当日涨跌", html)
         self.assertIn("▶ 动态分时", html)
         self.assertNotIn("2026-08-25 09:31", html)
+        self.assertIn("交易理由（选填）", html)
+        self.assertIn("无分钟缓存·仅开盘", html)
+        self.assertIn("require_decision:false", html)
+        self.assertNotIn("请填写交易理由", html)
+        self.assertNotIn("require_decision:true", html)
+
+
+    def test_order_allows_empty_reason_when_not_required(self):
+        service = TradingTrainerService(FakeMinuteRepository())
+        with patch.object(service, "_complete_dates", return_value=DATES), patch(
+            "scripts.services.trading_trainer.load_daily_history",
+            side_effect=history_loader,
+        ), patch(
+            "scripts.services.trading_trainer.IndexMinuteData.available_dates",
+            return_value=[],
+        ):
+            state = service.create({
+                "code": "600000", "start_date": DATES[0], "capital": 10_000,
+                "commission_bps": 0, "min_commission": 0, "sell_tax_bps": 0,
+            })
+            session_id = state["session_id"]
+            ordered = service.order(
+                session_id, "buy", 100, "", "market", None, "day",
+                emotion="", require_decision=False,
+            )
+        self.assertTrue(any(o["side"] == "buy" for o in ordered["orders"]))
+
+    def test_dates_intersects_index_minute_coverage(self):
+        service = TradingTrainerService(FakeMinuteRepository())
+        with patch.object(
+            service, "_complete_dates",
+            return_value=["2026-08-25", "2026-09-01", "2026-09-02"],
+        ), patch(
+            "scripts.services.trading_trainer.IndexMinuteData.available_dates",
+            return_value=["2026-09-01", "2026-09-02", "2026-09-03"],
+        ):
+            meta = service.dates("600000")
+        self.assertEqual(meta["dates"], ["2026-09-01", "2026-09-02"])
+        self.assertTrue(meta["index_minute_aligned"])
+        self.assertFalse(meta["index_minute_warning"])
+
+    def test_dates_falls_back_when_no_index_overlap(self):
+        service = TradingTrainerService(FakeMinuteRepository())
+        with patch.object(
+            service, "_complete_dates", return_value=["2026-08-25", "2026-08-26"]
+        ), patch(
+            "scripts.services.trading_trainer.IndexMinuteData.available_dates",
+            return_value=["2026-09-01"],
+        ):
+            meta = service.dates("600000")
+        self.assertEqual(meta["dates"], ["2026-08-25", "2026-08-26"])
+        self.assertTrue(meta["index_minute_warning"])
+        self.assertEqual(meta["index_minute_warning_code"], "index_minute_no_overlap")
 
 
 if __name__ == "__main__":

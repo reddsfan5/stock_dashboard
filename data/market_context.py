@@ -145,8 +145,8 @@ class MarketContextService:
             "a_share": a_share,
             "overseas": overseas,
             "notes": (
-                "A股优先按指数分钟与模拟时刻对齐；海外为日线，"
-                "仅显示该时刻在当地已收盘可知的点位，不伪造全球同分钟同步。"
+                "A股优先按指数分钟与模拟时刻对齐；港股恒生有分钟时同步截断，"
+                "美股/韩国仍为日线（仅当地已收盘可知），不伪造全球同分钟同步。"
             ),
         }
 
@@ -238,6 +238,7 @@ class MarketContextService:
                 meta["session_open"],
                 meta["session_close"],
             )
+            local = as_of_shanghai.astimezone(ZoneInfo(meta["timezone"]))
             known = last_known_daily_bar(
                 bars, as_of_shanghai, meta["timezone"], meta["session_close"]
             )
@@ -247,12 +248,31 @@ class MarketContextService:
                 if known is not None else None
             )
             prev = previous_close_from_bars(bars, known["日期"]) if known is not None else None
-            # 若尚无可知日线，退回缓存最后一根并标注（仍不得剧透未来相对 as_of）
+            point_time = None
+            source = "daily"
             note = "日线；收盘后才更新当日点位"
             if known is None and len(bars):
-                # 检查是否有未来剧透风险：若最新 bar 的收盘对 as_of 尚不可知则不展示价格
                 note = "缓存中尚无在该模拟时刻可知的收盘"
-            local = as_of_shanghai.astimezone(ZoneInfo(meta["timezone"]))
+
+            # 港股恒生：有分钟缓存时按当地时刻截断，与 A 股分时同步
+            if code == "HSI":
+                hk_date = local.strftime("%Y-%m-%d")
+                hk_clock = local.strftime("%H:%M:%S")
+                minute_points = self.index_minute.points_as_of(
+                    "hkHSI", hk_date, hk_clock
+                )
+                if len(minute_points):
+                    last = minute_points.iloc[-1]
+                    price = float(last["收盘"])
+                    point_time = pd.Timestamp(last["时间"]).strftime("%H:%M")
+                    bar_date = hk_date
+                    source = "minute"
+                    note = "分时；按模拟时刻截断"
+                    # 涨跌相对前一完整日收盘
+                    prev = previous_close_from_bars(bars, hk_date)
+                    if prev is None and known is not None:
+                        prev = previous_close_from_bars(bars, known["日期"])
+
             cards.append({
                 "code": code,
                 "name": meta["name"],
@@ -264,9 +284,10 @@ class MarketContextService:
                 "prev_close": _round_price(prev),
                 "change_pct": _pct(price, prev),
                 "bar_date": bar_date,
+                "time": point_time,
                 "local_time": local.strftime("%Y-%m-%d %H:%M"),
                 "timezone": meta["timezone"],
-                "source": "daily",
+                "source": source,
                 "note": note,
             })
         return cards
