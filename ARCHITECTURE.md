@@ -28,6 +28,7 @@ stock/
 │   ├── stock_journal.sqlite3     # 选股日记案例与事件
 │   ├── market_news.sqlite3       # 市场资讯缓存与影响记录
 │   ├── training_sessions.sqlite3 # T+1 训练闭环（计划/决策/心态）
+│   ├── watchlist.sqlite3         # 观察池 / 待买池与次日跟踪
 │   └── backups/                  # 日记一致性备份
 │
 ├── data/                         # 数据层（事实读写，不含特征公式）
@@ -123,7 +124,7 @@ data.rebuild(start_date="20100101")  # 全量重建
 ```
 
 日常任务由 `pipeline.daily_update` 按阶段执行：
-`stocks → etfs → index → minute → enrich → validate → news → market_context → stock_facts → reports`。
+`stocks → etfs → index → minute → enrich → validate → news → market_context → stock_facts → watchlist_track → reports`。
 状态写入 `cache/daily_update_status.json`；关键数据未达到覆盖率门禁时命令返回非零退出码。
 分钟线每 1000 只原子落盘，可在中断后续跑。
 
@@ -399,7 +400,7 @@ cache 行情事实
 
 交互服务（同一进程，127.0.0.1:8765）
     scripts.serve → scripts.services.minute_viewer --serve
-      入口：minute / grid / trainer / journal / news
+      入口：minute / grid / trainer / journal / news / watchlist
       日记读写：state/stock_journal.sqlite3
 
 静态报告（另一进程，127.0.0.1:8000）

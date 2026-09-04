@@ -431,7 +431,7 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
                 "status": "ok",
                 "service": "stock-interactive-web",
                 "version": 1,
-                "features": ["minute", "grid", "trainer", "journal", "news", "market_context", "training_loop"],
+                "features": ["minute", "grid", "trainer", "journal", "news", "market_context", "training_loop", "watchlist"],
                 "pid": os.getpid(),
             })
         if parsed.path == "/api/minute/search":
@@ -531,6 +531,8 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
             return self._market_context_get(parsed)
         if parsed.path.startswith("/api/journal/"):
             return self._journal_get(parsed)
+        if parsed.path.startswith("/api/watchlist/"):
+            return self._watchlist_get(parsed)
         return super().do_GET()
 
     def do_POST(self):
@@ -539,6 +541,8 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
             return self._news_post(parsed)
         if parsed.path.startswith("/api/journal/"):
             return self._journal_post(parsed)
+        if parsed.path.startswith("/api/watchlist/"):
+            return self._watchlist_post(parsed)
         if not parsed.path.startswith("/api/trainer/"):
             return self._send_json({"error": "接口不存在"}, status=404)
         try:
@@ -757,6 +761,61 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
         except Exception as exc:
             return self._send_json({"error": f"保存选股日记失败: {exc}"}, status=500)
 
+
+    def _watchlist_get(self, parsed):
+        params = parse_qs(parsed.query)
+        try:
+            if parsed.path == "/api/watchlist/items":
+                status = params.get("status", [None])[0] or None
+                code = params.get("code", [None])[0] or None
+                result = self.watchlist.list_items(
+                    status=status, code=code, limit=params.get("limit", [200])[0]
+                )
+            elif parsed.path == "/api/watchlist/tracks":
+                result = self.watchlist.tracks(
+                    track_date=params.get("track_date", [None])[0] or None,
+                    screen_date=params.get("screen_date", [None])[0] or None,
+                    limit=params.get("limit", [200])[0],
+                )
+            elif parsed.path == "/api/watchlist/sectors":
+                result = self.watchlist.sector_strength(
+                    market_date=params.get("date", [None])[0] or None,
+                    top_n=int(params.get("top_n", ["15"])[0]),
+                )
+            else:
+                return self._send_json({"error": "接口不存在"}, status=404)
+            return self._send_json(result)
+        except LookupError as exc:
+            return self._send_json({"error": str(exc)}, status=404)
+        except (TypeError, ValueError) as exc:
+            return self._send_json({"error": str(exc)}, status=400)
+        except Exception as exc:
+            return self._send_json({"error": f"读取观察池失败: {exc}"}, status=500)
+
+    def _watchlist_post(self, parsed):
+        try:
+            payload = self._read_json()
+            if parsed.path == "/api/watchlist/add":
+                result = self.watchlist.add(payload)
+            elif parsed.path == "/api/watchlist/status":
+                result = self.watchlist.set_status(payload)
+            elif parsed.path == "/api/watchlist/delete":
+                result = self.watchlist.delete(payload)
+            elif parsed.path == "/api/watchlist/refresh":
+                result = self.watchlist.refresh_tracking(
+                    as_of=payload.get("as_of"),
+                    fail_threshold_pct=float(payload.get("fail_threshold_pct", -3.0)),
+                )
+            else:
+                return self._send_json({"error": "接口不存在"}, status=404)
+            return self._send_json(result)
+        except LookupError as exc:
+            return self._send_json({"error": str(exc)}, status=404)
+        except (TypeError, ValueError, json.JSONDecodeError) as exc:
+            return self._send_json({"error": str(exc)}, status=400)
+        except Exception as exc:
+            return self._send_json({"error": f"保存观察池失败: {exc}"}, status=500)
+
     def _read_json(self):
         try:
             length = int(self.headers.get("Content-Length", "0"))
@@ -786,7 +845,7 @@ def write_app(path: str, payload: dict):
     print(f"✓ 页面: {path} ({os.path.getsize(path) / 1024:.0f} KB, {len(payload['points'])} 根分钟线)")
 
 
-def serve(repository: MinuteRepository, trainer, journal, news, market_context, html_path: str, host: str, port: int):
+def serve(repository: MinuteRepository, trainer, journal, news, market_context, watchlist, html_path: str, host: str, port: int):
     directory = os.path.dirname(os.path.abspath(html_path))
     handler = lambda *args, **kwargs: MinuteRequestHandler(*args, directory=directory, **kwargs)
     MinuteRequestHandler.repository = repository
@@ -794,12 +853,14 @@ def serve(repository: MinuteRepository, trainer, journal, news, market_context, 
     MinuteRequestHandler.journal = journal
     MinuteRequestHandler.news = news
     MinuteRequestHandler.market_context = market_context
+    MinuteRequestHandler.watchlist = watchlist
     server = ThreadingHTTPServer((host, port), handler)
     print(f"✓ 分时查询服务已启动: http://{host}:{port}/{os.path.basename(html_path)}")
     print(f"✓ 网格动态回放: http://{host}:{port}/grid_simulator.html")
     print(f"✓ T+1 交易训练: http://{host}:{port}/trading_trainer.html")
     print(f"✓ 选股日记工作台: http://{host}:{port}/stock_journal.html")
     print(f"✓ 市场资讯复盘: http://{host}:{port}/market_news.html")
+    print(f"✓ 观察池跟踪: http://{host}:{port}/watchlist.html")
     print(f"  已索引 {len(repository.search_rows)} 个缓存标的，按 Ctrl+C 停止")
     try:
         server.serve_forever()
@@ -836,20 +897,25 @@ def main():
         from data.market_news import MarketNewsRepository
         from data.market_context import MarketContextService
         from scripts.services.market_news import write_app as write_news_app
+        from scripts.services.watchlist import (
+            WatchlistService, write_app as write_watchlist_app,
+        )
         write_grid_app()
         write_trainer_app()
         write_journal_app()
         write_news_app()
+        write_watchlist_app()
         trainer = TradingTrainerService(repository)
         journal = StockJournalService(repository.name_map)
         news = MarketNewsRepository()
         market_context = MarketContextService()
+        watchlist = WatchlistService(name_map=repository.name_map)
         try:
             from scripts.reports.gen_index import generate as generate_index
             generate_index()
         except Exception as exc:
             print(f"! 导航页刷新失败（不影响交互服务）: {exc}")
-        serve(repository, trainer, journal, news, market_context, args.out, args.host, args.port)
+        serve(repository, trainer, journal, news, market_context, watchlist, args.out, args.host, args.port)
     else:
         print("  查询全部标的请运行: python -m scripts.serve start web")
 

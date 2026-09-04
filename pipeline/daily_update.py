@@ -36,7 +36,7 @@ from data.storage import atomic_write_json
 
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STATUS_FILE = os.path.join(PROJECT_DIR, "cache", "daily_update_status.json")
-STAGES = ("stocks", "etfs", "index", "minute", "enrich", "validate", "news", "market_context", "stock_facts", "reports")
+STAGES = ("stocks", "etfs", "index", "minute", "enrich", "validate", "news", "market_context", "stock_facts", "watchlist_track", "reports")
 REPORT_JOBS = (
     ("行情与板块报告", (sys.executable, "-m", "scripts.reports.gen_market")),
     ("选股仪表盘", (sys.executable, "-m", "scripts.screen")),
@@ -699,6 +699,28 @@ class DailyUpdatePipeline:
         }
 
 
+
+    def _watchlist_track_stage(self):
+        """非关键：刷新观察池次日跟踪结果。"""
+        from data.watchlist import WatchlistRepository
+        from data.kline import StockData
+
+        target = self.target_date or pd.Timestamp.today().normalize()
+        as_of = pd.Timestamp(target).strftime("%Y-%m-%d")
+        repo = WatchlistRepository()
+        data = StockData()
+
+        def loader(code: str):
+            return data.get_kline(code, days=40)
+
+        result = repo.refresh_tracking(loader, as_of=as_of)
+        details = {
+            "as_of": as_of,
+            "tracked": result.get("tracked", 0),
+            "skipped": result.get("skipped", 0),
+        }
+        return True, result.get("message", "观察池跟踪完成"), details
+
     def _stock_facts_stage(self):
         """非关键：交易日历、涨跌停事实、ST 状态。失败不阻断主链路。"""
         from data.calendar import TradingCalendar
@@ -752,6 +774,7 @@ class DailyUpdatePipeline:
             ("news", False, self._news_stage),
             ("market_context", False, self._market_context_stage),
             ("stock_facts", False, self._stock_facts_stage),
+            ("watchlist_track", False, self._watchlist_track_stage),
             ("reports", False, self._reports_stage),
         ]
         for name, critical, function in stage_functions:

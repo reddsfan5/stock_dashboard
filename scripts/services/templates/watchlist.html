@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>观察池与次日跟踪</title>
+<style>
+:root{--bg:#f4f6fa;--card:#fff;--line:#e4e8f0;--blue:#1a73e8;--red:#d32f2f;--green:#159568;--muted:#7b8495}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:#1f2937}
+.header{background:linear-gradient(135deg,#1a1a2e,#16213e);color:#fff;padding:18px 24px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.header h1{font-size:20px}.header a{color:#9ec1ff;text-decoration:none;font-size:13px}
+.wrap{padding:16px 20px;display:grid;gap:14px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.panel h2{font-size:15px;margin-bottom:10px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-bottom:10px}
+label{font-size:11px;color:var(--muted);display:flex;flex-direction:column;gap:4px}
+input,select,button,textarea{font:inherit}
+input,select,textarea{border:1px solid #ccd3df;border-radius:8px;padding:8px 10px;min-width:120px}
+button{border:1px solid #bfc9d8;background:#fff;border-radius:8px;padding:8px 12px;cursor:pointer}
+button.primary{background:var(--blue);color:#fff;border-color:var(--blue)}
+button.danger{color:var(--red);border-color:#f0b4b4}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th,td{padding:8px 6px;border-bottom:1px solid var(--line);text-align:left}
+th{color:var(--muted);font-weight:600}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.up{color:var(--red)}.down{color:var(--green)}
+.badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;background:#edf2ff;color:#3451b2}
+.badge.planned{background:#fff4e5;color:#b54708}.badge.bought{background:#e8f8ef;color:#087443}.badge.dropped{background:#f2f4f7;color:#667085}
+.bars{display:grid;gap:6px}
+.bar{display:grid;grid-template-columns:110px 1fr 64px;gap:8px;align-items:center;font-size:12px}
+.bar .track{background:#eef2f7;border-radius:6px;height:10px;overflow:hidden}
+.bar .fill{height:100%;background:var(--red)}.bar .fill.neg{background:var(--green)}
+.notice{color:var(--muted);font-size:12px;margin-top:6px}
+.err{color:var(--red);font-size:12px}
+</style>
+</head>
+<body>
+<div class="header">
+  <div><h1>👀 观察池 / 待买池 · 次日跟踪</h1><div style="opacity:.7;font-size:12px;margin-top:4px">从选股结果加入 · 跟踪次日收益 · 申万一级板块强度</div></div>
+  <div style="display:flex;gap:14px">
+    <a href="/">工作台</a>
+    <a href="/stock_journal.html">选股日记</a>
+    <a href="/trading_trainer.html">T+1训练</a>
+  </div>
+</div>
+<div class="wrap">
+  <div class="panel">
+    <h2>加入观察</h2>
+    <div class="row">
+      <label>代码<input id="code" placeholder="sh600519"></label>
+      <label>名称<input id="name" placeholder="可选"></label>
+      <label>状态<select id="status"><option value="watching">观察中</option><option value="planned">待买</option><option value="bought">已买</option></select></label>
+      <label>来源模块<input id="module" placeholder="continuity"></label>
+      <label>筛出日<input id="screenDate" type="date"></label>
+      <label>论点<input id="thesis" style="min-width:220px" placeholder="为何观察"></label>
+      <button class="primary" id="addBtn">加入</button>
+    </div>
+    <div class="err" id="addErr"></div>
+  </div>
+
+  <div class="panel">
+    <h2>观察池</h2>
+    <div class="row">
+      <label>筛选状态
+        <select id="filterStatus">
+          <option value="">全部活跃</option>
+          <option value="watching">观察中</option>
+          <option value="planned">待买</option>
+          <option value="bought">已买</option>
+          <option value="dropped">已放弃</option>
+        </select>
+      </label>
+      <button id="reloadBtn">刷新</button>
+      <button class="primary" id="trackBtn">刷新次日跟踪</button>
+    </div>
+    <table>
+      <thead><tr><th>代码</th><th>名称</th><th>状态</th><th>来源</th><th>筛出日</th><th>论点</th><th>操作</th></tr></thead>
+      <tbody id="watchBody"></tbody>
+    </table>
+    <div class="notice" id="watchNotice"></div>
+  </div>
+
+  <div class="panel">
+    <h2>次日跟踪</h2>
+    <div class="row">
+      <label>跟踪日<input id="trackDate" type="date"></label>
+      <button id="loadTracks">加载</button>
+    </div>
+    <table>
+      <thead><tr><th>代码</th><th>筛出日</th><th>跟踪日</th><th class="num">次日收益%</th><th>形态失效</th><th>来源</th></tr></thead>
+      <tbody id="trackBody"></tbody>
+    </table>
+    <div class="notice" id="trackNotice"></div>
+  </div>
+
+  <div class="panel">
+    <h2>申万一级板块强度</h2>
+    <div class="row">
+      <label>交易日<input id="sectorDate" type="date"></label>
+      <button id="loadSectors">加载</button>
+    </div>
+    <div class="bars" id="sectorBars"></div>
+    <div class="notice" id="sectorNotice"></div>
+  </div>
+</div>
+<script>
+async function api(path, opts){
+  const r = await fetch(path, Object.assign({cache:'no-store'}, opts||{}));
+  const body = await r.json();
+  if(!r.ok) throw new Error(body.error || ('HTTP '+r.status));
+  return body;
+}
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]))}
+function pctClass(v){return v>0?'up':(v<0?'down':'')}
+function statusBadge(item){
+  return `<span class="badge ${esc(item.status)}">${esc(item.status_label||item.status)}</span>`;
+}
+
+async function loadWatch(){
+  const st = $('filterStatus').value;
+  const q = st ? ('?status='+encodeURIComponent(st)) : '';
+  const data = await api('/api/watchlist/items'+q);
+  const body = $('watchBody');
+  body.innerHTML = (data.items||[]).map(it => `<tr>
+    <td><a href="/stock_journal.html?code=${encodeURIComponent(it.code)}">${esc(it.code)}</a></td>
+    <td>${esc(it.name)}</td>
+    <td>${statusBadge(it)}</td>
+    <td>${esc(it.source_module||'')}</td>
+    <td>${esc(it.screen_date||'')}</td>
+    <td>${esc(it.thesis||it.note||'')}</td>
+    <td>
+      <button data-act="planned" data-id="${it.id}">待买</button>
+      <button data-act="bought" data-id="${it.id}">已买</button>
+      <button data-act="dropped" data-id="${it.id}" class="danger">放弃</button>
+      <a href="/trading_trainer.html?code=${encodeURIComponent(it.code)}">训练</a>
+    </td>
+  </tr>`).join('') || '<tr><td colspan="7">暂无条目</td></tr>';
+  $('watchNotice').textContent = '共 '+(data.count||0)+' 条';
+}
+
+async function loadTracks(){
+  const d = $('trackDate').value;
+  const q = d ? ('?track_date='+encodeURIComponent(d)) : '';
+  const data = await api('/api/watchlist/tracks'+q);
+  $('trackBody').innerHTML = (data.items||[]).map(it => {
+    const ret = it.return_pct;
+    return `<tr>
+      <td>${esc(it.code)}</td><td>${esc(it.screen_date)}</td><td>${esc(it.track_date)}</td>
+      <td class="num ${pctClass(ret)}">${ret==null?'—':((ret>0?'+':'')+Number(ret).toFixed(2))}</td>
+      <td>${it.pattern_failed?'⚠️ 是':'否'}</td>
+      <td>${esc(it.source_module||'')}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="6">暂无跟踪结果</td></tr>';
+  $('trackNotice').textContent = '共 '+(data.count||0)+' 条';
+}
+
+async function loadSectors(){
+  const d = $('sectorDate').value;
+  const q = d ? ('?date='+encodeURIComponent(d)) : '';
+  const data = await api('/api/watchlist/sectors'+q);
+  const maxAbs = Math.max(0.01, ...(data.sectors||[]).map(s=>Math.abs(s.avg_change_pct)));
+  $('sectorBars').innerHTML = (data.sectors||[]).map(s=>{
+    const w = Math.min(100, Math.abs(s.avg_change_pct)/maxAbs*100);
+    const neg = s.avg_change_pct<0;
+    return `<div class="bar"><div>${esc(s.sector)}</div>
+      <div class="track"><div class="fill ${neg?'neg':''}" style="width:${w}%"></div></div>
+      <div class="num ${pctClass(s.avg_change_pct)}">${(s.avg_change_pct>0?'+':'')+s.avg_change_pct.toFixed(2)}%</div></div>`;
+  }).join('') || '<div class="notice">无板块数据</div>';
+  $('sectorNotice').textContent = (data.message||'') + (data.market_date?(' · '+data.market_date):'');
+  if(data.market_date && !$('sectorDate').value) $('sectorDate').value = data.market_date;
+}
+
+function $(id){return document.getElementById(id)}
+
+$('addBtn').onclick = async ()=>{
+  $('addErr').textContent='';
+  try{
+    await api('/api/watchlist/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      code:$('code').value, name:$('name').value, status:$('status').value,
+      source_module:$('module').value, screen_date:$('screenDate').value, thesis:$('thesis').value
+    })});
+    $('code').value=''; $('thesis').value='';
+    await loadWatch();
+  }catch(e){$('addErr').textContent=e.message}
+};
+$('reloadBtn').onclick = ()=>loadWatch().catch(e=>$('watchNotice').textContent=e.message);
+$('filterStatus').onchange = ()=>loadWatch().catch(e=>$('watchNotice').textContent=e.message);
+$('trackBtn').onclick = async ()=>{
+  try{
+    const r = await api('/api/watchlist/refresh',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+    $('trackNotice').textContent = r.message||'已刷新';
+    await loadTracks(); await loadWatch();
+  }catch(e){$('trackNotice').textContent=e.message}
+};
+$('loadTracks').onclick = ()=>loadTracks().catch(e=>$('trackNotice').textContent=e.message);
+$('loadSectors').onclick = ()=>loadSectors().catch(e=>$('sectorNotice').textContent=e.message);
+$('watchBody').onclick = async (e)=>{
+  const btn = e.target.closest('button[data-act]');
+  if(!btn) return;
+  try{
+    await api('/api/watchlist/status',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:Number(btn.dataset.id),status:btn.dataset.act})});
+    await loadWatch();
+  }catch(err){$('watchNotice').textContent=err.message}
+};
+
+loadWatch().catch(e=>$('watchNotice').textContent=e.message);
+loadTracks().catch(e=>$('trackNotice').textContent=e.message);
+loadSectors().catch(e=>$('sectorNotice').textContent=e.message);
+</script>
+</body>
+</html>

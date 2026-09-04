@@ -224,6 +224,8 @@ function showKline(code){{
   document.getElementById("klinePanel").classList.add("active");
   document.getElementById("klineTitle").textContent=code+" "+(d.name||"");
   document.getElementById("klineJournalLink").href="http://127.0.0.1:8765/stock_journal.html?code="+encodeURIComponent(code);
+  document.getElementById("klineWatchLink").href="http://127.0.0.1:8765/watchlist.html";
+  document.getElementById("klineWatchNotice").textContent="";
   document.getElementById("klineMetrics").innerHTML=metricHtml(d.metrics);
   setTimeout(function(){{
     if(klineChart){{klineChart.dispose();klineChart=null;}}
@@ -440,7 +442,7 @@ table.dataTable {{ font-size:12px; }}
 .kline-panel .close {{ position:sticky; top:0; background:#1a73e8; color:white; border:none; width:100%; padding:12px; font-size:14px; cursor:pointer; z-index:1; }}
 .kline-metrics {{ display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#e0e5ed }}.kline-metric {{ background:#fff;padding:8px 10px }}.kline-metric span {{ display:block;color:#818b9d;font-size:9px;margin-bottom:3px }}.kline-metric b {{ font-size:13px;font-variant-numeric:tabular-nums }}
 .kline-panel .chart {{ width:100%; height:600px; }}
-.journal-action {{ display:block;margin:10px 12px;padding:9px;text-align:center;text-decoration:none;background:#edf4ff;color:#1a73e8;border:1px solid #bfd2f7;border-radius:8px;font-weight:650 }}
+.journal-action {{ display:block;margin:10px 12px;padding:9px;text-align:center;text-decoration:none;background:#edf4ff;color:#1a73e8;border:1px solid #bfd2f7;border-radius:8px;font-weight:650;width:calc(100% - 24px);cursor:pointer;font:inherit }}
 .kline-overlay {{ display:none; position:fixed; inset:0; background:rgba(0,0,0,.2); z-index:999; }}
 .kline-overlay.active {{ display:block; }}
 .code-clickable {{ cursor:pointer; }}
@@ -455,11 +457,14 @@ footer {{ text-align:center; color:#999; font-size:11px; padding:20px; }}
   <button class="close" onclick="closeKline()">✕ <span id="klineTitle"></span><span style="float:right;opacity:.6;font-size:11px" id="klineNav"></span></button>
   <div class="kline-metrics" id="klineMetrics"></div>
   <a class="journal-action" id="klineJournalLink" href="http://127.0.0.1:8765/stock_journal.html">📓 在选股日记中打开</a>
+  <button class="journal-action" id="klineWatchBtn" type="button">👀 加入观察池</button>
+  <a class="journal-action" id="klineWatchLink" href="http://127.0.0.1:8765/watchlist.html">打开观察池</a>
+  <div class="notice" id="klineWatchNotice" style="margin:0 12px 8px;color:#7b8495;font-size:11px"></div>
   <div class="chart" id="klineChart"></div>
 </div>
 <div class="header">
   <h1>{title}</h1>
-  <div class="date">{now} · 申万一级行业分类 · 点击代码查看K线</div>
+  <div class="date">{now} · 申万一级行业分类 · 点击代码查看K线 · <a href="http://127.0.0.1:8765/watchlist.html" style="color:#9ec1ff">观察池</a></div>
 </div>
 <div class="stats">{stats}</div>
 <div class="tabs">{tab_buttons}</div>
@@ -553,6 +558,8 @@ function showKline(code){{
   var sector=d.sector||"";
   document.getElementById("klineTitle").innerHTML=code+" "+(d.name||"")+(sector?"<br><small style='opacity:.6'>"+sector+"</small>":"");
   document.getElementById("klineJournalLink").href="http://127.0.0.1:8765/stock_journal.html?code="+encodeURIComponent(code);
+  document.getElementById("klineWatchLink").href="http://127.0.0.1:8765/watchlist.html";
+  document.getElementById("klineWatchNotice").textContent="";
   document.getElementById("klineMetrics").innerHTML=metricHtml(d.metrics);
   setTimeout(function(){{
     if(klineChart){{klineChart.dispose();klineChart=null;}}
@@ -583,6 +590,24 @@ function showKline(code){{
     klineChart.resize();
   }},100);
 }}
+async function addToWatchlist(){{
+  if(!currentKlineCode)return;
+  var d=KLINES[currentKlineCode]||{{}}, notice=document.getElementById("klineWatchNotice");
+  notice.textContent="提交中…";
+  try{{
+    var screenDate=(d.dates&&d.dates.length)?d.dates[d.dates.length-1]:"";
+    var r=await fetch("http://127.0.0.1:8765/api/watchlist/add",{{
+      method:"POST",headers:{{"Content-Type":"application/json"}},
+      body:JSON.stringify({{code:currentKlineCode,name:d.name||"",status:"watching",
+        source_module:currentTabId||"dashboard",screen_date:screenDate,
+        thesis:"来自选股仪表盘"}})
+    }});
+    var body=await r.json();
+    if(!r.ok)throw new Error(body.error||("HTTP "+r.status));
+    notice.textContent="已加入观察池（"+ (body.status_label||body.status) +"）";
+  }}catch(e){{notice.textContent="加入失败："+e.message+"（需先 python -m scripts.serve start web）"}}
+}}
+document.getElementById("klineWatchBtn").onclick=addToWatchlist;
 function closeKline(){{
   currentKlineCode=null;
   document.getElementById("overlay").classList.remove("active");
