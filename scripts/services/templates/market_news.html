@@ -2,57 +2,496 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>市场资讯复盘</title>
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>市场资讯</title>
 <link rel="stylesheet" href="/assets/app.css">
 <style>
-:root{--bg:var(--app-bg,#f4f6fa);--card:var(--app-surface,#fff);--text:var(--app-text,#172033);--muted:var(--app-muted,#778196);--line:var(--app-border,#e3e7ee);--blue:var(--app-accent,#3478f6);--red:var(--app-up,#e5484d);--green:var(--app-down,#159568);--orange:#d88400;--shadow:var(--app-shadow,0 8px 28px rgba(24,39,75,.08))}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif}.page{max-width:1240px;margin:auto;padding:18px}.top{display:flex;align-items:center;gap:16px;margin-bottom:14px}.top h1{font-size:24px;margin:0}.top p{margin:4px 0 0;color:var(--muted);font-size:13px}.links{margin-left:auto;display:flex;gap:12px}.links a{color:var(--blue);text-decoration:none;font-size:13px}.toolbar{display:grid;grid-template-columns:170px 150px auto auto auto;gap:10px;align-items:end;padding:14px;background:var(--card);border:1px solid var(--line);border-radius:13px;box-shadow:var(--shadow)}label{display:block;color:#667085;font-size:11px;font-weight:700;margin-bottom:5px}input,select,textarea,button{font:inherit}input,select,textarea{width:100%;border:1px solid #ccd3df;border-radius:8px;background:#fff;color:var(--text);padding:9px 10px}button{border:1px solid #cdd4df;border-radius:8px;background:#fff;color:#344054;padding:9px 13px;cursor:pointer}.primary{border-color:var(--blue);background:var(--blue);color:#fff}.toolbar-note{grid-column:1/-1;padding-top:3px;color:var(--muted);font-size:11px;line-height:1.5}.status{display:flex;align-items:center;gap:9px;margin:13px 0;color:var(--muted);font-size:12px}.status b{color:#475467}.status .source{margin-left:auto}.status a{color:var(--blue);text-decoration:none}.notice{padding:9px 12px;margin:10px 0;border-radius:8px;background:#fff6dd;color:#805b00;font-size:12px}.timeline{display:flex;flex-direction:column;gap:16px}.phase{background:var(--card);border:1px solid var(--line);border-radius:13px;overflow:hidden;box-shadow:var(--shadow)}.phase-head{position:sticky;top:0;z-index:2;display:flex;justify-content:space-between;align-items:center;padding:13px 14px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.96)}.phase-head h2{font-size:16px;margin:0}.phase-head small{color:var(--muted)}.phase-pre_open .phase-head{border-top:3px solid var(--orange)}.phase-midday .phase-head{border-top:3px solid var(--red)}.phase-close .phase-head{border-top:3px solid var(--blue)}.news-list,.news-masonry{padding:12px 13px 14px}.news-masonry{column-count:3;column-gap:12px}.news-masonry>.news,.news-masonry>.empty{break-inside:avoid;-webkit-column-break-inside:avoid;page-break-inside:avoid;margin:0 0 12px;display:inline-block;width:100%;vertical-align:top}.news{padding:12px 13px;border:1px solid var(--line);border-radius:12px;background:var(--card);box-shadow:0 1px 2px rgba(15,23,42,.04),0 8px 20px rgba(15,23,42,.05);transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}.news:hover{transform:translateY(-3px);box-shadow:0 6px 18px rgba(15,23,42,.1);border-color:#c5d0e0}.news-meta{display:flex;align-items:center;gap:7px;color:var(--muted);font-size:10px}.news-time{font-weight:800;color:#475467;font-variant-numeric:tabular-nums}.tag{padding:2px 6px;border-radius:10px;background:#eef3ff;color:#4d67a5}.news h3{font-size:14px;line-height:1.45;margin:7px 0;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}.news p{margin:0;color:#5e687a;font-size:12px;line-height:1.65;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}.news-actions{display:flex;gap:8px;margin-top:9px}.news-actions a,.news-actions button{font-size:11px;padding:6px 9px;text-decoration:none;border-radius:7px}.news-actions a{color:var(--blue);border:1px solid #cbd9f6}.impact-btn{color:#6253a9;border-color:#d2caef;background:#f7f5ff}.empty{padding:32px 10px;text-align:center;color:#98a2b3;font-size:12px}.review{margin-top:16px;background:#fff;border:1px solid var(--line);border-radius:13px;padding:14px;box-shadow:var(--shadow)}.review h2{font-size:17px;margin:0 0 4px}.review-intro{margin:0 0 12px;color:var(--muted);font-size:11px}.impact{display:grid;grid-template-columns:110px minmax(0,1fr) auto;gap:12px;padding:11px 0;border-top:1px solid #edf0f4}.impact-label{font-size:11px;color:var(--muted)}.impact-label b{display:block;color:#344054;font-size:12px;margin-bottom:4px}.impact-body strong{display:block;font-size:13px}.impact-body p{margin:5px 0 0;color:#596579;font-size:12px;line-height:1.55}.delete{padding:5px 8px;color:#a33;border-color:#efcaca;background:#fff}.modal{position:fixed;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;padding:18px}.modal[hidden]{display:none}.backdrop{position:absolute;inset:0;background:rgba(10,18,32,.58)}.dialog{position:relative;width:min(560px,100%);max-height:calc(100dvh - 36px);overflow:auto;background:#fff;border-radius:15px;padding:18px;box-shadow:0 20px 70px rgba(0,0,0,.25)}.dialog h2{font-size:18px;margin:0 0 6px}.picked{margin:0 0 14px;color:#5d687c;font-size:12px;line-height:1.55}.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.full{grid-column:1/-1}.dialog-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}.loading{position:fixed;right:18px;bottom:18px;padding:9px 13px;border-radius:9px;background:#172033;color:#fff;font-size:12px;box-shadow:var(--shadow)}.loading[hidden]{display:none}@media(max-width:900px){.news-masonry{column-count:2}.toolbar{grid-template-columns:1fr 1fr}.impact{grid-template-columns:1fr auto}.impact-label{grid-column:1/-1}.top{align-items:flex-start}.links{flex-direction:column;gap:4px}}@media(max-width:560px){.news-masonry{column-count:1}.page{padding:10px}.top h1{font-size:19px}.top p{font-size:11px}.toolbar{grid-template-columns:1fr}.toolbar-note{grid-column:auto}.form-grid{grid-template-columns:1fr}.full{grid-column:auto}.status{align-items:flex-start;flex-wrap:wrap}.status .source{margin-left:0;width:100%}}
-@media(prefers-reduced-motion:reduce){.news{transition:none}.news:hover{transform:none}}:root[data-theme=dark] .news{box-shadow:0 1px 2px rgba(0,0,0,.28),0 8px 20px rgba(0,0,0,.22)}:root[data-theme=dark] .news:hover{border-color:#3b4b63}</style>
+/* Page-local: market news desk — tokens from app.css */
+.mn-page{
+  max-inline-size:min(1320px,100%);
+  margin-inline:auto;
+  padding:var(--app-space-4) var(--app-space-4) var(--app-space-5);
+}
+.mn-hero{
+  display:flex;flex-wrap:wrap;align-items:flex-end;gap:var(--app-space-3);
+  margin-block-end:var(--app-space-4);
+}
+.mn-hero h1{
+  margin:0;font-size:clamp(1.15rem,1rem + 0.8vw,1.45rem);font-weight:750;letter-spacing:-.02em;
+}
+.mn-hero p{margin:4px 0 0;color:var(--app-muted);font-size:var(--app-fs-sm);max-inline-size:42rem}
+.mn-badges{display:flex;flex-wrap:wrap;gap:6px;margin-inline-start:auto}
+.mn-badge{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:5px 10px;border-radius:999px;font-size:11px;font-weight:650;
+  background:var(--app-surface);border:1px solid var(--app-border);color:var(--app-muted);
+}
+.mn-badge strong{color:var(--app-text);font-variant-numeric:tabular-nums}
+.mn-badge a{font-weight:650}
+
+.mn-controls{
+  position:sticky;top:calc(var(--app-nav-h) + var(--app-clock-h,0px) + 2px);z-index:20;
+  display:grid;gap:var(--app-space-3);
+  padding:var(--app-space-3);
+  background:color-mix(in srgb,var(--app-surface) 92%,transparent);
+  border:1px solid var(--app-border);border-radius:var(--app-radius);
+  box-shadow:var(--app-shadow);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  margin-block-end:var(--app-space-4);
+}
+.mn-controls-row{
+  display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px;
+}
+.mn-field{display:flex;flex-direction:column;gap:5px;min-inline-size:0}
+.mn-field label{font-size:11px;font-weight:700;color:var(--app-muted);letter-spacing:.02em}
+.mn-field input[type=date],.mn-field input[type=time],.mn-field input[type=search]{
+  height:36px;padding:0 10px;min-inline-size:9.5rem;
+}
+.mn-field input[type=search]{min-inline-size:min(220px,100%)}
+.mn-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.mn-hint{color:var(--app-muted);font-size:11px;line-height:1.5}
+
+.mn-chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.mn-chip{
+  appearance:none;border:1px solid var(--app-border);background:var(--app-surface);
+  color:var(--app-muted);border-radius:999px;height:30px;padding:0 12px;
+  font:inherit;font-size:12px;font-weight:650;cursor:pointer;
+}
+.mn-chip:hover{border-color:#cbd5e1;color:var(--app-text)}
+.mn-chip.is-on{
+  background:var(--app-accent-soft);border-color:color-mix(in srgb,var(--app-accent) 45%,var(--app-border));
+  color:var(--app-accent);
+}
+.mn-chip .n{margin-inline-start:4px;font-variant-numeric:tabular-nums;opacity:.85}
+.mn-seg{
+  display:inline-flex;padding:3px;border-radius:999px;border:1px solid var(--app-border);
+  background:var(--app-surface-2);gap:2px;
+}
+.mn-seg button{
+  height:28px;padding:0 11px;border:0;border-radius:999px;background:transparent;
+  color:var(--app-muted);font:inherit;font-size:12px;font-weight:650;cursor:pointer;
+}
+.mn-seg button.is-on{background:var(--app-surface);color:var(--app-text);box-shadow:0 1px 2px rgba(15,23,42,.08)}
+
+.mn-notice{
+  margin-block-end:var(--app-space-3);padding:10px 12px;border-radius:var(--app-radius-sm);
+  background:color-mix(in srgb,var(--app-warn) 12%,var(--app-surface));
+  color:var(--app-warn);font-size:var(--app-fs-sm);border:1px solid color-mix(in srgb,var(--app-warn) 28%,var(--app-border));
+}
+.mn-notice[hidden]{display:none}
+
+.mn-layout{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(280px,340px);
+  gap:var(--app-space-4);
+  align-items:start;
+}
+.mn-main{min-inline-size:0;display:flex;flex-direction:column;gap:var(--app-space-4)}
+.mn-aside{min-inline-size:0;position:sticky;top:calc(var(--app-nav-h) + var(--app-clock-h,0px) + 92px)}
+
+.mn-phase{
+  background:var(--app-surface);border:1px solid var(--app-border);
+  border-radius:var(--app-radius);box-shadow:var(--app-shadow);overflow:clip;
+}
+.mn-phase-head{
+  position:sticky;top:calc(var(--app-nav-h) + var(--app-clock-h,0px) + 118px);z-index:5;
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:12px 14px;border-block-end:1px solid var(--app-border);
+  background:color-mix(in srgb,var(--app-surface) 94%,transparent);
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+}
+.mn-phase-head h2{margin:0;font-size:15px;font-weight:750}
+.mn-phase-head small{display:block;margin-block-start:2px;color:var(--app-muted);font-size:11px;font-weight:500}
+.mn-phase-count{
+  min-inline-size:2rem;height:28px;padding:0 10px;border-radius:999px;
+  display:inline-grid;place-items:center;font-size:12px;font-weight:750;
+  font-variant-numeric:tabular-nums;background:var(--app-surface-2);color:var(--app-muted);
+  border:1px solid var(--app-border);
+}
+.mn-phase-pre_open{border-block-start:3px solid #d88400}
+.mn-phase-midday{border-block-start:3px solid var(--app-up)}
+.mn-phase-close{border-block-start:3px solid var(--app-accent)}
+
+.mn-feed{padding:12px}
+.mn-feed.is-masonry{
+  column-count:3;column-gap:12px;
+}
+.mn-feed.is-masonry > .mn-card,
+.mn-feed.is-masonry > .app-empty{
+  break-inside:avoid;-webkit-column-break-inside:avoid;
+  display:inline-block;width:100%;margin:0 0 12px;vertical-align:top;
+}
+.mn-feed.is-list{display:flex;flex-direction:column;gap:10px}
+
+.mn-card{
+  padding:12px 13px;border:1px solid var(--app-border);border-radius:12px;
+  background:var(--app-surface);box-shadow:0 1px 2px rgba(15,23,42,.04);
+  transition:transform var(--app-transition),box-shadow var(--app-transition),border-color var(--app-transition);
+  content-visibility:auto;
+  contain-intrinsic-size:auto none auto 140px;
+}
+.mn-card:hover{
+  transform:translateY(-2px);
+  border-color:color-mix(in srgb,var(--app-accent) 35%,var(--app-border));
+  box-shadow:var(--app-shadow);
+}
+.mn-meta{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:10px;color:var(--app-muted)}
+.mn-time{font-weight:800;color:var(--app-text);font-variant-numeric:tabular-nums}
+.mn-tag{
+  padding:2px 7px;border-radius:999px;background:var(--app-accent-soft);color:var(--app-accent);font-weight:650;
+}
+.mn-card h3{
+  margin:8px 0 6px;font-size:14px;line-height:1.45;font-weight:700;
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;
+}
+.mn-card p{
+  margin:0;color:var(--app-muted);font-size:12px;line-height:1.6;
+  display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;
+}
+.mn-card-actions{display:flex;flex-wrap:wrap;gap:8px;margin-block-start:10px}
+.mn-card-actions a,.mn-card-actions button{
+  font-size:11px;height:30px;padding:0 10px;border-radius:8px;font-weight:650;
+}
+.mn-impact-btn{
+  border:1px solid color-mix(in srgb,#6253a9 35%,var(--app-border));
+  background:color-mix(in srgb,#6253a9 8%,var(--app-surface));color:#6253a9;cursor:pointer;font:inherit;
+}
+.mn-impact-btn:hover{filter:brightness(0.98)}
+
+.mn-journal{
+  background:var(--app-surface);border:1px solid var(--app-border);
+  border-radius:var(--app-radius);box-shadow:var(--app-shadow);overflow:clip;
+}
+.mn-journal-head{padding:12px 14px;border-block-end:1px solid var(--app-border)}
+.mn-journal-head h2{margin:0;font-size:14px;font-weight:750}
+.mn-journal-head p{margin:4px 0 0;color:var(--app-muted);font-size:11px;line-height:1.5}
+.mn-impact{
+  display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 10px;
+  padding:12px 14px;border-block-start:1px solid var(--app-border);
+}
+.mn-impact-when{font-size:11px;color:var(--app-muted)}
+.mn-impact-when b{display:block;color:var(--app-text);font-size:12px;margin-block-end:2px;font-variant-numeric:tabular-nums}
+.mn-impact-body strong{display:block;font-size:12px;line-height:1.4}
+.mn-impact-body p{margin:4px 0 0;color:var(--app-muted);font-size:11px;line-height:1.5}
+.mn-delete{
+  height:28px;padding:0 8px;font-size:11px;border-radius:7px;cursor:pointer;font:inherit;font-weight:650;
+  color:var(--app-up);border:1px solid color-mix(in srgb,var(--app-up) 30%,var(--app-border));
+  background:color-mix(in srgb,var(--app-up) 6%,var(--app-surface));
+}
+
+.mn-modal{position:fixed;inset:0;z-index:1200;display:grid;place-items:center;padding:18px}
+.mn-modal[hidden]{display:none}
+.mn-backdrop{position:absolute;inset:0;background:rgba(10,18,32,.55);backdrop-filter:blur(2px)}
+.mn-dialog{
+  position:relative;inline-size:min(560px,100%);max-block-size:calc(100dvh - 36px);overflow:auto;
+  background:var(--app-surface);border:1px solid var(--app-border);border-radius:14px;
+  padding:18px;box-shadow:0 24px 80px rgba(0,0,0,.28);
+}
+.mn-dialog h2{margin:0 0 6px;font-size:17px}
+.mn-picked{margin:0 0 14px;color:var(--app-muted);font-size:12px;line-height:1.55}
+.mn-form{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.mn-form .full{grid-column:1/-1}
+.mn-form label{display:block;font-size:11px;font-weight:700;color:var(--app-muted);margin-block-end:5px}
+.mn-form input,.mn-form select,.mn-form textarea{width:100%;padding:9px 10px}
+.mn-dialog-actions{display:flex;justify-content:flex-end;gap:8px;margin-block-start:14px}
+
+.mn-loading{
+  position:fixed;inset-inline-end:18px;inset-block-end:18px;z-index:1300;
+  padding:9px 13px;border-radius:9px;background:#0f172a;color:#fff;font-size:12px;font-weight:650;
+  box-shadow:var(--app-shadow);
+}
+.mn-loading[hidden]{display:none}
+
+@media (max-width:1100px){
+  .mn-layout{grid-template-columns:1fr}
+  .mn-aside{position:static}
+  .mn-feed.is-masonry{column-count:2}
+  .mn-phase-head{top:calc(var(--app-nav-h) + 8px)}
+}
+@media (max-width:640px){
+  .mn-page{padding:10px}
+  .mn-feed.is-masonry{column-count:1}
+  .mn-form{grid-template-columns:1fr}
+  .mn-form .full{grid-column:auto}
+  .mn-badges{margin-inline-start:0;width:100%}
+  .mn-controls{top:calc(var(--app-nav-h) + 2px)}
+}
+@media (prefers-reduced-motion:reduce){
+  .mn-card{transition:none}
+  .mn-card:hover{transform:none}
+}
+:root[data-theme=dark] .mn-controls,
+:root[data-theme=dark] .mn-phase-head{
+  background:color-mix(in srgb,var(--app-surface) 88%,transparent);
+}
+:root[data-theme=dark] .mn-seg button.is-on{box-shadow:0 1px 2px rgba(0,0,0,.35)}
+</style>
 </head>
 <body>
 <div id="app-shell" data-active="news"></div>
-<main class="page">
-  <header class="top"><div><h1>📰 市场资讯复盘</h1><p>只看市场级重要消息，并按当时可见时刻回放</p></div><nav class="links"><a href="trading_trainer.html">交易训练</a><a href="stock_journal.html">选股日记</a><a href="index.html">返回导航</a></nav></header>
-  <section class="toolbar">
-    <div><label for="marketDate">行情日期</label><input id="marketDate" type="date"></div>
-    <div><label for="asOf">只看截至时刻</label><input id="asOf" type="time" step="60"></div>
-    <button class="primary" id="load">按时点查看</button><button id="fullDay">查看全天</button><button id="refresh">刷新同花顺</button>
-    <div class="toolbar-note">无剧透训练时请保留截止时刻；全天复盘时再点“查看全天”。早盘为 09:30 前，午间为 09:30–12:59，收盘为 13:00 后。</div>
+<main class="mn-page">
+  <header class="mn-hero">
+    <div>
+      <h1>市场资讯</h1>
+      <p>按可见时刻回放市场级重要消息；训练时保留截止时刻，避免剧透。</p>
+    </div>
+    <div class="mn-badges">
+      <span class="mn-badge">范围 <strong id="scope">—</strong></span>
+      <span class="mn-badge">缓存 <strong id="cache">—</strong></span>
+      <span class="mn-badge">来源 <a id="source" target="_blank" rel="noopener">同花顺 7×24</a></span>
+    </div>
+  </header>
+
+  <section class="mn-controls" aria-label="筛选与时间">
+    <div class="mn-controls-row">
+      <div class="mn-field"><label for="marketDate">行情日期</label><input id="marketDate" type="date"></div>
+      <div class="mn-field"><label for="asOf">截至时刻</label><input id="asOf" type="time" step="60"></div>
+      <div class="mn-field"><label for="q">关键词</label><input id="q" type="search" placeholder="标题 / 摘要 / 标签" autocomplete="off"></div>
+      <div class="mn-actions">
+        <button class="btn btn-primary" type="button" id="load">按时点查看</button>
+        <button class="btn" type="button" id="fullDay">查看全天</button>
+        <button class="btn" type="button" id="refresh">刷新同花顺</button>
+      </div>
+      <div class="mn-seg" role="group" aria-label="布局">
+        <button type="button" id="viewMasonry" class="is-on">瀑布</button>
+        <button type="button" id="viewList">列表</button>
+      </div>
+    </div>
+    <div class="mn-chips" id="phaseChips" role="tablist" aria-label="时段"></div>
+    <div class="mn-chips" id="tagChips" hidden></div>
+    <p class="mn-hint">早盘 = 09:30 前 · 午间 = 09:30–12:59 · 收盘 = 13:00 后。无剧透训练请保留截止时刻。</p>
   </section>
-  <div class="notice" id="notice" hidden></div>
-  <div class="status"><b id="scope">—</b><span id="cache">—</span><span class="source">来源：<a id="source" target="_blank" rel="noopener">同花顺7×24重要资讯</a> · 本页不构成投资建议</span></div>
-  <section class="timeline" id="timeline"></section>
-  <section class="review"><h2>我的消息影响记录</h2><p class="review-intro">记录“当时为什么认为它重要”，不要在事后只按涨跌结果改写理由。</p><div id="impacts"></div></section>
+
+  <div class="mn-notice" id="notice" hidden></div>
+
+  <div class="mn-layout">
+    <div class="mn-main">
+      <section class="mn-timeline" id="timeline" aria-live="polite"></section>
+    </div>
+    <aside class="mn-aside">
+      <section class="mn-journal">
+        <div class="mn-journal-head">
+          <h2>消息影响记录</h2>
+          <p>写下当时为何重要，不要事后按涨跌改写理由。</p>
+        </div>
+        <div id="impacts"></div>
+      </section>
+    </aside>
+  </div>
 </main>
-<div class="modal" id="impactModal" hidden><div class="backdrop" id="backdrop"></div><section class="dialog" role="dialog" aria-modal="true"><h2>记录这条消息如何影响判断</h2><p class="picked" id="pickedNews">—</p><div class="form-grid">
-  <div><label for="impactCode">关联标的（可选）</label><input id="impactCode" placeholder="如 520500"></div>
-  <div><label for="decisionTime">当时决策时刻</label><input id="decisionTime" type="time" step="60"></div>
-  <div><label for="impactAction">影响的动作</label><select id="impactAction"><option value="watch">观望</option><option value="select">纳入候选</option><option value="buy">买入</option><option value="hold">持有</option><option value="sell">卖出</option><option value="avoid">回避</option></select></div>
-  <div><label for="impactStance">当时理解</label><select id="impactStance"><option value="uncertain">不确定</option><option value="bullish">偏利多</option><option value="bearish">偏利空</option><option value="neutral">中性</option></select></div>
-  <div class="full"><label for="impactNote">影响说明</label><textarea id="impactNote" rows="4" maxlength="2000" placeholder="例如：政策超预期，决定把证券ETF加入午后观察，但等待量价确认"></textarea></div>
- </div><div class="dialog-actions"><button id="cancelImpact">取消</button><button class="primary" id="saveImpact">保存影响记录</button></div></section></div>
-<div class="loading" id="loading" hidden>正在读取重要资讯…</div>
+
+<div class="mn-modal" id="impactModal" hidden>
+  <div class="mn-backdrop" id="backdrop"></div>
+  <section class="mn-dialog" role="dialog" aria-modal="true" aria-labelledby="impactTitle">
+    <h2 id="impactTitle">记录这条消息如何影响判断</h2>
+    <p class="mn-picked" id="pickedNews">—</p>
+    <div class="mn-form">
+      <div><label for="impactCode">关联标的（可选）</label><input id="impactCode" placeholder="如 600519 或 sh600519"></div>
+      <div><label for="decisionTime">当时决策时刻</label><input id="decisionTime" type="time" step="60"></div>
+      <div><label for="impactAction">影响的动作</label>
+        <select id="impactAction">
+          <option value="watch">观望</option><option value="select">纳入候选</option>
+          <option value="buy">买入</option><option value="hold">持有</option>
+          <option value="sell">卖出</option><option value="avoid">回避</option>
+        </select>
+      </div>
+      <div><label for="impactStance">当时理解</label>
+        <select id="impactStance">
+          <option value="uncertain">不确定</option><option value="bullish">偏利多</option>
+          <option value="bearish">偏利空</option><option value="neutral">中性</option>
+        </select>
+      </div>
+      <div class="full"><label for="impactNote">影响说明</label>
+        <textarea id="impactNote" rows="4" maxlength="2000" placeholder="例如：政策超预期，把证券 ETF 加入午后观察，等待量价确认"></textarea>
+      </div>
+    </div>
+    <div class="mn-dialog-actions">
+      <button class="btn" type="button" id="cancelImpact">取消</button>
+      <button class="btn btn-primary" type="button" id="saveImpact">保存影响记录</button>
+    </div>
+  </section>
+</div>
+<div class="mn-loading" id="loading" hidden>正在读取重要资讯…</div>
+
 <script>
-const $=id=>document.getElementById(id);let payload=null,pickedId=null;
-const phases=['pre_open','midday','close'],labels={pre_open:'早盘',midday:'午间',close:'收盘'},phaseHints={pre_open:'开盘前已知',midday:'上午盘中与午休',close:'午后与收盘后'};
-const actionNames={watch:'观望',select:'纳入候选',buy:'买入',hold:'持有',sell:'卖出',avoid:'回避'},stanceNames={bullish:'偏利多',bearish:'偏利空',neutral:'中性',uncertain:'不确定'};
+const $=id=>document.getElementById(id);
+let payload=null,pickedId=null,phaseFilter='all',tagFilter='',viewMode='masonry';
+const phases=['pre_open','midday','close'];
+const labels={pre_open:'早盘',midday:'午间',close:'收盘'};
+const phaseHints={pre_open:'开盘前已知',midday:'上午盘中与午休',close:'午后与收盘后'};
+const actionNames={watch:'观望',select:'纳入候选',buy:'买入',hold:'持有',sell:'卖出',avoid:'回避'};
+const stanceNames={bullish:'偏利多',bearish:'偏利空',neutral:'中性',uncertain:'不确定'};
+
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-async function api(path,method='GET',body=null){const o={method,cache:'no-store',headers:{}};if(body){o.headers['Content-Type']='application/json';o.body=JSON.stringify(body)}const r=await fetch(path,o);let x={};try{x=await r.json()}catch(e){}if(!r.ok)throw new Error(x.error||`HTTP ${r.status}`);return x}
+async function api(path,method='GET',body=null){
+  const o={method,cache:'no-store',headers:{}};
+  if(body){o.headers['Content-Type']='application/json';o.body=JSON.stringify(body)}
+  const r=await fetch(path,o);let x={};try{x=await r.json()}catch(e){}
+  if(!r.ok)throw new Error(x.error||`HTTP ${r.status}`);return x;
+}
 function setLoading(on){$('loading').hidden=!on}
 function message(text){$('notice').textContent=text||'';$('notice').hidden=!text}
 function query(){const q=new URLSearchParams({date:$('marketDate').value});if($('asOf').value)q.set('as_of',$('asOf').value);return q}
-async function load(refresh=false){if(!$('marketDate').value)return;setLoading(true);message('');try{const q=query();if(refresh)q.set('refresh','1');payload=await api('/api/news/day?'+q);render();await loadImpacts();syncUrl()}catch(e){message(e.message)}finally{setLoading(false)}}
-function syncUrl(){const u=new URL(location.href);u.searchParams.set('date',$('marketDate').value);if($('asOf').value)u.searchParams.set('as_of',$('asOf').value);else u.searchParams.delete('as_of');history.replaceState(null,'',u)}
-function render(){const asof=payload.as_of?`截至 ${payload.as_of.slice(0,5)}（无剧透）`:'全天复盘';$('scope').textContent=`${payload.market_date} · ${asof} · ${payload.items.length} 条`;$('cache').textContent=payload.fetched_at?`缓存更新 ${payload.fetched_at.replace('T',' ')}`:'尚无缓存';$('source').href=payload.source_url;if(payload.message)message(payload.message);const grouped=Object.fromEntries(phases.map(p=>[p,[]]));payload.items.forEach(x=>(grouped[x.phase]||grouped.close).push(x));$('timeline').innerHTML=phases.map(p=>`<section class="phase phase-${p}"><header class="phase-head"><div><h2>${labels[p]}</h2><small>${phaseHints[p]}</small></div><b>${grouped[p].length}</b></header><div class="news-masonry">${grouped[p].length?grouped[p].map(newsCard).join(''):'<div class="empty">该时段没有重要资讯</div>'}</div></section>`).join('');if(window.StockAppShell&&StockAppShell.observeReveal)StockAppShell.observeReveal($('timeline'))}
-function newsCard(x){const tags=(x.tags||[]).slice(0,3).map(t=>`<span class="tag">${esc(t)}</span>`).join('');return`<article class="news app-reveal"><div class="news-meta"><span class="news-time">${esc(x.time.slice(0,5))}</span>${tags}</div><h3>${esc(x.title)}</h3>${x.digest?`<p>${esc(x.digest)}</p>`:''}<div class="news-actions">${x.url?`<a href="${esc(x.url)}" target="_blank" rel="noopener">查看原文</a>`:''}<button class="impact-btn" data-impact="${esc(x.id)}">记录影响</button></div></article>`}
-async function loadImpacts(){const q=new URLSearchParams({date:$('marketDate').value});const code=new URL(location.href).searchParams.get('code');if(code)q.set('code',code);try{const rows=await api('/api/news/impacts?'+q);$('impacts').innerHTML=rows.length?rows.map(impactCard).join(''):'<div class="empty">当天尚未记录任何消息影响</div>'}catch(e){$('impacts').innerHTML=`<div class="empty">${esc(e.message)}</div>`}}
-function impactCard(x){return`<div class="impact"><div class="impact-label"><b>${esc(x.decision_time?.slice(0,5)||'未填时刻')}</b>${esc(x.code||'市场整体')} · ${stanceNames[x.stance]||x.stance}</div><div class="impact-body"><strong>${actionNames[x.action]||x.action}｜${esc(x.news_title)}</strong><p>${esc(x.note)}</p></div><button class="delete" data-delete="${x.id}">删除</button></div>`}
-function openImpact(id){const item=payload.items.find(x=>x.id===id);if(!item)return;pickedId=id;$('pickedNews').textContent=`${item.time.slice(0,5)}｜${item.title}`;$('decisionTime').value=$('asOf').value||item.time.slice(0,5);$('impactCode').value=new URL(location.href).searchParams.get('code')||'';$('impactNote').value='';$('impactModal').hidden=false}
+
+function filteredItems(){
+  if(!payload)return [];
+  const q=($('q').value||'').trim().toLowerCase();
+  return payload.items.filter(x=>{
+    if(phaseFilter!=='all' && x.phase!==phaseFilter)return false;
+    if(tagFilter && !(x.tags||[]).includes(tagFilter))return false;
+    if(!q)return true;
+    const hay=[x.title,x.digest,...(x.tags||[])].join(' ').toLowerCase();
+    return hay.includes(q);
+  });
+}
+
+function renderChips(){
+  const counts=Object.fromEntries(phases.map(p=>[p,0]));
+  (payload?.items||[]).forEach(x=>{if(counts[x.phase]!=null)counts[x.phase]++});
+  const total=payload?.items?.length||0;
+  const chip=(id,label,n,on)=>`<button type="button" class="mn-chip${on?' is-on':''}" data-phase="${id}" role="tab" aria-selected="${on}">${label}<span class="n">${n}</span></button>`;
+  $('phaseChips').innerHTML=[
+    chip('all','全部',total,phaseFilter==='all'),
+    ...phases.map(p=>chip(p,labels[p],counts[p],phaseFilter===p))
+  ].join('');
+
+  const tagMap=new Map();
+  (payload?.items||[]).forEach(x=>{(x.tags||[]).forEach(t=>tagMap.set(t,(tagMap.get(t)||0)+1))});
+  const tags=[...tagMap.entries()].sort((a,b)=>b[1]-a[1]).slice(0,10);
+  if(!tags.length){$('tagChips').hidden=true;$('tagChips').innerHTML='';return}
+  $('tagChips').hidden=false;
+  $('tagChips').innerHTML=`<button type="button" class="mn-chip${!tagFilter?' is-on':''}" data-tag="">标签·全部</button>`+
+    tags.map(([t,n])=>`<button type="button" class="mn-chip${tagFilter===t?' is-on':''}" data-tag="${esc(t)}">${esc(t)}<span class="n">${n}</span></button>`).join('');
+}
+
+function newsCard(x){
+  const tags=(x.tags||[]).slice(0,3).map(t=>`<span class="mn-tag">${esc(t)}</span>`).join('');
+  return `<article class="mn-card app-reveal">
+    <div class="mn-meta"><span class="mn-time">${esc((x.time||'').slice(0,5))}</span>${tags}</div>
+    <h3>${esc(x.title)}</h3>
+    ${x.digest?`<p>${esc(x.digest)}</p>`:''}
+    <div class="mn-card-actions">
+      ${x.url?`<a class="btn" href="${esc(x.url)}" target="_blank" rel="noopener">原文</a>`:''}
+      <button type="button" class="mn-impact-btn" data-impact="${esc(x.id)}">记录影响</button>
+    </div>
+  </article>`;
+}
+
+function render(){
+  if(!payload)return;
+  const asof=payload.as_of?`截至 ${payload.as_of.slice(0,5)}（无剧透）`:'全天复盘';
+  $('scope').textContent=`${payload.market_date} · ${asof} · ${payload.items.length} 条`;
+  $('cache').textContent=payload.fetched_at?payload.fetched_at.replace('T',' ').slice(0,16):'尚无';
+  if(payload.source_url)$('source').href=payload.source_url;
+  if(payload.message)message(payload.message); else if(!$('notice').dataset.sticky)message('');
+  renderChips();
+
+  const items=filteredItems();
+  const grouped=Object.fromEntries(phases.map(p=>[p,[]]));
+  items.forEach(x=>(grouped[x.phase]||grouped.close).push(x));
+  const showPhases=phaseFilter==='all'?phases:[phaseFilter];
+  const feedClass=viewMode==='list'?'mn-feed is-list':'mn-feed is-masonry';
+
+  if(!items.length){
+    $('timeline').innerHTML=`<div class="app-empty">当前筛选下没有资讯。试试清空关键词或切换时段。</div>`;
+  }else{
+    $('timeline').innerHTML=showPhases.map(p=>{
+      const rows=grouped[p]||[];
+      return `<section class="mn-phase mn-phase-${p}">
+        <header class="mn-phase-head"><div><h2>${labels[p]}</h2><small>${phaseHints[p]}</small></div>
+        <span class="mn-phase-count">${rows.length}</span></header>
+        <div class="${feedClass}">${rows.length?rows.map(newsCard).join(''):'<div class="app-empty">该时段没有重要资讯</div>'}</div>
+      </section>`;
+    }).join('');
+  }
+  if(window.StockAppShell&&StockAppShell.observeReveal)StockAppShell.observeReveal($('timeline'));
+}
+
+async function loadImpacts(){
+  const q=new URLSearchParams({date:$('marketDate').value});
+  const code=new URL(location.href).searchParams.get('code');
+  if(code)q.set('code',code);
+  try{
+    const rows=await api('/api/news/impacts?'+q);
+    $('impacts').innerHTML=rows.length?rows.map(impactCard).join(''):'<div class="app-empty" style="margin:12px;border:0">当天尚未记录</div>';
+  }catch(e){$('impacts').innerHTML=`<div class="app-error" style="margin:12px">${esc(e.message)}</div>`}
+}
+function impactCard(x){
+  return `<div class="mn-impact">
+    <div>
+      <div class="mn-impact-when"><b>${esc(x.decision_time?.slice(0,5)||'未填时刻')}</b>${esc(x.code||'市场整体')} · ${stanceNames[x.stance]||x.stance}</div>
+      <div class="mn-impact-body"><strong>${actionNames[x.action]||x.action}｜${esc(x.news_title)}</strong><p>${esc(x.note)}</p></div>
+    </div>
+    <button type="button" class="mn-delete" data-delete="${x.id}">删除</button>
+  </div>`;
+}
+
+async function load(refresh=false){
+  if(!$('marketDate').value)return;
+  setLoading(true);message('');
+  try{
+    const q=query();if(refresh)q.set('refresh','1');
+    payload=await api('/api/news/day?'+q);
+    render();await loadImpacts();syncUrl();
+  }catch(e){message(e.message)}
+  finally{setLoading(false)}
+}
+function syncUrl(){
+  const u=new URL(location.href);
+  u.searchParams.set('date',$('marketDate').value);
+  if($('asOf').value)u.searchParams.set('as_of',$('asOf').value);else u.searchParams.delete('as_of');
+  history.replaceState(null,'',u);
+}
+function openImpact(id){
+  const item=payload.items.find(x=>x.id===id);if(!item)return;
+  pickedId=id;
+  $('pickedNews').textContent=`${item.time.slice(0,5)}｜${item.title}`;
+  $('decisionTime').value=$('asOf').value||item.time.slice(0,5);
+  $('impactCode').value=new URL(location.href).searchParams.get('code')||'';
+  $('impactNote').value='';
+  $('impactModal').hidden=false;
+  $('impactNote').focus();
+}
 function closeImpact(){$('impactModal').hidden=true;pickedId=null}
-async function saveImpact(){const body={news_id:pickedId,market_date:$('marketDate').value,decision_time:$('decisionTime').value,code:$('impactCode').value,action:$('impactAction').value,stance:$('impactStance').value,note:$('impactNote').value};try{await api('/api/news/impact','POST',body);closeImpact();await loadImpacts()}catch(e){message(e.message)}}
-$('load').onclick=()=>load(false);$('fullDay').onclick=()=>{$('asOf').value='';load(false)};$('refresh').onclick=()=>load(true);$('cancelImpact').onclick=closeImpact;$('backdrop').onclick=closeImpact;$('saveImpact').onclick=saveImpact;
-$('timeline').onclick=e=>{const b=e.target.closest('[data-impact]');if(b)openImpact(b.dataset.impact)};$('impacts').onclick=async e=>{const b=e.target.closest('[data-delete]');if(b&&confirm('删除这条消息影响记录？')){try{await api('/api/news/impact/delete','POST',{impact_id:b.dataset.delete});await loadImpacts()}catch(err){message(err.message)}}};
-const u=new URL(location.href),today=new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'});$('marketDate').value=u.searchParams.get('date')||today;$('asOf').value=(u.searchParams.get('as_of')||'').slice(0,5);load(false);
+async function saveImpact(){
+  const body={news_id:pickedId,market_date:$('marketDate').value,decision_time:$('decisionTime').value,
+    code:$('impactCode').value,action:$('impactAction').value,stance:$('impactStance').value,note:$('impactNote').value};
+  try{await api('/api/news/impact','POST',body);closeImpact();await loadImpacts()}
+  catch(e){message(e.message)}
+}
+function setView(mode){
+  viewMode=mode;
+  $('viewMasonry').classList.toggle('is-on',mode==='masonry');
+  $('viewList').classList.toggle('is-on',mode==='list');
+  render();
+}
+
+$('load').onclick=()=>load(false);
+$('fullDay').onclick=()=>{$('asOf').value='';load(false)};
+$('refresh').onclick=()=>load(true);
+$('cancelImpact').onclick=closeImpact;
+$('backdrop').onclick=closeImpact;
+$('saveImpact').onclick=saveImpact;
+$('viewMasonry').onclick=()=>setView('masonry');
+$('viewList').onclick=()=>setView('list');
+$('q').oninput=()=>{if(payload)render()};
+$('phaseChips').onclick=e=>{const b=e.target.closest('[data-phase]');if(!b)return;phaseFilter=b.dataset.phase;render()};
+$('tagChips').onclick=e=>{const b=e.target.closest('[data-tag]');if(!b)return;tagFilter=b.dataset.tag||'';render()};
+$('timeline').onclick=e=>{const b=e.target.closest('[data-impact]');if(b)openImpact(b.dataset.impact)};
+$('impacts').onclick=async e=>{
+  const b=e.target.closest('[data-delete]');
+  if(b&&confirm('删除这条消息影响记录？')){
+    try{await api('/api/news/impact/delete','POST',{impact_id:b.dataset.delete});await loadImpacts()}
+    catch(err){message(err.message)}
+  }
+};
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('impactModal').hidden)closeImpact()});
+
+const u=new URL(location.href);
+const today=new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'});
+$('marketDate').value=u.searchParams.get('date')||today;
+$('asOf').value=(u.searchParams.get('as_of')||'').slice(0,5);
+load(false);
 </script>
 <script src="/assets/app-shell.js"></script>
 </body>

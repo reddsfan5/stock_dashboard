@@ -476,3 +476,7 @@ to { transform: translateX(-50%); }
     transition: none;
   }
 }
+
+
+/* —— Market news page extras (shared hooks) —— */
+.mn-page a.btn:hover { text-decoration: none; }
