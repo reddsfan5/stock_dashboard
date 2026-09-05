@@ -364,17 +364,34 @@ def stop_target(service, replace_conflicts=False):
     return _stop_owned("reports", report_is_healthy)
 
 
-def _launchd_update_status():
+def _launchd_job_state(label):
+    """Return short state for one LaunchAgent label, or None if not loaded."""
     if sys.platform != "darwin":
-        return "非 macOS：请检查系统调度器"
-    domain = "gui/{}/com.stock.cache-update".format(os.getuid())
+        return None
+    domain = "gui/{}/{}".format(os.getuid(), label)
     result = subprocess.run(
         ["launchctl", "print", domain], capture_output=True, text=True, check=False
     )
     if result.returncode != 0:
-        return "未加载"
-    state = "运行中" if "state = running" in result.stdout else "已调度（当前空闲）"
-    return state + "，工作日 18:30"
+        return None
+    return "运行中" if "state = running" in result.stdout else "已调度"
+
+
+def _launchd_update_status():
+    if sys.platform != "darwin":
+        return "非 macOS：请检查系统调度器"
+    weekday = _launchd_job_state("com.stock.cache-update")
+    saturday = _launchd_job_state("com.stock.market-context-saturday")
+    parts = []
+    if weekday:
+        parts.append("{}（工作日 18:30 全量）".format(weekday))
+    else:
+        parts.append("工作日全量未加载")
+    if saturday:
+        parts.append("{}（周六 07:00 market_context）".format(saturday))
+    else:
+        parts.append("周六轻量未加载")
+    return "；".join(parts)
 
 
 def show_status():
@@ -395,11 +412,11 @@ def show_status():
     else:
         report_status = "未运行"
 
-    print("项目运行单元：2 个 HTTP 服务 + 1 个计划任务")
+    print("项目运行单元：2 个 HTTP 服务 + 2 个计划任务")
     print("- 交互 Web  {:<30} http://127.0.0.1:{}/".format(web_status, WEB_PORT))
     print("  └─ 分时 / 网格 / T+1训练 / 选股日记 / 市场资讯，共用一个进程")
     print("- 静态报告  {:<30} http://127.0.0.1:{}/index.html".format(report_status, REPORT_PORT))
-    print("- 每日更新  {}（计划任务，不计入 start all）".format(_launchd_update_status()))
+    print("- 计划更新  {}（不计入 start all）".format(_launchd_update_status()))
     if web_listeners and not web_is_healthy():
         print("\n8765 监听详情：")
         for row in _describe_listeners(WEB_PORT):

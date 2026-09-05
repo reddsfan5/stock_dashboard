@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.stock.market-context-saturday</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>-c</string>
+        <!-- 周六补抓周五美股收盘后的海外宽基；不跑 A 股全量分钟 -->
+        <string>cd /Users/dong_007/D/stock &amp;&amp; /usr/local/bin/python -m scripts.update_cache --only market_context</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/dong_007/D/stock</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+    <!-- 周六 07:00（美股周五收盘后已落地） -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Weekday</key>
+        <integer>6</integer>
+        <key>Hour</key>
+        <integer>7</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+    <key>StandardOutPath</key>
+    <string>/Users/dong_007/Library/Logs/stock_market_context_saturday.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/dong_007/Library/Logs/stock_market_context_saturday.err.log</string>
+</dict>
+</plist>

@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.stock.cache-update</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>-c</string>
+        <!-- 数据统一更新并通过质量门禁后，才刷新选股仪表盘 -->
+        <string>cd /Users/dong_007/D/stock &amp;&amp; /usr/local/bin/python -m scripts.update_cache &amp;&amp; /usr/local/bin/python -m scripts.screen</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/dong_007/D/stock</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+    <!-- 唤醒/登录时补跑（增量更新，重复跑无害） -->
+    <key>RunAtLoad</key>
+    <true/>
+    <!-- 每个工作日 18:30 -->
+    <key>StartCalendarInterval</key>
+    <array>
+        <dict><key>Hour</key><integer>18</integer><key>Minute</key><integer>30</integer><key>Weekday</key><integer>1</integer></dict>
+        <dict><key>Hour</key><integer>18</integer><key>Minute</key><integer>30</integer><key>Weekday</key><integer>2</integer></dict>
+        <dict><key>Hour</key><integer>18</integer><key>Minute</key><integer>30</integer><key>Weekday</key><integer>3</integer></dict>
+        <dict><key>Hour</key><integer>18</integer><key>Minute</key><integer>30</integer><key>Weekday</key><integer>4</integer></dict>
+        <dict><key>Hour</key><integer>18</integer><key>Minute</key><integer>30</integer><key>Weekday</key><integer>5</integer></dict>
+    </array>
+    <key>StandardOutPath</key>
+    <string>/Users/dong_007/Library/Logs/stock_update.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/dong_007/Library/Logs/stock_update.err.log</string>
+</dict>
+</plist>
