@@ -39,7 +39,7 @@ A股日K线数据层 — 本地缓存管理 + 增量更新
 
 # 股票列表
 >>> stocks = data.get_stock_list(board="main")   # 仅沪深主板
->>> stocks = data.get_stock_list(board="all")    # 全 A 股
+>>> stocks = data.get_stock_list(board="all")    # 全 A（含科创/北交）
 """
 
 import os
@@ -154,28 +154,30 @@ class StockData:
 
     def get_stock_list(self, board: str = "main") -> pd.DataFrame:
         """
-        获取股票列表
+        获取股票列表（缓存侧尽量全；选股仪表盘再用过滤器收窄）
 
-        board='main'  → 仅沪深主板（默认）
-        board='all'   → 全 A 股（含创业/科创，排除 ST/北交所）
+        board='main'  → 仅沪深主板（000/001/002/003/600/601/603/605）
+        board='hs'    → 沪深 A 股（主板+创业+科创，不含北交所）
+        board='all'   → 全 A 股（含创业/科创/北交所；仍排除 ST/退）
         """
         if self._stock_list is not None and getattr(self, '_stock_list_board', '') == board:
             return self._stock_list
 
         df = ak.stock_zh_a_spot_tx()
 
-        # 排除 ST / 退市 / 风险警示
+        # 排除 ST / 退市 / 风险警示（名称与腾讯 state）
         df = df[~df["name"].str.contains("ST|退", regex=True, na=False)]
         df = df[df["state"] == ""]
-
-        # 排除北交所 + 科创板
-        df = df[~df["code"].str.startswith("bj")]
-        df = df[~df["code"].str.startswith("sh688")]
 
         if board == "main":
             df["code_num"] = df["code"].str[2:]
             df = df[df["code_num"].str.startswith(MAIN_BOARD_PREFIX)]
             df = df.drop(columns=["code_num"])
+        elif board == "hs":
+            # 沪深：去掉北交所，保留科创/创业
+            df = df[~df["code"].str.startswith("bj")]
+        elif board != "all":
+            raise ValueError("board 须为 main / hs / all，收到: {!r}".format(board))
 
         df = df[["code", "name"]].rename(columns={"code": "代码", "name": "名称"})
         self._stock_list = df.reset_index(drop=True)

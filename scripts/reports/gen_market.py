@@ -8,7 +8,7 @@
   · 板块强度变化（申万1级 31 个轮动热力图 + 申万2级 131 个强度排行榜）
 
 数据口径：
-  · 股票K线缓存（成交额单位元，覆盖沪深主板+创业板，不含科创/北交所）
+  · 股票K线缓存（成交额单位元，覆盖沪深主板+创业+科创+北交（仪表盘可再过滤））
   · 涨跌停按 主板10%/创业板20%/ST≈5% 估算（ST 用当前名称近似，历史状态不可回溯）
   · 申万分类为当前分类回填历史，缺失填「未分类」
 
@@ -499,7 +499,7 @@ def render_html(payload: dict, generated_at: str) -> str:
 <script>window.echarts || document.write(`<script src='https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js'><\\/script>`);</script>
 <script>{js}</script>
 <div class="footer">生成: scripts/reports/gen_market.py · 数据: 个股K线缓存 + 腾讯指数日K（每日 18:30 自动更新）<br>
-口径: 涨跌停按 主板10%/创业板20%/ST≈5% 估算（ST 用当前名称近似） · 申万分类为当前分类回填历史，缺失记「未分类」 · 两市成交额为缓存内沪深主板+创业板合计（不含科创/北交所）</div>
+口径: 涨跌停按 主板10%/创业板20%/ST≈5% 估算（ST 用当前名称近似） · 申万分类为当前分类回填历史，缺失记「未分类」 · 两市成交额默认按缓存合计；选股仪表盘仍可过滤主板</div>
 </body></html>"""
 
 

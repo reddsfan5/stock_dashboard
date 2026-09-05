@@ -27,6 +27,7 @@ from data.sources import (
     ak_fetch_kline,
     bs_fetch_kline,
     bs_get_stock_list,
+    sina_fetch_kline,
     baostock_available,
     baostock_session,
     tx_fetch_daily_snapshot,
@@ -187,17 +188,26 @@ class DailyUpdatePipeline:
                     target_date=target)
         primary_failed = list(data.last_failed)
         final_failed = primary_failed
-        if primary_failed and self.source == "auto" and baostock_available():
+
+        # 北交所等腾讯接口常空：先用新浪补；再对剩余走 baostock
+        if primary_failed and self.source in ("auto", "akshare"):
             failed_df = stocks[stocks["代码"].isin(primary_failed)]
-            self.logger.warning("股票日线主源失败 %d 只，baostock 回退", len(failed_df))
+            self.logger.warning("股票日线主源失败 %d 只，新浪回退", len(failed_df))
+            data.update(failed_df, progress=False, fetch_fn=sina_fetch_kline,
+                        target_date=target)
+            final_failed = list(data.last_failed)
+
+        if final_failed and self.source == "auto" and baostock_available():
+            failed_df = stocks[stocks["代码"].isin(final_failed)]
+            self.logger.warning("股票日线仍失败 %d 只，baostock 回退", len(failed_df))
             with baostock_session():
                 data.update(failed_df, progress=False, fetch_fn=bs_fetch_kline,
                             threads=1, target_date=target)
             final_failed = list(data.last_failed)
-        elif primary_failed and self.source == "auto":
+        elif final_failed and self.source == "auto":
             self.logger.warning(
-                "股票日线主源失败 %d 只；当前环境未安装 baostock，保留失败清单",
-                len(primary_failed),
+                "股票日线仍失败 %d 只；当前环境未安装 baostock，保留失败清单",
+                len(final_failed),
             )
         return primary_failed, final_failed
 

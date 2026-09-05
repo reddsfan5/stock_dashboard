@@ -273,8 +273,8 @@ def baostock_session():
 
 
 def bs_code(code: str) -> str:
-    """项目格式 → baostock 格式: sh600519 → sh.600519"""
-    if code.startswith(("sh", "sz")) and len(code) > 2:
+    """项目格式 → baostock 格式: sh600519 → sh.600519；bj920xxx → bj.920xxx"""
+    if code.startswith(("sh", "sz", "bj")) and len(code) > 2:
         return f"{code[:2]}.{code[2:]}"
     return code
 
@@ -313,8 +313,9 @@ def bs_get_stock_list(board: str = "all") -> pd.DataFrame:
     """
     baostock 股票列表 → 与 StockData.get_stock_list 同构（代码/名称 两列）。
 
-    过滤规则与 get_stock_list 一致：ST/退、北交所、科创板剔除。
-    代码为带前缀项目格式（sh600519）。
+    过滤规则与 get_stock_list 对齐：默认保留科创/北交；仍排除 ST/退。
+    代码为带前缀项目格式（sh600519 / bj920xxx）。
+    注意：baostock 对北交所日 K 支持弱，管线对 bj* 会优先新浪回退。
     """
     with baostock_session():
         rs = bs.query_stock_basic()
@@ -329,13 +330,15 @@ def bs_get_stock_list(board: str = "all") -> pd.DataFrame:
     df = pd.DataFrame(rows, columns=rs.fields)  # code,code_name,ipoDate,outDate,type,status
     df = df[(df["type"] == "1") & (df["status"] == "1") & (df["outDate"] == "")]
     df = df[~df["code_name"].str.contains("ST|退", regex=True, na=False)]
-    df = df[~df["code"].str.startswith("bj")]
-    df = df[~df["code"].str.startswith("sh.688")]
 
     if board == "main":
         df["code_num"] = df["code"].str.split(".").str[1]
         df = df[df["code_num"].str.startswith(MAIN_BOARD_PREFIX)]
         df = df.drop(columns=["code_num"])
+    elif board == "hs":
+        df = df[~df["code"].str.startswith("bj.")]
+    elif board != "all":
+        raise ValueError("board 须为 main / hs / all，收到: {!r}".format(board))
 
     df["代码"] = df["code"].str.replace(".", "", regex=False)
     return df[["代码", "code_name"]].rename(columns={"code_name": "名称"}).reset_index(drop=True)
