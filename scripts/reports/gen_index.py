@@ -315,13 +315,13 @@ main{{max-width:1300px;margin:0 auto;padding:8px 32px 20px}}
 <script src="/assets/app-shell.js"></script>
 <script>
 (function(){{
-  var CAPS=[{{label:'沪深300'}},{{label:'科创50'}},{{label:'恒指'}},{{label:'上证'}},{{label:'纳指'}},{{label:'道琼斯'}},{{label:'韩股'}}];
+  var CAPS=[{{label:'道琼斯'}},{{label:'纳指'}},{{label:'标普500'}},{{label:'韩股'}},{{label:'上证指数'}},{{label:'沪深300'}},{{label:'科创50'}},{{label:'恒指'}}];
   function caps(){{
     if(window.StockAppShell&&StockAppShell.setTicker) StockAppShell.setTicker(CAPS);
   }}
   function mapCtx(data){{
-    var wantA={{sh000300:1,sh000688:1,sh000001:1}};
-    var wantO={{HSI:1,IXIC:1,DJIA:1,KS11:1}};
+    var wantA={{sh000001:1,sh000300:1,sh000688:1}};
+    var wantO={{DJIA:1,IXIC:1,SPX:1,KS11:1,HSI:1}};
     var items=[];
     (data.a_share||[]).forEach(function(x){{
       if(!wantA[x.code]) return;

@@ -241,22 +241,24 @@
 
   // 顶栏静态指数板（按显示顺序）
   var INDEX_BOARD = [
+    { key: 'DJIA', match: [/道琼斯/, /道指/, /\bDJIA\b/i] },
+    { key: 'IXIC', match: [/纳斯达克/, /纳指/, /\bIXIC\b/i, /NDX/i] },
+    { key: 'SPX', match: [/标普500/, /标普/, /\bSPX\b/i, /S&P/i] },
+    { key: 'KS11', match: [/韩国/, /韩股/, /KOSPI/, /\bKS11\b/i] },
+    { key: 'sh000001', match: [/上证指数/, /上证/, /sh000001/i, /^000001$/] },
     { key: 'sh000300', match: [/沪深300/, /sh000300/i, /^000300$/] },
     { key: 'sh000688', match: [/科创50/, /sh000688/i, /^000688$/] },
-    { key: 'HSI', match: [/恒生/, /恒指/, /\bHSI\b/i, /hkHSI/i] },
-    { key: 'sh000001', match: [/上证/, /上证指数/, /sh000001/i, /^000001$/] },
-    { key: 'IXIC', match: [/纳斯达克/, /纳指/, /\bIXIC\b/i, /NDX/i] },
-    { key: 'DJIA', match: [/道琼斯/, /道指/, /\bDJIA\b/i] },
-    { key: 'KS11', match: [/韩国/, /KOSPI/, /\bKS11\b/i] }
+    { key: 'HSI', match: [/恒生/, /恒指/, /\bHSI\b/i, /hkHSI/i] }
   ];
   var INDEX_BOARD_LABEL = {
+    DJIA: '道琼斯',
+    IXIC: '纳指',
+    SPX: '标普500',
+    KS11: '韩股',
+    sh000001: '上证指数',
     sh000300: '沪深300',
     sh000688: '科创50',
-    HSI: '恒指',
-    sh000001: '上证',
-    IXIC: '纳指',
-    DJIA: '道琼斯',
-    KS11: '韩股'
+    HSI: '恒指'
   };
 
   function matchBoardKey(it) {

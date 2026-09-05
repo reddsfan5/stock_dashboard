@@ -448,11 +448,11 @@ function renderMarketContext(data,asOf){
   }).join('');
   $('marketContextBody').innerHTML=`<div class="market-block"><h3>A股宽基</h3><div class="idx-grid">${a||'<div class="empty">暂无指数缓存</div>'}</div></div><div class="market-block" id="overseasBlock"><h3>海外摘要</h3><div class="ov-list">${o||'<div class="empty">暂无海外缓存</div>'}</div></div>`;
   if(window.StockAppShell&&StockAppShell.setTicker){
-    const want=new Set(['sh000300','sh000688','sh000001']);
+    const want=new Set(['sh000001','sh000300','sh000688']);
     const items=[];
     (data.a_share||[]).forEach(x=>{ if(want.has(x.code)) items.push({code:x.code,label:x.name,price:x.price,changePct:x.change_pct}); });
     (data.overseas||[]).forEach(x=>{
-      if(['HSI','IXIC','DJIA','KS11'].includes(x.code)) items.push({code:x.code,label:x.name,price:x.price,changePct:x.change_pct});
+      if(['DJIA','IXIC','SPX','KS11','HSI'].includes(x.code)) items.push({code:x.code,label:x.name,price:x.price,changePct:x.change_pct});
     });
     StockAppShell.setTicker(items);
   }

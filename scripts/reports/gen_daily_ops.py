@@ -188,7 +188,7 @@ python -m scripts.serve start web   # 若 8765 未启动</div>
 <script src="/assets/app-shell.js"></script>
 <script>
 (function(){{
-  var CAPS=[{{label:'沪深300'}},{{label:'科创50'}},{{label:'恒指'}},{{label:'上证'}},{{label:'纳指'}},{{label:'道琼斯'}},{{label:'韩股'}}];
+  var CAPS=[{{label:'道琼斯'}},{{label:'纳指'}},{{label:'标普500'}},{{label:'韩股'}},{{label:'上证指数'}},{{label:'沪深300'}},{{label:'科创50'}},{{label:'恒指'}}];
   function caps(){{ if(window.StockAppShell&&StockAppShell.setTicker) StockAppShell.setTicker(CAPS); }}
   async function loadTicker(){{
     if(!window.StockAppShell||!StockAppShell.setTicker) return;
@@ -198,7 +198,7 @@ python -m scripts.serve start web   # 若 8765 未启动</div>
       var r=await fetch('/api/market/context?date='+encodeURIComponent(today)+'&as_of='+encodeURIComponent((now||'15:00:00').slice(0,8)),{{cache:'no-store'}});
       if(!r.ok) throw new Error('http');
       var data=await r.json();
-      var wantA={{sh000300:1,sh000688:1,sh000001:1}}, wantO={{HSI:1,IXIC:1,DJIA:1,KS11:1}}, items=[];
+      var wantA={{sh000001:1,sh000300:1,sh000688:1}}, wantO={{DJIA:1,IXIC:1,SPX:1,KS11:1,HSI:1}}, items=[];
       (data.a_share||[]).forEach(function(x){{ if(!wantA[x.code]) return; items.push({{code:x.code,label:x.name,price:x.price==null?null:Number(x.price).toFixed(2),changePct:x.change_pct}}); }});
       (data.overseas||[]).forEach(function(x){{ if(!wantO[x.code]) return; items.push({{code:x.code,label:x.name,price:x.price==null?null:Number(x.price).toLocaleString(undefined,{{maximumFractionDigits:2}}),changePct:x.change_pct}}); }});
       if(items.length) StockAppShell.setTicker(items); else caps();
