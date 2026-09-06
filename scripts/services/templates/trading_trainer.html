@@ -342,10 +342,38 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&chartPricePick){e.p
   function applyChartPrice(e){
     ensureLimitForChartHover();
     const target=chartPriceFillTarget();
+    // gridIndex:0 = price pane only (exclude volume). Explicit x/yAxisIndex:0 = price axis
+    // (minute chart has dual yAxes on grid 0 — price + hidden % — so grid-only convert often NaNs).
     if(!target||!state||!chart.containPixel({gridIndex:0},[e.offsetX,e.offsetY]))return false;
-    const point=chart.convertFromPixel({gridIndex:0},[e.offsetX,e.offsetY]);
+    const point=chart.convertFromPixel({xAxisIndex:0,yAxisIndex:0},[e.offsetX,e.offsetY]);
     if(!point||!Number.isFinite(point[1])||point[1]<=0)return false;
-    if(chart===minuteChart){const option=chart.getOption(),slot=option.xAxis[0].data[Math.round(point[0])];if(!state.minute_points.some(x=>x.time===slot))return false;}
+    if(chart===minuteChart){
+      const option=chart.getOption();
+      let axisData=option.xAxis?.[0]?.data;
+      if(Array.isArray(axisData)&&axisData.length===1&&Array.isArray(axisData[0]))axisData=axisData[0];
+      const slots=Array.isArray(axisData)?axisData:[];
+      const norm=t=>String(t==null?'':t).slice(0,5);
+      const revealed=new Set((state.minute_points||[]).map(x=>norm(x.time)));
+      const slotOf=i=>{
+        if(i<0||i>=slots.length)return '';
+        const v=slots[i];
+        return norm(Array.isArray(v)?v[0]:v);
+      };
+      const raw=point[0];
+      let idx=Math.round(raw);
+      if(!revealed.has(slotOf(idx))){
+        let best=-1,bestDist=Infinity;
+        const lo=Math.max(0,Math.floor(raw-0.5)),hi=Math.min(slots.length-1,Math.ceil(raw+0.5));
+        for(let i=lo;i<=hi;i++){
+          if(!revealed.has(slotOf(i)))continue;
+          const d=Math.abs(i-raw);
+          if(d<=0.5+1e-9&&d<bestDist){bestDist=d;best=i;}
+        }
+        if(best<0)return false;
+        idx=best;
+      }
+      if(!revealed.has(slotOf(idx)))return false;
+    }
     const digits=state.code.slice(2).match(/^[15]/)?3:2;
     const val=point[1].toFixed(digits);
     if(target.el.value!==val){
