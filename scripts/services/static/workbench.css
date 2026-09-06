@@ -270,11 +270,45 @@ body[data-page=trainer].wb-training-active .page>.top {display:none;}
 .training-index-items>div {display:flex;flex-wrap:wrap;align-items:center;gap:2px 8px;font-size:12px;}
 .training-index-items b {white-space:nowrap;}
 .training-index-items small {color:var(--app-muted);font-size:10px;}
-/* Desktop chart hover fill: modal does not block chart hits */
+/* Desktop chart hover fill: side-dock form, charts stay interactive (Tonghuashun-like) */
 @media(min-width:901px){
-  .app-workbench .modal.chart-pass-through {pointer-events:none;}
-  .app-workbench .modal.chart-pass-through .sheet {pointer-events:auto;}
-  .app-workbench .modal.chart-pass-through .modal-backdrop {background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none;}
+  .app-workbench .modal.chart-pass-through{
+    pointer-events:none;
+    background:transparent;
+    align-items:stretch;
+    justify-content:flex-end;
+  }
+  .app-workbench .modal.chart-pass-through .modal-backdrop{
+    pointer-events:none;
+    background:transparent;
+    backdrop-filter:none;
+    -webkit-backdrop-filter:none;
+  }
+  .app-workbench .modal.chart-pass-through .sheet{
+    pointer-events:auto;
+    width:min(400px,38vw);
+    max-height:100vh;
+    max-height:100dvh;
+    height:100%;
+    border-radius:18px 0 0 18px;
+    animation:none;
+  }
+  .app-workbench .modal.chart-pass-through .sheet-handle{display:none;}
+}
+@media(max-width:900px){
+  .app-workbench .modal.chart-pass-through{pointer-events:auto;align-items:flex-end;justify-content:center;}
+  .app-workbench .modal.chart-pass-through .modal-backdrop{
+    pointer-events:auto;
+    background:rgba(9,14,24,.58);
+    backdrop-filter:blur(2px);
+    -webkit-backdrop-filter:blur(2px);
+  }
+  .app-workbench .modal.chart-pass-through .sheet{
+    width:min(720px,100%);
+    max-height:min(88vh,820px);
+    height:auto;
+    border-radius:18px 18px 0 0;
+  }
 }
 @keyframes price-flash {
   0% {box-shadow:0 0 0 0 color-mix(in srgb, var(--app-accent,#3478f6) 55%, transparent);background:var(--app-accent-soft,#edf3ff);}
