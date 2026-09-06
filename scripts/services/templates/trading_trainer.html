@@ -690,9 +690,9 @@ function renderCancelManager(){if(!state)return;const pending=(state.pending_ord
 function maxQuantity(side,useManualPrice=false){if(!state)return 0;if(side==='sell')return state.account.available_shares;const inputPrice=useManualPrice&&$('manualOrderType').value==='limit'&&+$('manualLimitPrice').value>0?+$('manualLimitPrice').value:state.market.price*1.002;return Math.max(0,Math.floor(state.account.available_cash/inputPrice/100)*100)}
 function setQuantity(inputId,side,ratio){const max=maxQuantity(side,inputId==='manualShares');$(inputId).value=Math.floor(max*ratio/100)*100}
 function scrollChartsForTrade(){
-  const charts=document.querySelector('.charts');
-  if(!charts)return;
-  charts.scrollIntoView({block:'start',behavior:'smooth'});
+  const anchor=document.querySelector('.playbar')||document.querySelector('.charts');
+  if(!anchor)return;
+  anchor.scrollIntoView({block:'start',behavior:'smooth'});
   requestAnimationFrame(()=>{dailyChart.resize();minuteChart.resize()});
 }
 function showModal(){stop();$('tradeModal').hidden=false;$('tradeModal').setAttribute('aria-hidden','false');document.body.classList.add('body-modal-open');syncChartPassThrough()}
