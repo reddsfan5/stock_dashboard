@@ -337,6 +337,25 @@ body[data-page=trainer].wb-training-active #app-toast-host {top:calc(64px + var(
 .training-index-row .training-index-items>div {flex:0 0 auto;flex-wrap:nowrap;gap:6px;line-height:24px;font-size:11px;white-space:nowrap;}
 .training-index-row .training-index-items b {font-size:12px;}
 .training-index-row--compact .training-index-items {gap:4px 10px;align-items:center;}
+.training-index-groups {
+  display:flex;flex:1;min-width:0;align-items:center;gap:10px;
+  overflow-x:auto;scrollbar-width:thin;flex-wrap:nowrap;
+}
+.training-index-group {
+  display:flex;align-items:center;gap:6px;flex:0 0 auto;min-width:0;
+}
+.training-index-group:not(:first-child) {
+  padding-left:10px;
+  border-left:1px solid var(--app-border);
+}
+.training-index-group-label {
+  flex:0 0 auto;color:var(--app-muted);font-size:10px;font-weight:500;
+  letter-spacing:.02em;line-height:1;white-space:nowrap;
+}
+.training-index-group .training-index-items {
+  display:flex;flex:0 1 auto;min-width:0;gap:4px 10px;align-items:center;
+  overflow:visible;
+}
 .training-index-chip {
   display:inline-flex;align-items:baseline;gap:4px;flex:0 0 auto;
   padding:1px 0;line-height:1.25;font-size:11px;white-space:nowrap;
@@ -393,7 +412,11 @@ body[data-page=trainer].wb-training-active #app-clock {display:none;}
 }
 
 @media(max-width:767px){
- .training-index-row--compact .training-index-items {gap:8px;}
+ .training-index-groups {gap:8px;}
+ .training-index-group {gap:4px;}
+ .training-index-group:not(:first-child) {padding-left:8px;}
+ .training-index-row--compact .training-index-items,
+ .training-index-group .training-index-items {gap:8px;}
  .training-index-chip {gap:3px;}
  .training-index-chip b {font-size:11px;}
 }

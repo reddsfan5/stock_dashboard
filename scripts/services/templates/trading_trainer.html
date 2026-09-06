@@ -526,25 +526,66 @@ function shortIndexLabel(x){
   };
   return byName[x.name]||String(x.name||code||'—').slice(0,2);
 }
+function buildIndexChip(x,asOf){
+  const valid=Number.isFinite(x.price)&&x.price>0;
+  const source=x.source==='minute'?'分时 '+(x.time||asOf):x.source==='daily_open'?'仅开盘':x.source==='daily_close'?'收盘 '+(x.bar_date||''):'昨收';
+  const fullName=x.name||x.code||'';
+  const info=[fullName,source,x.status_label||'',x.note||''].filter(Boolean).join(' · ');
+  const label=shortIndexLabel(x);
+  const cls=valid?pnlClass(x.change_pct):'';
+  const code=String(x.code||'');
+  const showPrice=code==='sh000001'||fullName==='上证指数';
+  const priceText=valid?x.price.toFixed(2):'—';
+  const chgText=valid&&Number.isFinite(x.change_pct)?signed(x.change_pct,'%'):'—';
+  const tip=escapeHtml([info, showPrice?'':('点位 '+priceText)].filter(Boolean).join(' · '));
+  const priceHtml=showPrice?'<b class="'+cls+'">'+priceText+'</b>':'';
+  return '<div class="training-index-chip'+(showPrice?' is-primary':'')+'" title="'+tip+'"><span class="idx-abbr" aria-label="'+escapeHtml(fullName)+'">'+escapeHtml(label)+'</span>'+priceHtml+'<span class="'+cls+'">'+chgText+'</span></div>';
+}
+function isAsiaPeripheralIndex(x){
+  const code=String(x.code||'').toUpperCase();
+  if(['HSI','KS11'].includes(code)) return true;
+  const region=String(x.region_label||'');
+  if(region==='美股') return false;
+  return region==='港股'||region==='韩国'||region.startsWith('亚洲');
+}
+function isUsIndex(x){
+  const code=String(x.code||'').toUpperCase();
+  if(['DJIA','IXIC','SPX'].includes(code)) return true;
+  return String(x.region_label||'')==='美股';
+}
+function sortAsiaPeripheral(items){
+  const rank={HSI:0,KS11:1};
+  return items.slice().sort((a,b)=>{
+    const ra=rank[String(a.code||'').toUpperCase()];
+    const rb=rank[String(b.code||'').toUpperCase()];
+    return (ra==null?99:ra)-(rb==null?99:rb);
+  });
+}
+function sortUsIndexes(items){
+  const rank={DJIA:0,IXIC:1,SPX:2};
+  return items.slice().sort((a,b)=>{
+    const ra=rank[String(a.code||'').toUpperCase()];
+    const rb=rank[String(b.code||'').toUpperCase()];
+    return (ra==null?99:ra)-(rb==null?99:rb);
+  });
+}
+function renderIndexGroup(key,label,items,asOf){
+  if(!items||!items.length) return '';
+  const chips=items.map(x=>buildIndexChip(x,asOf)).join('');
+  return '<div class="training-index-group" data-group="'+key+'" aria-label="'+escapeHtml(label)+'"><span class="training-index-group-label">'+escapeHtml(label)+'</span><div class="training-index-items">'+chips+'</div></div>';
+}
 function renderMarketContext(data,asOf){
   const strip=$('trainingIndices');
-  const items=[...(data.a_share||[]),...(data.overseas||[])];
-  const cells=items.map(x=>{
-    const valid=Number.isFinite(x.price)&&x.price>0;
-    const source=x.source==='minute'?'分时 '+(x.time||asOf):x.source==='daily_open'?'仅开盘':x.source==='daily_close'?'收盘 '+(x.bar_date||''):'昨收';
-    const fullName=x.name||x.code||'';
-    const info=[fullName,source,x.status_label||'',x.note||''].filter(Boolean).join(' · ');
-    const label=shortIndexLabel(x);
-    const cls=valid?pnlClass(x.change_pct):'';
-    const code=String(x.code||'');
-    const showPrice=code==='sh000001'||fullName==='上证指数';
-    const priceText=valid?x.price.toFixed(2):'—';
-    const chgText=valid&&Number.isFinite(x.change_pct)?signed(x.change_pct,'%'):'—';
-    const tip=escapeHtml([info, showPrice?'':('点位 '+priceText)].filter(Boolean).join(' · '));
-    const priceHtml=showPrice?'<b class="'+cls+'">'+priceText+'</b>':'';
-    return '<div class="training-index-chip'+(showPrice?' is-primary':'')+'" title="'+tip+'"><span class="idx-abbr" aria-label="'+escapeHtml(fullName)+'">'+escapeHtml(label)+'</span>'+priceHtml+'<span class="'+cls+'">'+chgText+'</span></div>';
-  }).join('')||'<small>暂无指数缓存</small>';
-  strip.innerHTML='<div class="training-index-meta"><small>'+escapeHtml(data.market_date+' · 截至 '+asOf)+' · 外围为该时刻已知行情</small></div><div class="training-index-row training-index-row--compact"><div class="training-index-items" tabindex="0" aria-label="宽基指数，可横向滚动">'+cells+'</div></div>';
+  const aShare=data.a_share||[];
+  const overseas=data.overseas||[];
+  const asia=sortAsiaPeripheral(overseas.filter(isAsiaPeripheralIndex));
+  const us=sortUsIndexes(overseas.filter(isUsIndex));
+  const groups=[
+    renderIndexGroup('a','大A',aShare,asOf),
+    renderIndexGroup('asia','港韩',asia,asOf),
+    renderIndexGroup('us','美股',us,asOf)
+  ].filter(Boolean).join('')||'<small>暂无指数缓存</small>';
+  strip.innerHTML='<div class="training-index-meta"><small>'+escapeHtml(data.market_date+' · 截至 '+asOf)+' · 外围为该时刻已知行情</small></div><div class="training-index-row training-index-row--compact"><div class="training-index-groups" tabindex="0" aria-label="宽基指数，可横向滚动">'+groups+'</div></div>';
 
   $('marketContextStatus').textContent=`${data.market_date} · 截至 ${asOf}`;
   const a=(data.a_share||[]).map(x=>{
