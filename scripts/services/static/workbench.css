@@ -270,6 +270,18 @@ body[data-page=trainer].wb-training-active .page>.top {display:none;}
 .training-index-items>div {display:flex;flex-wrap:wrap;align-items:center;gap:2px 8px;font-size:12px;}
 .training-index-items b {white-space:nowrap;}
 .training-index-items small {color:var(--app-muted);font-size:10px;}
+/* Desktop chart hover fill: modal does not block chart hits */
+@media(min-width:901px){
+  .app-workbench .modal.chart-pass-through {pointer-events:none;}
+  .app-workbench .modal.chart-pass-through .sheet {pointer-events:auto;}
+  .app-workbench .modal.chart-pass-through .modal-backdrop {background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none;}
+}
+@keyframes price-flash {
+  0% {box-shadow:0 0 0 0 color-mix(in srgb, var(--app-accent,#3478f6) 55%, transparent);background:var(--app-accent-soft,#edf3ff);}
+  100% {box-shadow:0 0 0 6px transparent;background:var(--app-surface,#fff);}
+}
+.app-workbench .price-flash {animation:price-flash .42s ease-out;}
+
 #chartPricePicker {position:fixed;top:calc(64px + var(--training-index-height,44px));left:calc(var(--wb-side,216px) + 12px);right:12px;z-index:1200;display:flex;justify-content:space-between;align-items:center;gap:12px;padding:8px 12px;background:var(--app-surface);border:1px solid var(--app-accent);border-radius:8px;pointer-events:none;}
 #chartPricePicker[hidden] {display:none;}
 #chartPricePicker button {pointer-events:auto;}
