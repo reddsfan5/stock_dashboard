@@ -295,6 +295,11 @@ body[data-page=trainer].wb-training-active .page>.top {display:none;}
   }
   .app-workbench .modal.chart-pass-through .sheet-handle{display:none;}
 }
+/* Side-dock trade sheet: keep left page scrollable for charts */
+@media(min-width:901px){
+  body.body-modal-open:has(#tradeModal.chart-pass-through),
+  body.app-workbench.body-modal-open:has(#tradeModal.chart-pass-through){overflow:auto;}
+}
 @media(max-width:900px){
   .app-workbench .modal.chart-pass-through{pointer-events:auto;align-items:flex-end;justify-content:center;}
   .app-workbench .modal.chart-pass-through .modal-backdrop{
@@ -375,6 +380,11 @@ body[data-page=trainer].wb-training-active #app-toast-host {top:calc(64px + var(
 .wb-account-disclosure>summary {padding:4px 0;font-size:12px;color:var(--app-muted);}
 .wb-account-details {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;}
 .app-workbench[data-page=trainer] .main {gap:12px;align-items:start;}
+/* Trade open: scrollIntoView anchors clear sticky header + index bar */
+.app-workbench[data-page=trainer] .charts,
+.app-workbench[data-page=trainer] .playbar{
+  scroll-margin-top:calc(56px + var(--training-index-height,44px) + 8px);
+}
 .app-workbench[data-page=trainer] .charts {grid-template-rows:480px 280px;}
 .app-workbench[data-page=trainer] [data-chart-kind=minute] {grid-row:1;}
 .app-workbench[data-page=trainer] [data-chart-kind=daily] {grid-row:2;border-top:1px solid var(--app-border);border-bottom:0;}

@@ -689,8 +689,26 @@ function renderCancelManager(){if(!state)return;const pending=(state.pending_ord
 
 function maxQuantity(side,useManualPrice=false){if(!state)return 0;if(side==='sell')return state.account.available_shares;const inputPrice=useManualPrice&&$('manualOrderType').value==='limit'&&+$('manualLimitPrice').value>0?+$('manualLimitPrice').value:state.market.price*1.002;return Math.max(0,Math.floor(state.account.available_cash/inputPrice/100)*100)}
 function setQuantity(inputId,side,ratio){const max=maxQuantity(side,inputId==='manualShares');$(inputId).value=Math.floor(max*ratio/100)*100}
+function scrollChartsForTrade(){
+  const charts=document.querySelector('.charts');
+  if(!charts)return;
+  charts.scrollIntoView({block:'start',behavior:'smooth'});
+  requestAnimationFrame(()=>{dailyChart.resize();minuteChart.resize()});
+}
 function showModal(){stop();$('tradeModal').hidden=false;$('tradeModal').setAttribute('aria-hidden','false');document.body.classList.add('body-modal-open');syncChartPassThrough()}
-function openTradeModal(tab){if(!state)return;$('tradeModal').classList.remove('manage-mode');showModal();$('tradeTabs').hidden=false;selectTradeTab(tab);setTimeout(()=>$(tab==='condition'?'conditionShares':'manualShares').focus(),50)}
+function openTradeModal(tab){
+  if(!state)return;
+  $('tradeModal').classList.remove('manage-mode');
+  showModal();
+  $('tradeTabs').hidden=false;
+  selectTradeTab(tab);
+  // After side-dock / chart-pass-through layout settles, pin charts under sticky index bar.
+  requestAnimationFrame(()=>{
+    scrollChartsForTrade();
+    setTimeout(()=>{dailyChart.resize();minuteChart.resize()},0);
+  });
+  setTimeout(()=>$(tab==='condition'?'conditionShares':'manualShares').focus(),50);
+}
 function openManageModal(){if(!state)return;tradeTab='manage';$('tradeModal').classList.add('manage-mode');showModal();$('tradeTabs').hidden=true;$('manualPane').hidden=true;$('conditionPane').hidden=true;$('managePane').hidden=false;renderModalAccount();renderCancelManager();syncChartPassThrough()}
 function closeTradeModal(){$('tradeModal').hidden=true;$('tradeModal').classList.remove('manage-mode','chart-pass-through');$('tradeModal').setAttribute('aria-hidden','true');document.body.classList.remove('body-modal-open')}
 function selectTradeTab(tab){tradeTab=tab;$('managePane').hidden=true;document.querySelectorAll('[data-trade-tab]').forEach(b=>{b.className=b.dataset.tradeTab===tab?`active-${tab}`:''});$('manualPane').hidden=tab==='condition';$('conditionPane').hidden=tab!=='condition';if(tab!=='condition'){$('manualSubmit').className=`submit-order ${tab==='buy'?'submit-buy':'submit-sell'}`;$('manualQuantityLabel').textContent=tab==='buy'?'买入数量（100 股整数倍）':'卖出数量（不超过 T+1 可卖）';updateManualOrderType()}else if(!$('triggerValue').value&&state){updateConditionType(true)}renderModalAccount();syncChartPassThrough()}
