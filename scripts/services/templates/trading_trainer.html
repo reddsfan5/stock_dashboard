@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>T+1 无剧透交易训练</title>
 <link rel="stylesheet" href="/assets/app.css">
+<script src="/assets/training-context.js"></script>
 <style>
 :root{--bg:var(--app-bg,#f3f5f8);--panel:var(--app-surface,#fff);--text:var(--app-text,#172033);--muted:var(--app-muted,#778196);--border:var(--app-border,#e0e5ed);--blue:var(--app-accent,#3478f6);--red:var(--app-up,#e5484d);--green:var(--app-down,#159568);--sell:#3979bf;--gold:#d99200;--soft:var(--app-surface-2,#f6f8fb);--shadow:var(--app-shadow,0 18px 55px rgba(17,27,46,.22))}
 *{box-sizing:border-box}html,body{min-height:100%}body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;font-size:14px}.page{max-width:1480px;margin:auto;padding:14px}.top{display:flex;align-items:center;gap:12px;margin-bottom:10px}.top h1{font-size:20px;margin:0}.top .links{margin-left:auto;display:flex;gap:14px}.top a{color:var(--blue);text-decoration:none}.panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;box-shadow:0 2px 8px rgba(30,45,75,.04)}
@@ -71,6 +72,7 @@
   </details>
 
   <section id="game" hidden>
+    <section id="trainingIndices" aria-label="当前模拟时刻的宽基指数">宽基指数加载中…</section>
     <section class="panel metrics">
       <div class="metric"><span class="label">当前价 · 较昨收</span><span class="value" id="mPrice">—</span><span class="context" id="mChange">—</span></div>
       <div class="metric"><span class="label">可用现金</span><span class="value" id="mCash">—</span><span class="context" id="mCashContext">—</span></div>
@@ -164,6 +166,7 @@
   </section>
 </main>
 
+<div id="chartPricePicker" hidden><span id="chartPriceHint">悬停自动填价，点击确认；Escape 取消</span><button type="button" id="cancelChartPrice">取消取价</button></div>
 <div class="modal" id="tradeModal" hidden aria-hidden="true">
   <div class="modal-backdrop" id="modalBackdrop"></div>
   <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
@@ -188,7 +191,7 @@
       </div>
       <div class="manual-order-grid">
         <div class="field"><label>委托方式</label><select id="manualOrderType"><option value="market">立即成交</option><option value="limit">限价委托</option></select></div>
-        <div class="field" id="limitPriceField" hidden><label>委托价格</label><input id="manualLimitPrice" type="number" min="0.001" step="0.01"></div>
+        <div class="field" id="limitPriceField" hidden><label>委托价格</label><input id="manualLimitPrice" type="number" min="0.001" step="0.01"><button type="button" id="pickChartPrice">从图上取价</button></div>
         <div class="field" id="limitValidityField" hidden><label>有效期</label><select id="manualValidity"><option value="day">当日有效</option><option value="session">本次训练持续有效</option></select></div>
       </div>
       <p class="order-hint" id="manualOrderHint">立即按当前已显示分钟价撮合，提交后不可撤销。</p>
@@ -278,6 +281,39 @@ function formatSymbolLabel(name, code){
 
 let newsRequesting=false,newsPending=null,newsLastKey='',newsDate='',newsInitialized=false,newsSeen=new Set();
 const dailyChart=echarts.init($('dailyChart')),minuteChart=echarts.init($('minuteChart'));
+// Pick only from the revealed price grid; volume and unrevealed minute slots are excluded.
+let chartPricePick=null;
+function endChartPricePick(cancel=false){
+  if(!chartPricePick)return;
+  if(cancel)$('manualLimitPrice').value=chartPricePick.previous;
+  chartPricePick=null;$('chartPricePicker').hidden=true;showModal();
+  requestAnimationFrame(()=>$('manualLimitPrice').focus());
+}
+$('pickChartPrice').onclick=()=>{
+  if(!state)return;stop();chartPricePick={previous:$('manualLimitPrice').value};
+  closeTradeModal();$('chartPricePicker').hidden=false;
+  $('chartPriceHint').textContent='悬停自动填价，点击确认；Escape 取消';
+  const chart=innerWidth<768&&document.querySelector('.charts').dataset.chartTab==='minute'?minuteChart:dailyChart;
+  // Let the modal restore focus before bringing the chart into view.
+  requestAnimationFrame(()=>{if(!chartPricePick)return;$('cancelChartPrice').focus({preventScroll:true});chart.getDom().scrollIntoView({block:'center'});});
+};
+$('cancelChartPrice').onclick=()=>endChartPricePick(true);
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&chartPricePick){e.preventDefault();e.stopImmediatePropagation();endChartPricePick(true);}},true);
+[dailyChart,minuteChart].forEach(chart=>{
+  function pick(e){
+    if(!chartPricePick||!state||!chart.containPixel({gridIndex:0},[e.offsetX,e.offsetY]))return false;
+    const point=chart.convertFromPixel({gridIndex:0},[e.offsetX,e.offsetY]);
+    if(!point||!Number.isFinite(point[1])||point[1]<=0)return false;
+    if(chart===minuteChart){const option=chart.getOption(),slot=option.xAxis[0].data[Math.round(point[0])];if(!state.minute_points.some(x=>x.time===slot))return false;}
+    const digits=state.code.slice(2).match(/^[15]/)?3:2;
+    $('manualLimitPrice').value=point[1].toFixed(digits);
+    $('chartPriceHint').textContent='委托价格 '+$('manualLimitPrice').value+' · 点击确认，Escape 取消';
+    return true;
+  }
+  chart.getZr().on('mousemove',pick);
+  chart.getZr().on('click',e=>{if(pick(e))endChartPricePick();});
+});
+new ResizeObserver(()=>{document.documentElement.style.setProperty('--training-index-height',$('trainingIndices').offsetHeight+'px')}).observe($('trainingIndices'));
 const conditionOptions={
   buy:[
     ['price_below','股价回落到','价格低于或触及指定价格时触发买入','元'],
@@ -313,7 +349,7 @@ async function request(path,method='GET',body=null){const options={method,cache:
 function tradingTimes(){const out=[];for(let h=9,m=31;h<12;){out.push(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);m++;if(m===60){h++;m=0}if(h===11&&m===31)break}for(let h=13,m=1;h<16;){out.push(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);m++;if(m===60){h++;m=0}if(h===15&&m===1)break}return out}
 
 function render(next){
-  state=next;sessionId=next.session_id;sessionStorage.setItem('tradingTrainerSession',sessionId);
+  state=next;window.StockTrainingContext.set(next);sessionId=next.session_id;sessionStorage.setItem('tradingTrainerSession',sessionId);
   $('journalLink').href='/stock_journal.html?code='+encodeURIComponent(next.code);
   if($('symbolLink'))$('symbolLink').href='/symbol.html?code='+encodeURIComponent(next.code);
   $('newsLink').href='market_news.html?mode=replay&date='+encodeURIComponent(next.date)+'&as_of='+encodeURIComponent(next.time)+'&code='+encodeURIComponent(next.code);
@@ -399,6 +435,7 @@ async function drainMarketContext(){
     if(marketPending&&marketPending.date!==current.date)return;
     marketLastKey=current.key;renderMarketContext(data,current.asOf);
   }catch(e){
+    $('trainingIndices').textContent=`截至 ${current.asOf} · 宽基指数暂不可用，推进时重试`;
     $('marketContextStatus').textContent=`截至 ${current.asOf} · 市场情境暂不可用`;
     $('marketContextBody').innerHTML=`<div class="news-error">${escapeHtml(e.message)}<br>行情回放不受影响。</div>`;
   }finally{marketRequesting=false;if(marketPending&&marketPending.key!==marketLastKey)drainMarketContext()}
@@ -423,7 +460,37 @@ function quoteTip(lines){
   const html=lines.filter(Boolean).map(escapeHtml).join('<br>');
   return `<details class="quote-tip"><summary class="info-btn" title="说明" aria-label="说明">i</summary><div class="tip-pop">${html}</div></details>`;
 }
+function shortIndexLabel(x){
+  const byCode={
+    sh000001:'上证',sz399001:'深成',sh000300:'沪深',sz399006:'创业',sh000688:'科创',
+    HSI:'恒',IXIC:'纳',DJIA:'道',SPX:'标普',KS11:'韩',
+    hsi:'恒',ixic:'纳',djia:'道',spx:'标普',ks11:'韩'
+  };
+  const code=String(x.code||'');
+  if(byCode[code]) return byCode[code];
+  const upper=code.toUpperCase();
+  if(byCode[upper]) return byCode[upper];
+  const byName={
+    '上证指数':'上证','深证成指':'深成','沪深300':'沪深','创业板指':'创业','科创50':'科创',
+    '恒生指数':'恒','纳斯达克综指':'纳','纳斯达克':'纳','道琼斯':'道','标普500':'标普',
+    '韩国KOSPI':'韩','韩国':'韩'
+  };
+  return byName[x.name]||String(x.name||code||'—').slice(0,2);
+}
 function renderMarketContext(data,asOf){
+  const strip=$('trainingIndices');
+  const items=[...(data.a_share||[]),...(data.overseas||[])];
+  const cells=items.map(x=>{
+    const valid=Number.isFinite(x.price)&&x.price>0;
+    const source=x.source==='minute'?'分时 '+(x.time||asOf):x.source==='daily_open'?'仅开盘':x.source==='daily_close'?'收盘 '+(x.bar_date||''):'昨收';
+    const fullName=x.name||x.code||'';
+    const info=[fullName,source,x.status_label||'',x.note||''].filter(Boolean).join(' · ');
+    const label=shortIndexLabel(x);
+    const cls=valid?pnlClass(x.change_pct):'';
+    return '<div class="training-index-chip" title="'+escapeHtml(info)+'"><span class="idx-abbr" aria-label="'+escapeHtml(fullName)+'">'+escapeHtml(label)+'</span><b class="'+cls+'">'+(valid?x.price.toFixed(2):'—')+'</b><span class="'+cls+'">'+(valid&&Number.isFinite(x.change_pct)?signed(x.change_pct,'%'):'—')+'</span></div>';
+  }).join('')||'<small>暂无指数缓存</small>';
+  strip.innerHTML='<div class="training-index-meta"><small>'+escapeHtml(data.market_date+' · 截至 '+asOf)+' · 外围为该时刻已知行情</small></div><div class="training-index-row training-index-row--compact"><div class="training-index-items" tabindex="0" aria-label="宽基指数，可横向滚动">'+cells+'</div></div>';
+
   $('marketContextStatus').textContent=`${data.market_date} · 截至 ${asOf}`;
   const a=(data.a_share||[]).map(x=>{
     const cls=pnlClass(x.change_pct);
@@ -447,15 +514,7 @@ function renderMarketContext(data,asOf){
     return `<div class="ov-card${spark?' has-spark':''}"><span class="name">${escapeHtml(x.region_label)} · ${escapeHtml(x.name)}</span><span class="badge-status ${escapeHtml(x.status)}">${escapeHtml(x.status_label||x.status)}</span>${quoteTip(tipLines)}<div class="price-row"><span class="price ${cls}">${x.price==null?'—':(+x.price).toLocaleString(undefined,{maximumFractionDigits:2})}</span><span class="chg ${cls}">${ch}</span></div>${spark}</div>`;
   }).join('');
   $('marketContextBody').innerHTML=`<div class="market-block"><h3>A股宽基</h3><div class="idx-grid">${a||'<div class="empty">暂无指数缓存</div>'}</div></div><div class="market-block" id="overseasBlock"><h3>海外摘要</h3><div class="ov-list">${o||'<div class="empty">暂无海外缓存</div>'}</div></div>`;
-  if(window.StockAppShell&&StockAppShell.setTicker){
-    const want=new Set(['sh000001','sh000300','sh000688']);
-    const items=[];
-    (data.a_share||[]).forEach(x=>{ if(want.has(x.code)) items.push({code:x.code,label:x.name,price:x.price,changePct:x.change_pct}); });
-    (data.overseas||[]).forEach(x=>{
-      if(['DJIA','IXIC','SPX','KS11','HSI'].includes(x.code)) items.push({code:x.code,label:x.name,price:x.price,changePct:x.change_pct});
-    });
-    StockAppShell.setTicker(items);
-  }
+
 }
 
 function renderMarketIndicators(x){
@@ -665,7 +724,7 @@ async function openReview(){
 }
 
 $('startRandom').onchange=syncStartDateMode;$('startDate').onchange=()=>{if(!$('startRandom').checked&&$('startDate').value){const n=nearestAvailableDate($('startDate').value);if(n&&n!==$('startDate').value){$('startDate').value=n;notice(`已调整为最近可练日 ${n}`)}};syncStartDateMode()};$('start').onclick=startGame;$('play').onclick=play;$('step').onclick=()=>advance(1);$('closeDay').onclick=()=>advance(10000);$('nextDay').onclick=async()=>{stop();await mutate('/api/trainer/next-day')};
-$('newGame').onclick=()=>{stop();closeTradeModal();closeReviewModal();closePlanModal();sessionStorage.removeItem('tradingTrainerSession');sessionId=null;state=null;$('game').hidden=true;$('setup').hidden=false};
+$('newGame').onclick=()=>{stop();closeTradeModal();closeReviewModal();closePlanModal();sessionStorage.removeItem('tradingTrainerSession');sessionId=null;state=null;window.StockTrainingContext.set(null);$('game').hidden=true;$('setup').hidden=false};
 $('openReview').onclick=openReview;$('closeReview').onclick=closeReviewModal;$('reviewBackdrop').onclick=closeReviewModal;
 $('editPlan').onclick=openPlanModal;$('savePlan').onclick=openPlanModal;$('closePlanModal').onclick=closePlanModal;$('planBackdrop').onclick=closePlanModal;$('confirmPlan').onclick=saveLivePlan;
 document.querySelectorAll('[data-mindset]').forEach(b=>b.onclick=()=>markMindset(b.dataset.mindset));
@@ -709,15 +768,19 @@ async function init(){
     input.addEventListener('focus',clearOnce);
     input.addEventListener('pointerdown',clearOnce);
   }
-  const saved=sessionStorage.getItem('tradingTrainerSession');
+  const saved=new URL(location.href).searchParams.get('training_session')||sessionStorage.getItem('tradingTrainerSession');
+  const requestedCode=new URL(location.href).searchParams.get('code');
   if(saved){
     try{
-      render(await request('/api/trainer/state?session_id='+encodeURIComponent(saved)));
+      const resumed=await request('/api/trainer/state?session_id='+encodeURIComponent(saved));
+      if(requestedCode && resumed.code!==requestedCode){await loadDates(requestedCode);return;}
+      render(resumed);
       $('setup').hidden=true;$('game').hidden=false;
       setTimeout(()=>{dailyChart.resize();minuteChart.resize()},20);
       return;
     }catch(e){sessionStorage.removeItem('tradingTrainerSession')}
   }
+  if(requestedCode) await loadDates(requestedCode);
 }
 
 (function setupDenoise(){
