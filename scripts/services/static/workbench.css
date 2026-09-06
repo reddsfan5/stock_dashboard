@@ -316,14 +316,10 @@ body[data-page=trainer].wb-training-active .page>.top {display:none;}
 }
 .app-workbench .price-flash {animation:price-flash .42s ease-out;}
 
-#chartPricePicker {position:fixed;top:calc(64px + var(--training-index-height,44px));left:calc(var(--wb-side,216px) + 12px);right:12px;z-index:1200;display:flex;justify-content:space-between;align-items:center;gap:12px;padding:8px 12px;background:var(--app-surface);border:1px solid var(--app-accent);border-radius:8px;pointer-events:none;}
-#chartPricePicker[hidden] {display:none;}
-#chartPricePicker button {pointer-events:auto;}
 @media(max-width:767px){
  #trainingIndices {left:0;padding:4px 12px;}
  .training-index-items {grid-template-columns:repeat(2,minmax(0,1fr));gap:2px 8px;}
  .training-index-items>div {font-size:11px;gap:0 4px;}
- #chartPricePicker {left:8px;right:8px;font-size:12px;}
 }
 body[data-page=trainer].wb-training-active #app-toast-host {top:calc(64px + var(--training-index-height,44px));}
 
