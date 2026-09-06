@@ -487,7 +487,13 @@ function renderMarketContext(data,asOf){
     const info=[fullName,source,x.status_label||'',x.note||''].filter(Boolean).join(' · ');
     const label=shortIndexLabel(x);
     const cls=valid?pnlClass(x.change_pct):'';
-    return '<div class="training-index-chip" title="'+escapeHtml(info)+'"><span class="idx-abbr" aria-label="'+escapeHtml(fullName)+'">'+escapeHtml(label)+'</span><b class="'+cls+'">'+(valid?x.price.toFixed(2):'—')+'</b><span class="'+cls+'">'+(valid&&Number.isFinite(x.change_pct)?signed(x.change_pct,'%'):'—')+'</span></div>';
+    const code=String(x.code||'');
+    const showPrice=code==='sh000001'||fullName==='上证指数';
+    const priceText=valid?x.price.toFixed(2):'—';
+    const chgText=valid&&Number.isFinite(x.change_pct)?signed(x.change_pct,'%'):'—';
+    const tip=escapeHtml([info, showPrice?'':('点位 '+priceText)].filter(Boolean).join(' · '));
+    const priceHtml=showPrice?'<b class="'+cls+'">'+priceText+'</b>':'';
+    return '<div class="training-index-chip'+(showPrice?' is-primary':'')+'" title="'+tip+'"><span class="idx-abbr" aria-label="'+escapeHtml(fullName)+'">'+escapeHtml(label)+'</span>'+priceHtml+'<span class="'+cls+'">'+chgText+'</span></div>';
   }).join('')||'<small>暂无指数缓存</small>';
   strip.innerHTML='<div class="training-index-meta"><small>'+escapeHtml(data.market_date+' · 截至 '+asOf)+' · 外围为该时刻已知行情</small></div><div class="training-index-row training-index-row--compact"><div class="training-index-items" tabindex="0" aria-label="宽基指数，可横向滚动">'+cells+'</div></div>';
 

@@ -302,6 +302,9 @@ body[data-page=trainer].wb-training-active #app-toast-host {top:calc(64px + var(
 }
 .training-index-chip b {font-size:12px;font-weight:750;}
 .training-index-chip>span:last-child {font-size:10px;font-weight:700;}
+.training-index-chip.is-primary .idx-abbr {color:var(--app-text);}
+.training-index-chip:not(.is-primary) {gap:3px;}
+
 .app-workbench[data-page=trainer] .metrics {grid-template-columns:repeat(5,minmax(0,1fr));margin-bottom:4px;}
 .app-workbench[data-page=trainer] .metric {padding:8px 10px;}
 .app-workbench[data-page=trainer] .metric .value {font-size:18px;line-height:24px;}
