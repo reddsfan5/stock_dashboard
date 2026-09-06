@@ -67,6 +67,12 @@ class CombinedData:
         self._combined_cache = None
         # ETF 名称映射
         self._etf_names = {}
+        try:
+            from data.industry import StockInfo
+            info = StockInfo().df
+            self._stock_names = dict(zip(info['代码'], info['名称']))
+        except (OSError, KeyError):
+            self._stock_names = {}
         if etf_data is not None:
             try:
                 etf_list = etf_data.get_list()
@@ -96,7 +102,7 @@ class CombinedData:
     def get_stock_name(self, code: str) -> str:
         if code in self._etf_names:
             return self._etf_names[code]
-        return self._stock.get_stock_name(code)
+        return self._stock_names.get(code, code)
 
     def __getattr__(self, name):
         return getattr(self._stock, name)
@@ -126,7 +132,7 @@ def main():
 
     # 2. 数据准备
     data = StockData()
-    stocks = data.get_stock_list(board="all")
+    stocks = data.get_stock_list(board="all") if args.backfill or args.refresh else None
     if args.backfill:
         data.backfill(stocks)
     if args.refresh:

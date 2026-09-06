@@ -180,9 +180,12 @@ class MinuteRepository:
         try:
             from data.industry import StockInfo
             info = StockInfo().df
-            return dict(zip(info["代码"], info["名称"]))
+            names = dict(zip(info["代码"], info["名称"]))
         except Exception:
-            return {}
+            names = {}
+        from data.etf_names import load_names
+        names.update(load_names())
+        return names
 
     @staticmethod
     def _minute_cache_signature():
@@ -365,6 +368,7 @@ def build_html(initial_payload: dict) -> str:
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>分时行情查询</title>
 <link rel="stylesheet" href="/assets/app.css">
+<script src="/assets/training-context.js"></script>
 <style>
 :root{{--bg:var(--app-bg,#f4f6f9);--card:var(--app-surface,#fff);--text:var(--app-text,#202124);--muted:var(--app-muted,#7b8190);--border:var(--app-border,#e5e8ef);--blue:var(--app-accent,#3478f6);--red:var(--app-up,#e5484d);--green:var(--app-down,#16a36a);--gold:#e5a000}}
 *{{box-sizing:border-box}}body{{margin:0;background:var(--bg);color:var(--text);font-family:var(--app-font,-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif)}}
@@ -411,7 +415,7 @@ function renderDates(data){{$('dateSelect').innerHTML=data.dates.map(d=>`<option
 function renderChart(data){{const pts=data.points,times=pts.map(p=>p.time),closes=pts.map(p=>p.close),vwaps=pts.map(p=>p.vwap),vols=pts.map(p=>p.volume),base=data.prev_close,extrema=pts.flatMap(p=>[p.high,p.low]);let dev=Math.max(...extrema.map(v=>Math.abs(v-base)),Math.abs(base)*.002)*1.08;const ymin=base-dev,ymax=base+dev,pct=Math.max(dev/base*100,.2);chart.setOption({{animation:false,grid:[{{left:68,right:72,top:35,height:'62%'}},{{left:68,right:72,top:'76%',height:'15%'}}],axisPointer:{{link:[{{xAxisIndex:[0,1]}}],label:{{backgroundColor:'#586174'}}}},tooltip:{{trigger:'axis',axisPointer:{{type:'cross',snap:true}},backgroundColor:'rgba(27,31,40,.94)',borderWidth:0,textStyle:{{color:'#fff',fontSize:12}},formatter:params=>{{if(!params.length)return'';const i=params[0].dataIndex,p=pts[i],color=p.change_pct>=0?'#ff6b6b':'#41d49a',ratio=p.intraday_volume_ratio==null?'—':(+p.intraday_volume_ratio).toFixed(2)+'×';return`<div style="min-width:190px"><b>${{data.date}} ${{p.time}}</b><br><span style="color:${{color}};font-size:16px;font-weight:700">${{price(p.close)}} (${{signed(p.change_pct)}})</span><br>开 ${{price(p.open)}}　高 ${{price(p.high)}}<br>低 ${{price(p.low)}}　均价 ${{price(p.vwap)}}<br>成交量 ${{compact(p.volume)}}　量比 ${{ratio}}<br>成交额 ${{compact(p.amount)}}</div>`}}}},xAxis:[{{type:'category',gridIndex:0,data:times,boundaryGap:false,axisLabel:{{show:false}},axisTick:{{show:false}},axisLine:{{lineStyle:{{color:'#d9dde6'}}}}}},{{type:'category',gridIndex:1,data:times,boundaryGap:true,axisLabel:{{color:'#7b8190',formatter:(v,i)=>i%30===0?v:''}},axisTick:{{show:false}},axisLine:{{lineStyle:{{color:'#d9dde6'}}}}}}],yAxis:[{{type:'value',gridIndex:0,min:ymin,max:ymax,scale:true,splitNumber:6,axisLabel:{{formatter:v=>price(v),color:v=>v>=base?'#e5484d':'#16a36a'}},splitLine:{{lineStyle:{{color:'#edf0f5',type:'dashed'}}}}}},{{type:'value',gridIndex:0,min:-pct,max:pct,position:'right',splitNumber:6,axisLabel:{{formatter:v=>`${{v>=0?'+':''}}${{v.toFixed(2)}}%`,color:v=>v>=0?'#e5484d':'#16a36a'}},splitLine:{{show:false}}}},{{type:'value',gridIndex:1,scale:true,axisLabel:{{formatter:v=>compact(v),color:'#7b8190'}},splitLine:{{show:false}}}}],dataZoom:[{{type:'inside',xAxisIndex:[0,1],filterMode:'none'}},{{type:'slider',xAxisIndex:[0,1],bottom:4,height:18,showDetail:false,borderColor:'#e5e8ef'}}],series:[{{name:'价格',type:'line',xAxisIndex:0,yAxisIndex:0,data:closes,showSymbol:false,lineStyle:{{width:1.4,color:'#3478f6'}},areaStyle:{{color:{{type:'linear',x:0,y:0,x2:0,y2:1,colorStops:[{{offset:0,color:'rgba(52,120,246,.18)'}},{{offset:1,color:'rgba(52,120,246,.01)'}}]}}}},markLine:{{silent:true,symbol:'none',label:{{formatter:`前收 ${{price(base)}}`,position:'insideEndTop',color:'#8a909e'}},lineStyle:{{color:'#9ca3af',type:'dashed'}},data:[{{yAxis:base}}]}}}},{{name:'均价',type:'line',xAxisIndex:0,yAxisIndex:0,data:vwaps,showSymbol:false,lineStyle:{{width:1,color:'#e5a000'}}}},{{name:'成交量',type:'bar',xAxisIndex:1,yAxisIndex:2,data:vols,itemStyle:{{color:p=>pts[p.dataIndex].direction>=0?'#e5484d':'#16a36a'}}}}]}},true)}}
 async function api(path){{const r=await fetch(path,{{cache:'no-store'}}),body=await r.json();if(!r.ok)throw new Error(body.error||`HTTP ${{r.status}}`);return body}}async function loadData(code,date=''){{if(!API_AVAILABLE){{showNotice('当前是静态快照。要查询其他股票，请运行：python -m scripts.serve start web',true);return}}setLoading(true);try{{const q=new URLSearchParams({{code}});if(date)q.set('date',date);render(await api('/api/minute/data?'+q))}}catch(e){{showNotice(e.message,true)}}finally{{setLoading(false)}}}}async function doSearch(){{const q=$('searchInput').value.trim();if(!q)return;if(!API_AVAILABLE){{showNotice('查询需要本地服务：python -m scripts.serve start web',true);return}}try{{const rows=await api('/api/minute/search?q='+encodeURIComponent(q));showResults(rows);if(rows.length===1)loadData(rows[0].code)}}catch(e){{showNotice(e.message,true)}}}}function showResults(rows){{const box=$('results');if(!rows.length){{box.innerHTML='<div class="result">未找到缓存标的</div>';box.style.display='block';return}}box.innerHTML=rows.map(r=>`<div class="result" data-code="${{r.code}}"><span><b>${{escapeHtml(r.name)}}</b>　<span class="result-code">${{r.code}}</span></span><span class="result-date">${{r.latest_date}}</span></div>`).join('');box.style.display='block'}}function updateUrl(data){{if(!API_AVAILABLE)return;const u=new URL(location.href);u.searchParams.set('code',data.code);u.searchParams.set('date',data.date);history.replaceState(null,'',u)}}
 $('replayPlay').onclick=()=>minuteReplay.toggle();$('replayStep').onclick=()=>minuteReplay.step();$('replayReset').onclick=()=>minuteReplay.reset();$('replayAll').onclick=()=>minuteReplay.showAll();$('replaySpeed').onchange=e=>minuteReplay.setSpeed(e.target.value);
-$('searchBtn').onclick=doSearch;$('searchInput').addEventListener('keydown',e=>{{if(e.key==='Enter')doSearch();if(e.key==='Escape')$('results').style.display='none'}});$('searchInput').addEventListener('input',()=>{{clearTimeout(searchTimer);const q=$('searchInput').value.trim();if(!API_AVAILABLE||q.length<2){{$('results').style.display='none';return}}searchTimer=setTimeout(async()=>{{try{{showResults(await api('/api/minute/search?q='+encodeURIComponent(q)))}}catch(e){{}}}},220)}});$('results').addEventListener('click',e=>{{const row=e.target.closest('[data-code]');if(row){{$('results').style.display='none';loadData(row.dataset.code)}}}});document.addEventListener('click',e=>{{if(!e.target.closest('.search-wrap'))$('results').style.display='none'}});$('dateSelect').onchange=e=>loadData(current.code,e.target.value);$('prevDay').onclick=()=>{{const i=current.dates.indexOf(current.date);if(i>0)loadData(current.code,current.dates[i-1])}};$('nextDay').onclick=()=>{{const i=current.dates.indexOf(current.date);if(i<current.dates.length-1)loadData(current.code,current.dates[i+1])}};window.addEventListener('resize',()=>chart.resize());const requestedUrl=new URL(location.href),requestedCode=requestedUrl.searchParams.get('code'),requestedDate=requestedUrl.searchParams.get('date');render(INITIAL_DATA);if(API_AVAILABLE)loadData(requestedCode||INITIAL_DATA.code,requestedDate||'');else showNotice('这是可离线打开的静态快照；启动本地服务后可查询全部缓存标的。',true);
+$('searchBtn').onclick=doSearch;$('searchInput').addEventListener('keydown',e=>{{if(e.key==='Enter')doSearch();if(e.key==='Escape')$('results').style.display='none'}});$('searchInput').addEventListener('input',()=>{{clearTimeout(searchTimer);const q=$('searchInput').value.trim();if(!API_AVAILABLE||q.length<2){{$('results').style.display='none';return}}searchTimer=setTimeout(async()=>{{try{{showResults(await api('/api/minute/search?q='+encodeURIComponent(q)))}}catch(e){{}}}},220)}});$('results').addEventListener('click',e=>{{const row=e.target.closest('[data-code]');if(row){{$('results').style.display='none';loadData(row.dataset.code)}}}});document.addEventListener('click',e=>{{if(!e.target.closest('.search-wrap'))$('results').style.display='none'}});$('dateSelect').onchange=e=>loadData(current.code,e.target.value);$('prevDay').onclick=()=>{{const i=current.dates.indexOf(current.date);if(i>0)loadData(current.code,current.dates[i-1])}};$('nextDay').onclick=()=>{{const i=current.dates.indexOf(current.date);if(i<current.dates.length-1)loadData(current.code,current.dates[i+1])}};window.addEventListener('resize',()=>chart.resize());const requestedUrl=new URL(location.href),requestedCode=requestedUrl.searchParams.get('code'),requestedDate=requestedUrl.searchParams.get('date');if(!window.StockTrainingContext.active)render(INITIAL_DATA);if(API_AVAILABLE)loadData(requestedCode||INITIAL_DATA.code,requestedDate||'');else showNotice('这是可离线打开的静态快照；启动本地服务后可查询全部缓存标的。',true);
 </script></body></html>'''
     return inject_intraday_replay(html)
 
@@ -467,11 +471,37 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         parsed = urlparse(self.path)
+        params = parse_qs(parsed.query)
+        if params.get('training_session') and parsed.path == '/minute_view.html':
+            from scripts.services.training_context import context_state, minute_payload
+            try:
+                body = build_html(minute_payload(context_state(self.trainer, params))).encode('utf-8')
+            except (ValueError, LookupError) as exc:
+                return self._send_json({'error': str(exc)}, status=409)
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html; charset=utf-8')
+            self.send_header('Content-Length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        if params.get('training_session') and parsed.path.endswith('.html') and parsed.path not in (
+            '/trading_trainer.html', '/stock_journal.html', '/symbol.html', '/market_news.html'):
+            return self._send_json({'error': '该页面包含最新行情，请结束训练后查看'}, status=409)
+        if params.get('training_session') and parsed.path.startswith('/api/') and not parsed.path.startswith('/api/trainer/'):
+            from scripts.services.training_context import read_context
+            try:
+                return self._send_json(read_context(self, parsed.path, params))
+            except (ValueError, LookupError) as exc:
+                return self._send_json({'error': str(exc)}, status=409)
+        if parsed.path == "/api/system/status":
+            from scripts.services.system_status import public_status
+            return self._send_json(public_status())
         if parsed.path == "/api/health":
             return self._send_json({
                 "status": "ok",
                 "service": "stock-interactive-web",
                 "version": 1,
+                "listen_host": self.server.server_address[0],
                 "features": ["minute", "grid", "trainer", "journal", "news", "market_context", "training_loop", "watchlist", "symbol_context", "hypotheses"],
                 "pid": os.getpid(),
             })
@@ -788,6 +818,20 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
     def _journal_post(self, parsed):
         try:
             payload = self._read_json()
+            params = parse_qs(parsed.query)
+            if params.get('training_session'):
+                from scripts.services.training_context import context_state, journal_source
+                state = context_state(self.trainer, params)
+                source = journal_source(state)
+                if parsed.path == '/api/journal/case':
+                    payload['code'] = state['code']
+                    payload['source'] = source
+                elif parsed.path == '/api/journal/entry':
+                    case = self.journal.get_case(payload.get('case_id'))
+                    if case.get('source') != source or payload.get('market_date', '') > state['date']:
+                        raise ValueError('日记必须属于本次训练，且行情日期不能晚于模拟日期')
+                else:
+                    raise ValueError('训练模式仅支持追加案例和记录')
             if parsed.path == "/api/journal/case":
                 result = self.journal.create_case(payload)
             elif parsed.path == "/api/journal/entry":

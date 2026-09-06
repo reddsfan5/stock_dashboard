@@ -39,13 +39,8 @@ th{color:var(--muted);font-weight:600}
 <body>
 <div id="app-shell" data-active="watchlist"></div>
 <div class="header">
-  <div><h1>👀 观察池 / 待买池 · 次日跟踪</h1><div style="opacity:.7;font-size:12px;margin-top:4px">从选股结果加入 · 跟踪次日收益 · 申万一级板块强度</div></div>
-  <div style="display:flex;gap:14px">
-    <a href="/">工作台</a>
-    <a href="/symbol.html">标的上下文</a>
-    <a href="/stock_journal.html">选股日记</a>
-    <a href="/trading_trainer.html">T+1训练</a>
-  </div>
+  <div><h1>观察池</h1><div style="opacity:.7;font-size:12px;margin-top:4px">从选股结果加入 · 跟踪次日收益 · 申万一级板块强度</div></div>
+
 </div>
 <div class="wrap">
   <div class="panel app-reveal">
@@ -138,7 +133,7 @@ async function loadWatch(){
       <button data-act="dropped" data-id="${it.id}" class="danger">放弃</button>
       <a href="/trading_trainer.html?code=${encodeURIComponent(it.code)}">训练</a>
     </td>
-  </tr>`).join('') || '<tr><td colspan="7">暂无条目</td></tr>';
+  </tr>`).join('') || '<tr><td colspan="7">还没有观察标的。<a href="/dashboard.html">去选股</a>，或点击“加入观察”。</td></tr>';
   $('watchNotice').textContent = '共 '+(data.count||0)+' 条';
 }
 
@@ -187,6 +182,7 @@ $('addBtn').onclick = async ()=>{
     })});
     $('code').value=''; $('thesis').value='';
     toastMsg('已加入观察池','ok');
+    window.dispatchEvent(new Event('stockapp:watch-added'));
     await loadWatch();
   }catch(e){$('addErr').textContent=e.message;toastMsg(e.message,'error')}
 };

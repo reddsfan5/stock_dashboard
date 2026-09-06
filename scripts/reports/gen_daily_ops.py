@@ -65,7 +65,7 @@ def build_html(*, status: dict, sector: dict | None, generated_at: str) -> str:
             f"<tr><td>{stage.get('name')}</td>"
             f"<td style='color:{color};font-weight:700'>{mark}</td>"
             f"<td>{stage.get('duration_seconds', '—')}</td>"
-            f"<td>{_esc(stage.get('message') or '')}</td></tr>"
+            f"<td>{'已完成' if ok else '未完成，请查看本机运行日志'}</td></tr>"
         )
     if not stage_rows:
         stage_rows = "<tr><td colspan='4' class='app-empty'>尚无阶段结果</td></tr>"
@@ -83,7 +83,7 @@ def build_html(*, status: dict, sector: dict | None, generated_at: str) -> str:
             f"<td class='num'>{row.get('count') or row.get('n') or '—'}</td></tr>"
         )
     if not sector_rows:
-        sector_rows = "<tr><td colspan='3' class='app-empty'>暂无板块强度快照（可去掉 --skip-sector 生成）</td></tr>"
+        sector_rows = "<tr><td colspan='3' class='app-empty'>暂无板块强度快照，请在数据更新后重试。</td></tr>"
 
     state = status.get("state") or "—"
     ok = status.get("ok")

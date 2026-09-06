@@ -53,208 +53,12 @@ def build_screening_mobile(
     decision_snapshot: Optional[pd.DataFrame] = None,
     title: str = "A股选股",
 ) -> str:
-    """生成手机版选股页面 — 卡片式布局，每模块显示前15只"""
-    now = datetime.now().strftime("%m/%d %H:%M")
-    decision_map = snapshot_lookup(decision_snapshot)
-
-    all_codes = set()
-    for df in results.values():
-        if len(df) > 0 and "代码" in df.columns:
-            all_codes.update(df["代码"].head(100).tolist())
-    all_codes = list(all_codes)[:500]
-
-    kline_json = "{}"
-    if data is not None and all_codes:
-        from tqdm import tqdm
-        import json as _json
-        cache = data.cache[data.cache["代码"].isin(all_codes)].copy()
-        cache = cache.sort_values(["代码", "日期"])
-        cache = cache.groupby("代码").tail(60)
-        if "开盘" not in cache.columns:
-            cache["开盘"] = cache["收盘"].shift(1).fillna(cache["收盘"])
-        try:
-            from data.industry import StockInfo
-            info = StockInfo()
-            sector_map = dict(zip(info.df["代码"], info.df["申万1级"]))
-        except:
-            sector_map = {}
-        kline_map = {}
-        for code, grp in tqdm(cache.groupby("代码"), desc="K线", total=len(all_codes), unit="只"):
-            try:
-                grp = grp.sort_values("日期")
-                if len(grp) > 0:
-                    grp["涨跌%"] = grp["收盘"].pct_change() * 100
-                    grp["前收"] = grp["收盘"].shift(1)
-                    changes = [round(v, 2) if not pd.isna(v) else None for v in grp["涨跌%"].values]
-                    prevs = [round(v, 2) if not pd.isna(v) else None for v in grp["前收"].values]
-                    volumes = [float(v) if not pd.isna(v) else 0 for v in grp["成交额"].values]
-                    ohlc = [[float(r["开盘"]), float(r["收盘"]), float(r["最低"]), float(r["最高"])]
-                            for _, r in grp.iterrows()]
-                    kline_map[code] = {
-                        "dates": grp["日期"].dt.strftime("%Y-%m-%d").tolist(),
-                        "data": ohlc, "prevs": prevs, "changes": changes,
-                        "volumes": volumes, "name": data.get_stock_name(code),
-                        "sector": sector_map.get(code, ""),
-                        "metrics": decision_map.get(str(code), {}),
-                    }
-            except Exception:
-                pass
-        kline_json = _json.dumps(kline_map, ensure_ascii=False)
-
-    tabs_html = ""
-    panels_html = ""
-    for i, mod in enumerate(pipeline_modules):
-        df = results.get(mod.id)
-        if df is None or len(df) == 0:
-            continue
-        active = "active" if i == 0 else ""
-        tabs_html += f'<button class="tab {active}" onclick="switchTab(\'{mod.id}\')">{mod.title}<span class="tc">{len(df)}</span></button>'
-
-        rows = ""
-        for _, row in df.head(200).iterrows():
-            code = row.get("代码", "")
-            name = row.get("名称", "")
-            sector = row.get("申万1级", "")
-            score = ""
-            for c in ["综合评分", "平均溢价%", "累计涨幅%", "平均下影比", "长下影天数", "连续天数"]:
-                if c in row.index and not pd.isna(row[c]):
-                    score = f"{c}={row[c]}"
-                    break
-            if not score:
-                for c in ["最新价", "收盘"]:
-                    if c in row.index and not pd.isna(row[c]):
-                        score = f"¥{row[c]}"
-                        break
-            facts = []
-            for column, label, suffix in (
-                ("成交量比20", "量", "×"),
-                ("换手率%", "换", "%"),
-                ("ATR14%", "ATR", "%"),
-            ):
-                value = row.get(column)
-                if pd.notna(value):
-                    facts.append(f"{label} {float(value):.2f}{suffix}")
-            decision = " · ".join(facts)
-            name_str = f"{name}" if name else ""
-            sector_str = f'<span class="sector">{sector}</span>' if sector else ""
-            rows += f"""<div class="stock-row" onclick="showKline('{code}')">
-  <span class="code">{code}</span>
-  <span class="name">{name_str} {sector_str}</span>
-  <span class="score">{score}<small>{decision}</small></span>
-</div>"""
-
-        more_btn = ""
-        if len(df) > 30:
-            more_btn = f'<div class="more-btn" onclick="this.previousElementSibling.classList.toggle(\'expanded\');this.textContent=this.textContent==\'显示全部({len(df)}只)\'?\'收起\':\'显示全部({len(df)}只)\'">显示全部({len(df)}只)</div>'
-        panels_html += f"""
-<div class="tab-panel {active}" id="panel-{mod.id}">
-  <div class="panel-body limited">{rows}</div>
-  {more_btn}
-</div>"""
-
-    return f"""<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
-<title>{title}</title>
-<style>
-*{{margin:0;padding:0;box-sizing:border-box}}
-body{{font-family:-apple-system,"PingFang SC",sans-serif;background:#f0f2f5;color:#333;font-size:14px;-webkit-tap-highlight-color:transparent}}
-.header{{background:linear-gradient(135deg,#1a1a2e,#16213e);color:#fff;padding:14px 16px;position:sticky;top:0;z-index:10;display:flex;justify-content:space-between;align-items:center}}
-.header h1{{font-size:17px}}.header .t{{font-size:11px;color:#8892b0}}
-.tabs{{display:flex;gap:4px;padding:8px 12px;overflow-x:auto;background:#fff;position:sticky;top:44px;z-index:9;-webkit-overflow-scrolling:touch;border-bottom:1px solid #e0e0e0}}
-.tab{{flex-shrink:0;padding:8px 12px;border:none;background:#f0f2f5;border-radius:16px;font-size:12px;color:#666;cursor:pointer;display:flex;align-items:center;gap:4px;white-space:nowrap}}
-.tab.active{{background:#1a73e8;color:#fff}}
-.tab .tc{{background:rgba(255,255,255,.3);font-size:10px;padding:1px 6px;border-radius:8px}}
-.tab-panel{{display:none}}
-.tab-panel.active{{display:block}}
-.panel-body{{padding:4px 0}}
-.stock-row{{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid #f0f0f0;cursor:pointer}}
-.stock-row:active{{background:#e8f0fe}}
-.stock-row:last-child{{border-bottom:none}}
-.code{{font-family:"SF Mono",monospace;font-size:13px;color:#1a73e8;min-width:80px;font-weight:600}}
-.name{{flex:1;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
-.sector{{font-size:10px;color:#999;margin-left:4px}}
-.score{{font-size:12px;color:#374151;white-space:nowrap;text-align:right}}.score small{{display:block;color:#8a94a6;font-size:9px;margin-top:2px}}
-.limited{{max-height:65vh;overflow-y:auto}}
-.limited .stock-row:nth-child(n+31){{display:none}}
-.limited.expanded .stock-row:nth-child(n+31){{display:block}}
-.more-btn{{text-align:center;padding:10px;color:#1a73e8;font-size:13px;cursor:pointer;border-top:1px solid #f0f0f0}}
-.more-btn:active{{background:#e8f0fe}}
-.kline-overlay{{display:none;position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:99}}
-.kline-overlay.active{{display:block}}
-.kline-panel{{display:none;position:fixed;left:0;top:0;width:100vw;height:100vh;background:#fff;z-index:100;overflow-y:auto}}
-.kline-panel.active{{display:block}}
-.kline-panel .close{{position:sticky;top:0;background:#1a73e8;color:#fff;border:none;width:100%;padding:12px;font-size:15px;z-index:1}}
-.kline-metrics{{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#e3e8f0;border-bottom:1px solid #e3e8f0}}.kline-metric{{background:#fff;padding:8px 9px}}.kline-metric b{{display:block;font-size:13px}}.kline-metric span{{display:block;color:#8992a3;font-size:9px;margin-bottom:2px}}
-.kline-panel .chart{{width:100%;height:55vh}}
-.journal-action{{display:block;margin:10px 12px;padding:9px;text-align:center;text-decoration:none;background:#edf4ff;color:#1a73e8;border:1px solid #bfd2f7;border-radius:8px;font-weight:650}}
-.footer{{text-align:center;padding:20px;font-size:11px;color:#bbb}}
-</style>
-</head>
-<body>
-<div class="header"><h1>📊 {title}</h1><span class="t">{now}</span></div>
-<div class="tabs">{tabs_html}</div>
-<div class="kline-overlay" id="overlay" onclick="closeKline()"></div>
-<div class="kline-panel" id="klinePanel">
-  <button class="close" onclick="closeKline()">← 返回 <span id="klineTitle"></span></button>
-  <div class="kline-metrics" id="klineMetrics"></div>
-  <a class="journal-action" id="klineSymbolLink" href="http://127.0.0.1:8765/symbol.html">📎 标的上下文</a>
-  <a class="journal-action" id="klineJournalLink" href="http://127.0.0.1:8765/stock_journal.html">📓 在选股日记中打开</a>
-  <div class="chart" id="klineChart"></div>
-  <div style="text-align:center;padding:16px"><button onclick="closeKline()" style="background:#1a73e8;color:#fff;border:none;padding:10px 40px;border-radius:8px;font-size:15px">关闭K线</button></div>
-</div>
-{panels_html}
-<div class="footer">点击股票代码查看K线 · 电脑端打开 dashboard.html 查看完整版</div>
-<script src="vendor/echarts.min.js"></script>
-<script>window.echarts || document.write(`<script src='https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js'><\/script>`);</script>
-<script>
-function switchTab(id){{
-  document.querySelectorAll(".tab").forEach(b=>b.classList.remove("active"));
-  document.querySelectorAll(".tab-panel").forEach(p=>p.classList.remove("active"));
-  document.querySelector("[onclick*='"+id+"']").classList.add("active");
-  document.getElementById("panel-"+id).classList.add("active");
-}}
-var KLINES={kline_json};var klineChart=null;
-{KLINE_TOOLTIP_JS}
-function metricHtml(m){{if(!m)return'';var defs=[['成交量比20','成交量比','×'],['成交额比20','成交额比','×'],['换手率%','换手率','%'],['20日动量%','20日动量','%'],['ATR14%','ATR14','%'],['距60日高点%','距60日高点','%']];return defs.map(function(x){{var v=m[x[0]],text=v===null||v===undefined?'—':(+v).toFixed(2)+x[2];return'<div class="kline-metric"><span>'+x[1]+'</span><b>'+text+'</b></div>'}}).join('')}}
-function showKline(code){{
-  var d=KLINES[code];if(!d)return;
-  document.getElementById("overlay").classList.add("active");
-  document.getElementById("klinePanel").classList.add("active");
-  document.getElementById("klineTitle").textContent=code+" "+(d.name||"");
-  document.getElementById("klineJournalLink").href="http://127.0.0.1:8765/stock_journal.html?code="+encodeURIComponent(code);
-  var sym=document.getElementById("klineSymbolLink"); if(sym) sym.href="http://127.0.0.1:8765/symbol.html?code="+encodeURIComponent(code);
-  document.getElementById("klineWatchLink").href="http://127.0.0.1:8765/watchlist.html";
-  document.getElementById("klineWatchNotice").textContent="";
-  document.getElementById("klineMetrics").innerHTML=metricHtml(d.metrics);
-  setTimeout(function(){{
-    if(klineChart){{klineChart.dispose();klineChart=null;}}
-    klineChart=echarts.init(document.getElementById("klineChart"));
-    var dates=d.dates,ohlc=d.data,changes=d.changes||[],prevs=d.prevs||[],vols=d.volumes||[];
-    klineChart.setOption({{
-      tooltip:{{trigger:"axis",axisPointer:{{type:"cross"}},confine:true,formatter:function(ps){{return klineTooltipHtml(ps,ohlc,dates,prevs,vols,changes,"最新收")}}}},
-      grid:[{{left:"8%",right:"2%",top:"5%",height:"50%"}},{{left:"8%",right:"2%",top:"63%",height:"12%"}},{{left:"8%",right:"2%",top:"82%",height:"10%"}}],
-      xAxis:[{{data:dates,axisLabel:{{rotate:30,fontSize:9}},gridIndex:0}},{{data:dates,axisLabel:{{show:false}},gridIndex:1}},{{data:dates,axisLabel:{{show:false}},gridIndex:2}}],
-      yAxis:[{{scale:true,gridIndex:0}},{{gridIndex:1,splitNumber:2,axisLabel:{{formatter:function(v){{return (v/1e8).toFixed(1)+"亿"}}}}}},{{gridIndex:2,splitNumber:2,axisLabel:{{formatter:"{{value}}%"}}}}],
-      series:[
-        {{name:"K线",type:"candlestick",data:ohlc,xAxisIndex:0,yAxisIndex:0,itemStyle:{{color:"#d32f2f",color0:"#34a853",borderColor:"#d32f2f",borderColor0:"#34a853"}},barWidth:"60%"}},
-        {{name:"成交额",type:"bar",data:vols,xAxisIndex:1,yAxisIndex:1,itemStyle:{{color:function(p){{var i=p.dataIndex;return ohlc[i][1]>=ohlc[i][0]?"#d32f2f":"#34a853"}}}}}},
-        {{name:"涨跌%",type:"bar",data:changes,xAxisIndex:2,yAxisIndex:2,itemStyle:{{color:function(p){{return p.value>=0?"#d32f2f":"#34a853"}}}}}}
-      ]
-    }});klineChart.resize();
-  }},100);
-}}
-function closeKline(){{document.getElementById("overlay").classList.remove("active");document.getElementById("klinePanel").classList.remove("active")}}
-</script>
-</body></html>"""
+    """旧手机版地址使用同一响应式页面，避免筛选逻辑分叉。"""
+    from scripts.services.ui_shell import mobile_redirect
+    return mobile_redirect('dashboard.html')
 
 
-
-# ====================================================================
-# 选股仪表盘 HTML（DataTables + ECharts K线）
-# ====================================================================
+# Desktop and mobile share the same report model.
 
 def build_screening_html(
     pipeline_modules: List,
@@ -333,7 +137,7 @@ def build_screening_html(
         if df is None or len(df) == 0:
             continue
 
-        active = "active" if i == 0 else ""
+        active = "active" if not tab_buttons else ""
         tab_buttons += f"""
             <button class="tab-btn {active}" onclick="switchTab('{mod.id}')">{mod.title}
               <span class="count">{len(df)}</span>
@@ -406,12 +210,24 @@ def build_screening_html(
         pass
 
     return f"""<!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" class="screen-pending">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script>try{{var root=document.documentElement;root.dataset.theme=localStorage.getItem('stockAppTheme')||'light';root.dataset.density=localStorage.getItem('stockAppDensity')||'comfortable';root.dataset.sidebar=localStorage.getItem('stockAppSidebar')||(innerWidth<1280?'collapsed':'expanded');}}catch(_){{}}</script>
 <title>{title} — {now}</title>
 <link rel="stylesheet" href="vendor/jquery.dataTables.min.css">
+<link rel="stylesheet" href="/assets/app.css">
+<script src="/assets/app-shell.js" defer></script>
+<script id="workbench-js" src="/assets/workbench.js" defer></script>
+<style>
+.screen-pending .header,.screen-pending .tabs,.screen-pending .stats,.screen-pending .decision-tools,.screen-pending .content,.screen-pending .wb-screen-toolbar,.screen-pending footer {{visibility:hidden}}
+.screen-pending .content {{max-height:360px;overflow:hidden}}
+#screen-loading {{position:absolute;top:100px;left:calc(var(--wb-side,216px) + 24px);right:24px;padding:24px;border:1px solid var(--app-border);border-radius:12px;background:var(--app-surface);color:var(--app-muted)}}
+#screen-loading .placeholder {{height:44px;margin-top:16px;border-radius:8px;background:var(--app-surface-2)}}
+html:not(.screen-pending) #screen-loading {{display:none}}
+@media(max-width:767px){{#screen-loading {{left:12px;right:12px}}}}
+</style>
 <style>
 * {{ margin:0; padding:0; box-sizing:border-box; }}
 body {{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:#f5f5f5; color:#333; }}
@@ -452,8 +268,11 @@ table.dataTable {{ font-size:12px; }}
 footer {{ text-align:center; color:#999; font-size:11px; padding:20px; }}
 @media(max-width:768px){{ .kline-panel{{width:100vw}}.decision-tools{{padding:8px 12px}}.metric-guide{{margin-left:0}}.metric-guide ul{{position:fixed;left:10px;right:10px;top:150px;width:auto}} }}
 </style>
+<link id="workbench-css" rel="stylesheet" href="/assets/workbench.css">
 </head>
-<body>
+<body class="app-workbench" data-page="dashboard">
+<div id="app-shell" data-active="dashboard"></div>
+<div id="screen-loading" role="status"><span>正在准备选股列表…</span><div class="placeholder"></div><div class="placeholder"></div><button id="screen-retry" hidden onclick="location.reload()">重新加载</button></div>
 <div class="kline-overlay" id="overlay" onclick="closeKline()"></div>
 <div class="kline-panel" id="klinePanel">
   <button class="close" onclick="closeKline()">✕ <span id="klineTitle"></span><span style="float:right;opacity:.6;font-size:11px" id="klineNav"></span></button>
@@ -494,7 +313,7 @@ function switchTab(id){{
   document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));
   document.querySelector(`[onclick="switchTab('${{id}}')"]`).classList.add('active');
   document.getElementById('tab-'+id).classList.add('active');
-  try{{ $('#tbl-'+id).DataTable().columns.adjust().draw(); }}catch(e){{}}
+  initStrategyTable(id).columns.adjust().draw();
 }}
 var currentTabId=({tab_ids})[0]||null;
 function filterValue(id){{var raw=document.getElementById(id).value;return raw===''?null:+raw}}
@@ -502,16 +321,21 @@ function metricValue(settings,row,label){{var idx=-1;for(var i=0;i<settings.aoCo
 $.fn.dataTable.ext.search.push(function(settings,row){{if(!currentTabId||settings.nTable.id!=='tbl-'+currentTabId)return true;var rules=[['fVolume','成交量比20','min'],['fTurnover','换手率%','min'],['fMomentum','20日动量%','min'],['fAtr','ATR14%','max'],['fPe','动态PE','max']];for(var i=0;i<rules.length;i++){{var wanted=filterValue(rules[i][0]);if(wanted===null)continue;var actual=metricValue(settings,row,rules[i][1]);if(actual===null)return false;if(rules[i][2]==='min'&&actual<wanted)return false;if(rules[i][2]==='max'&&actual>wanted)return false}}return true}});
 function applyDecisionFilters(){{if(currentTabId)$('#tbl-'+currentTabId).DataTable().draw()}}
 document.getElementById('applyFilters').onclick=applyDecisionFilters;document.getElementById('resetFilters').onclick=function(){{['fVolume','fTurnover','fMomentum','fAtr','fPe'].forEach(function(id){{document.getElementById(id).value=''}});applyDecisionFilters()}};
-$(document).ready(function(){{
-  var ids={tab_ids};
-  ids.forEach(function(id){{
-    $('#tbl-'+id).DataTable({{
+function initStrategyTable(id){{
+  var table=$('#tbl-'+id);
+  if($.fn.dataTable.isDataTable(table[0]))return table.DataTable();
+  return table.DataTable({{
       pageLength:25,
-      language:{{ url:'vendor/datatables-zh.json' }},
+      autoWidth:false,
+      language:{{search:'搜索:',lengthMenu:'显示 _MENU_ 条记录',info:'第 _START_ 至 _END_ 条，共 _TOTAL_ 条',infoEmpty:'暂无记录',infoFiltered:'（筛选自 _MAX_ 条记录）',zeroRecords:'没有符合条件的标的',emptyTable:'暂无标的',paginate:{{first:'首页',previous:'上页',next:'下页',last:'末页'}}}},
       order:[], layout:{{ topStart:'search', topEnd:'pageLength' }},
     }});
-  }});
+}}
+$(document).ready(function(){{
+  if(currentTabId)initStrategyTable(currentTabId);
+  else document.documentElement.classList.remove('screen-pending');
 }});
+setTimeout(function(){{if(document.documentElement.classList.contains('screen-pending')){{document.querySelector('#screen-loading span').textContent='列表加载尚未完成，请重试';document.getElementById('screen-retry').hidden=false;}}}},8000);
 </script>
 <script src="vendor/echarts.min.js"></script>
 <script>window.echarts || document.write(`<script src='https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js'><\/script>`);</script>
@@ -560,9 +384,9 @@ function showKline(code){{
   document.getElementById("klinePanel").classList.add("active");
   var sector=d.sector||"";
   document.getElementById("klineTitle").innerHTML=code+" "+(d.name||"")+(sector?"<br><small style='opacity:.6'>"+sector+"</small>":"");
-  document.getElementById("klineJournalLink").href="http://127.0.0.1:8765/stock_journal.html?code="+encodeURIComponent(code);
-  var sym=document.getElementById("klineSymbolLink"); if(sym) sym.href="http://127.0.0.1:8765/symbol.html?code="+encodeURIComponent(code);
-  document.getElementById("klineWatchLink").href="http://127.0.0.1:8765/watchlist.html";
+  document.getElementById("klineJournalLink").href=StockAppShell.webUrl("/stock_journal.html")+"?code="+encodeURIComponent(code);
+  var sym=document.getElementById("klineSymbolLink"); if(sym) sym.href=StockAppShell.webUrl("/symbol.html")+"?code="+encodeURIComponent(code);
+  document.getElementById("klineWatchLink").href=StockAppShell.webUrl("/watchlist.html");
   document.getElementById("klineWatchNotice").textContent="";
   document.getElementById("klineMetrics").innerHTML=metricHtml(d.metrics);
   setTimeout(function(){{
@@ -600,7 +424,7 @@ async function addToWatchlist(){{
   notice.textContent="提交中…";
   try{{
     var screenDate=(d.dates&&d.dates.length)?d.dates[d.dates.length-1]:"";
-    var r=await fetch("http://127.0.0.1:8765/api/watchlist/add",{{
+    var r=await fetch(StockAppShell.webUrl("/api/watchlist/add"),{{
       method:"POST",headers:{{"Content-Type":"application/json"}},
       body:JSON.stringify({{code:currentKlineCode,name:d.name||"",status:"watching",
         source_module:currentTabId||"dashboard",screen_date:screenDate,

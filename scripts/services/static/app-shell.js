@@ -5,29 +5,26 @@
   var DENSITY_KEY = 'stockAppDensity';
 
   var NAV = [
-    { key: 'trainer', href: '/trading_trainer.html', label: '交易训练' },
-    { key: 'daily', href: '/daily_ops.html', label: '每日操盘' },
-    { key: 'watchlist', href: '/watchlist.html', label: '观察池' },
-    { key: 'minute', href: '/minute_view.html', label: '分时查询' },
-    { key: 'journal', href: '/stock_journal.html', label: '选股日记' },
-    { key: 'news', href: '/market_news.html', label: '市场资讯' },
-    { key: 'symbol', href: '/symbol.html', label: '标的上下文' },
-    { key: 'grid', href: '/grid_simulator.html', label: '网格回放' },
-    { key: 'home', href: '/index.html', label: '全部导航' }
+    {key:'daily',href:'/daily_ops.html',label:'每日操盘',icon:'◫',group:'日常看盘'},
+    {key:'dashboard',href:'/dashboard.html',label:'选股仪表盘',icon:'▦',group:'日常看盘'},
+    {key:'watchlist',href:'/watchlist.html',label:'观察池',icon:'☆',group:'日常看盘'},
+    {key:'symbol',href:'/symbol.html',label:'标的上下文',icon:'◎',group:'日常看盘'},
+    {key:'minute',href:'/minute_view.html',label:'分时查询',icon:'⌁',group:'日常看盘'},
+    {key:'news',href:'/market_news.html',label:'市场资讯',icon:'≡',group:'日常看盘'},
+    {key:'trainer',href:'/trading_trainer.html',label:'交易训练',icon:'▷',group:'交易训练'},
+    {key:'grid',href:'/grid_simulator.html',label:'网格回放',icon:'⊞',group:'交易训练'},
+    {key:'journal',href:'/stock_journal.html',label:'选股日记',icon:'▤',group:'研究复盘'},
+    {key:'home',href:'/index.html',label:'全部工具',icon:'⋯',group:'研究复盘'}
   ];
-
-  var PATH_KEY = {
-    '/trading_trainer.html': 'trainer',
-    '/minute_view.html': 'minute',
-    '/stock_journal.html': 'journal',
-    '/watchlist.html': 'watchlist',
-    '/market_news.html': 'news',
-    '/symbol.html': 'symbol',
-    '/daily_ops.html': 'daily',
-    '/grid_simulator.html': 'grid',
-    '/index.html': 'home',
-    '/': 'home'
-  };
+  var PATH_KEY = {'/':'home'};
+  NAV.forEach(function(item){PATH_KEY[item.href]=item.key;});
+  function emit(name, value) { window.dispatchEvent(new CustomEvent('stockapp:'+name, {detail:value})); }
+  function webUrl(path) {
+    var url = new URL(path, location.href);
+    if (url.hostname === '127.0.0.1' || url.hostname === 'localhost') url.hostname = location.hostname;
+    if (location.port === '8000') url.port = '8765';
+    return window.StockTrainingContext?.active ? window.StockTrainingContext.url(url.href) : url.href;
+  }
 
   function resolveActive(active) {
     if (active) return String(active);
@@ -59,6 +56,7 @@
     var next = theme === 'dark' ? 'dark' : 'light';
     document.documentElement.dataset.theme = next;
     writePref(THEME_KEY, next);
+    emit('theme', next);
     return next;
   }
 
@@ -66,6 +64,7 @@
     var next = density === 'compact' ? 'compact' : 'comfortable';
     document.documentElement.dataset.density = next;
     writePref(DENSITY_KEY, next);
+    emit('density', next);
     return next;
   }
 
@@ -105,6 +104,9 @@
     var ms = opts.ms != null ? +opts.ms : (tone === 'error' ? 4200 : 3200);
     var host = ensureToastHost();
     if (!host) return;
+    // Native dialogs are in the browser top layer; notices must be inside it.
+    var noticeParent = document.querySelector('dialog[open]') || document.body;
+    if (host.parentElement !== noticeParent) noticeParent.appendChild(host);
     var el = document.createElement('div');
     el.className = 'app-toast app-toast--' + tone;
     el.setAttribute('role', tone === 'error' ? 'alert' : 'status');
@@ -167,34 +169,49 @@
   function fillShell(host, active) {
     if (!host) return;
     var key = resolveActive(active || host.getAttribute('data-active'));
-    if (!host.querySelector('.app-shell')) {
-      var navHtml = NAV.map(function (item) {
-        var cls = 'app-shell__link' + (item.key === key ? ' is-active' : '');
-        return '<a class="' + cls + '" data-nav="' + item.key + '" href="' + item.href + '">' + item.label + '</a>';
+    document.body.classList.add('app-workbench');
+    document.body.dataset.page = key;
+    if (!host.querySelector('.wb-sidebar')) {
+      var group = '';
+      var nav = NAV.map(function(item){
+        var heading = item.group === group ? '' : '<div class="wb-nav-group">'+item.group+'</div>';
+        group=item.group;
+        return heading+'<a class="wb-nav-link" data-nav="'+item.key+'" href="'+webUrl(item.href)+'" title="'+item.label+'"><span class="wb-nav-icon" aria-hidden="true">'+item.icon+'</span><span class="wb-nav-label">'+item.label+'</span></a>';
       }).join('');
-      host.innerHTML =
-        '<header class="app-shell" role="banner">' +
-          '<a class="app-shell__brand" href="/index.html">股票工作台</a>' +
-          '<nav class="app-shell__nav" aria-label="主导航">' + navHtml + '</nav>' +
-          toolButtonsHtml() +
-        '</header>' +
-        '<div class="app-clock" id="app-clock" hidden>' +
-          '<span class="app-clock__label">模拟时钟</span>' +
-          '<span class="app-clock__time" id="app-clock-time">—</span>' +
-          '<span class="app-clock__hint" id="app-clock-hint"></span>' +
-        '</div>';
-    } else {
-      host.querySelectorAll('[data-nav]').forEach(function (el) {
-        el.classList.toggle('is-active', el.getAttribute('data-nav') === key);
-      });
-      if (!host.querySelector('.app-shell__tools')) {
-        var shell = host.querySelector('.app-shell');
-        if (shell) shell.insertAdjacentHTML('beforeend', toolButtonsHtml());
+      var item=NAV.find(function(n){return n.key===key;});
+      host.innerHTML='<aside class="wb-sidebar" id="wb-sidebar"><a class="wb-brand" href="'+webUrl('/daily_ops.html')+'"><span class="wb-logo">Q</span><span class="wb-nav-label">量化工作台<small>研究 · 交易 · 复盘</small></span></a><nav aria-label="主导航">'+nav+'</nav><div class="wb-sidebar-foot">A 股研究工作台</div></aside>'+
+        '<button class="wb-scrim" hidden aria-label="关闭导航"></button>'+
+        '<header class="wb-topbar"><button class="wb-menu" aria-label="切换导航" aria-controls="wb-sidebar" aria-expanded="false">☰</button><span class="wb-page-name">'+(item?item.label:'量化工作台')+'</span>'+toolButtonsHtml()+'</header>'+
+        '<div class="app-clock" id="app-clock" hidden><span class="app-clock__label">模拟时钟</span><span class="app-clock__time" id="app-clock-time">—</span><span class="app-clock__hint" id="app-clock-hint"></span></div>'+
+        '<nav class="wb-bottom" aria-label="快捷导航">'+['daily','dashboard','trainer','journal'].map(function(k){var n=NAV.find(function(v){return v.key===k;});return '<a data-nav="'+k+'" href="'+webUrl(n.href)+'"><span aria-hidden="true">'+n.icon+'</span>'+({daily:'操盘',dashboard:'选股',trainer:'训练',journal:'日记'}[k])+'</a>';}).join('')+'</nav>';
+      var menu=host.querySelector('.wb-menu'),scrim=host.querySelector('.wb-scrim'),side=host.querySelector('.wb-sidebar');
+      function syncLayout(){
+        var mobile=innerWidth<768;
+        var collapsed=readPref('stockAppSidebar',innerWidth<1280?'collapsed':'expanded')==='collapsed';
+        document.documentElement.dataset.sidebar=collapsed?'collapsed':'expanded';
+        if(!mobile){document.body.classList.remove('wb-nav-open');scrim.hidden=true;side.inert=false;}
+        else side.inert=!document.body.classList.contains('wb-nav-open');
+        menu.setAttribute('aria-expanded',String(mobile?document.body.classList.contains('wb-nav-open'):!collapsed));
+        emit('layout',{collapsed:collapsed,mobile:mobile});
       }
-      syncToolLabels(host);
+      function closeNav(){document.body.classList.remove('wb-nav-open');scrim.hidden=true;syncLayout();menu.focus();}
+      menu.onclick=function(){
+        if(innerWidth<768){var open=document.body.classList.toggle('wb-nav-open');scrim.hidden=!open;syncLayout();if(open)side.querySelector('a').focus();}
+        else {writePref('stockAppSidebar',document.documentElement.dataset.sidebar==='collapsed'?'expanded':'collapsed');syncLayout();}
+      };
+      scrim.onclick=closeNav;
+      document.addEventListener('keydown',function(e){
+        if(!document.body.classList.contains('wb-nav-open'))return;
+        if(e.key==='Escape'){e.preventDefault();closeNav();}
+        if(e.key==='Tab'){var links=side.querySelectorAll('a');if(e.shiftKey&&document.activeElement===links[0]){e.preventDefault();links[links.length-1].focus();}else if(!e.shiftKey&&document.activeElement===links[links.length-1]){e.preventDefault();links[0].focus();}}
+      });
+      window.addEventListener('resize',syncLayout);syncLayout();
     }
-    bindTools(host);
-    if (key) host.setAttribute('data-active', key);
+    host.querySelectorAll('[data-nav]').forEach(function(el){var on=el.dataset.nav===key;el.classList.toggle('is-active',on);if(on)el.setAttribute('aria-current','page');else el.removeAttribute('aria-current');});
+    bindTools(host);syncToolLabels(host);
+    if(key)host.setAttribute('data-active',key);
+    if(!document.getElementById('workbench-css')){var css=document.createElement('link');css.id='workbench-css';css.rel='stylesheet';css.href='/assets/workbench.css';document.head.appendChild(css);}
+    if(!document.getElementById('workbench-js')){var js=document.createElement('script');js.id='workbench-js';js.src='/assets/workbench.js';document.head.appendChild(js);}
   }
 
   function escHtml(v) {
@@ -298,14 +315,15 @@
   function tickerItemHtml(it) {
     it = it || {};
     var label = it.label || it.name || '';
-    var empty = !!it.empty || (it.price == null || it.price === '');
+    var value = Number(String(it.price == null ? '' : it.price).replace(/,/g, ''));
+    var empty = !!it.empty || it.price == null || it.price === '' || !Number.isFinite(value) || value <= 0;
     var price = empty ? '—' : String(it.price);
     var chg = it.chg || it.change || '';
     if (!chg && it.changePct != null && it.changePct !== '' && isFinite(+it.changePct)) {
       var n = +it.changePct;
       chg = (n > 0 ? '+' : '') + n.toFixed(2) + '%';
     }
-    if (empty && !chg) chg = '—';
+    if (empty) chg = '暂无有效数据';
     var cls = empty ? ' is-empty' : '';
     if (!empty) {
       if (it.up || (it.changePct != null && +it.changePct > 0)) cls = ' up';
@@ -427,6 +445,7 @@
   function mount(options) {
     options = options || {};
     initPrefs();
+    if (!document.querySelector('link[rel="icon"]')) { var icon=document.createElement('link');icon.rel='icon';icon.href='/assets/favicon.svg';document.head.appendChild(icon); }
     var host = ensureShellHost();
     if (!host) return;
     if (options.active) host.setAttribute('data-active', options.active);
@@ -455,6 +474,7 @@
     setDensity: applyDensity,
     bindClearOnFocus: bindClearOnFocus,
     bindClearOnFocusAll: bindClearOnFocusAll,
+    webUrl: webUrl,
     nav: NAV
   };
 

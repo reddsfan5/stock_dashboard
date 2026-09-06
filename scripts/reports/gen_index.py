@@ -292,7 +292,7 @@ main{{max-width:1300px;margin:0 auto;padding:8px 32px 20px}}
 <section class="ops-hero" aria-label="今日操盘">
   <div class="ops-hero-card app-reveal">
     <div class="ops-hero-kicker">今日操盘</div>
-    <h2>从清单开始，而不是从卡片堆里找入口</h2>
+    <h2>每日操盘，从这里开始</h2>
     <p class="lead">先过每日操盘清单，再进入训练、观察池与资讯。下面保留完整工具归档，需要时再展开。</p>
     <div class="ops-ctas">
       <a class="ops-cta ops-cta-primary" href="/daily_ops.html">打开每日清单</a>
@@ -300,10 +300,7 @@ main{{max-width:1300px;margin:0 auto;padding:8px 32px 20px}}
       <a class="ops-cta" href="{WATCHLIST_URL}">观察池</a>
       <a class="ops-cta" href="{MARKET_NEWS_URL}">市场资讯</a>
     </div>
-    <div class="ops-tips">
-      <span>提示：样式或脚本更新后若未生效，请强制刷新（⌘/Ctrl + Shift + R）</span>
-      <span>交互页依赖本地服务 · 默认 http://127.0.0.1:8765</span>
-    </div>
+
   </div>
 </section>
 <div class="tools-label" id="all-tools">全部工具</div>

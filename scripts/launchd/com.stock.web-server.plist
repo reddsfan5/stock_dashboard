@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>PATH</key>
+		<string>/usr/local/bin:/usr/bin:/bin</string>
+	</dict>
+	<key>KeepAlive</key>
+	<true/>
+	<key>Label</key>
+	<string>com.stock.web-server</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/Users/dong_007/D/stock/.venv/bin/python</string>
+		<string>-m</string>
+		<string>scripts.services.static_reports</string>
+		<string>--port</string>
+		<string>8000</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>StandardErrorPath</key>
+	<string>/Users/dong_007/Library/Logs/stock_web_server.err.log</string>
+	<key>StandardOutPath</key>
+	<string>/Users/dong_007/Library/Logs/stock_web_server.log</string>
+	<key>WorkingDirectory</key>
+	<string>/Users/dong_007/D/stock</string>
+</dict>
+</plist>

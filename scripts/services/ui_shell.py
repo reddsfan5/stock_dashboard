@@ -20,3 +20,8 @@ def shell_mount_script(active: str) -> str:
 def shell_host_html(active: str) -> str:
     key = (active or "").replace('"', "&quot;")
     return f'<div id="app-shell" data-active="{key}"></div>'
+
+
+def mobile_redirect(target):
+    import json
+    return '<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>打开工作台</title><a href="'+target+'">打开工作台</a><script>location.replace('+json.dumps(target)+'+location.search+location.hash)</script></html>'

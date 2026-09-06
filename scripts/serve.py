@@ -17,6 +17,7 @@ import argparse
 import json
 import os
 import signal
+import socket
 import subprocess
 import sys
 import time
@@ -187,7 +188,7 @@ def _is_safe_project_listener(pid, service):
             or "scripts/serve.py" in command
             or "scripts.serve" in command
         )
-    return "http.server" in command and str(REPORT_PORT) in command
+    return ("http.server" in command or "scripts.services.static_reports" in command) and str(REPORT_PORT) in command
 
 
 def _describe_listeners(port):
@@ -256,8 +257,13 @@ def _selected_web_url(requested_target):
     return "http://127.0.0.1:{}{}".format(WEB_PORT, path)
 
 
-def start_web(requested_target="web", replace_conflicts=False):
+def start_web(requested_target="web", replace_conflicts=False, lan=False):
     if web_is_healthy():
+        _, health = _http_json(WEB_HEALTH_URL)
+        host = (health or {}).get('listen_host', '127.0.0.1')
+        if (host == '0.0.0.0') != lan:
+            print('监听模式不同，请运行 python -m scripts.serve restart web' + (' --lan' if lan else ''))
+            return False
         print("✓ 交互 Web 已运行：{}".format(_selected_web_url(requested_target)))
         return True
 
@@ -277,7 +283,7 @@ def start_web(requested_target="web", replace_conflicts=False):
 
     command = [
         sys.executable, "-u", "-m", "scripts.services.minute_viewer", "--serve",
-        "--host", "127.0.0.1", "--port", str(WEB_PORT),
+        "--host", "0.0.0.0" if lan else "127.0.0.1", "--port", str(WEB_PORT),
     ]
     pid, log_path = _spawn("web", command, "interactive_web.log")
     if not _wait_until(web_is_healthy, pid):
@@ -285,6 +291,23 @@ def start_web(requested_target="web", replace_conflicts=False):
         _remove_record("web")
         return False
     print("✓ 交互 Web 已启动（PID {}）".format(pid))
+    if lan:
+        addresses = set()
+        try:
+            for row in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
+                if not row[4][0].startswith('127.'):
+                    addresses.add(row[4][0])
+        except OSError:
+            pass
+        try:
+            result = subprocess.run(['/sbin/ifconfig'], capture_output=True, text=True, check=False)
+            import re
+            addresses.update(a for a in re.findall(r'inet (\d+\.\d+\.\d+\.\d+)', result.stdout) if not a.startswith('127.'))
+        except OSError:
+            pass
+        print('局域网模式 · 同网设备可直接访问和操作')
+        for address in sorted(addresses):
+            print('  手机入口：http://{}:{}/daily_ops.html'.format(address, WEB_PORT))
     print("  分时：  http://127.0.0.1:{}/minute_view.html".format(WEB_PORT))
     print("  网格：  http://127.0.0.1:{}/grid_simulator.html".format(WEB_PORT))
     print("  训练：  http://127.0.0.1:{}/trading_trainer.html".format(WEB_PORT))
@@ -314,8 +337,7 @@ def start_reports(replace_conflicts=False):
             return False
 
     command = [
-        sys.executable, "-u", "-m", "http.server", str(REPORT_PORT),
-        "--bind", "127.0.0.1", "--directory", str(OUTPUT_DIR),
+        sys.executable, "-u", "-m", "scripts.services.static_reports", "--port", str(REPORT_PORT),
     ]
     pid, log_path = _spawn("reports", command, "static_reports.log")
     if not _wait_until(report_is_healthy, pid, timeout=10.0):
@@ -398,7 +420,8 @@ def show_status():
     web_listeners = _listening_pids(WEB_PORT)
     report_listeners = _listening_pids(REPORT_PORT)
     if web_is_healthy():
-        web_status = "运行中"
+        _, health = _http_json(WEB_HEALTH_URL)
+        web_status = "运行中 · " + ("局域网" if (health or {}).get("listen_host") == "0.0.0.0" else "仅本机")
     elif web_listeners:
         web_status = "异常：端口被旧/错误服务占用"
     else:
@@ -450,6 +473,7 @@ def build_parser():
         "--replace-conflicts", action="store_true",
         help="仅替换占用目标端口的本项目旧服务，不会终止无关进程",
     )
+    parser.add_argument("--lan", action="store_true", help="交互服务允许可信局域网设备直接访问")
     return parser
 
 
@@ -469,7 +493,7 @@ def main(argv=None):
 
     for service in targets:
         if service == "web":
-            started = start_web(args.target, args.replace_conflicts)
+            started = start_web(args.target, args.replace_conflicts, args.lan)
         else:
             started = start_reports(args.replace_conflicts)
         ok = started and ok

@@ -4,9 +4,9 @@
   --app-surface: #ffffff;
   --app-surface-2: #f8fafc;
   --app-text: #0f172a;
-  --app-muted: #64748b;
+  --app-muted: #58677d;
   --app-border: #e2e8f0;
-  --app-accent: #3b82f6;
+  --app-accent: #2563eb;
   --app-accent-soft: #eff6ff;
   --app-up: #e5484d;
   --app-down: #159568;
@@ -20,7 +20,7 @@
   --app-fs-sm: 13px;
   --app-fs-md: 14px;
   --app-fs-lg: 16px;
-  --app-fs-xl: 20px;
+  --app-fs-xl: 22px;
   --app-space-1: 4px;
   --app-space-2: 8px;
   --app-space-3: 12px;

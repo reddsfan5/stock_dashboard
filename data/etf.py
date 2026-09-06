@@ -109,6 +109,10 @@ class ETFData:
         df = ak.fund_etf_spot_em()
         df = df[["代码", "名称"]].copy()
         df["代码"] = df["代码"].astype(str)
+        from data.etf_names import save_names
+        save_names({('sh' if code.startswith('5') else 'sz') + code.zfill(6): name
+                    for code, name in zip(df['代码'], df['名称'])
+                    if isinstance(name, str) and name.strip()})
         self._list = df.reset_index(drop=True)
         return self._list
 

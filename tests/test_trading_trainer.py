@@ -1,5 +1,8 @@
 import json
 import unittest
+import tempfile
+from pathlib import Path
+from data.training_sessions import TrainingSessionRepository
 from unittest.mock import patch
 
 import pandas as pd
@@ -295,6 +298,14 @@ class FakeMinuteRepository:
 
 
 class TradingTrainerServiceTest(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.store = TrainingSessionRepository(Path(self.temp.name) / 'training.sqlite3')
+        patcher = patch('scripts.services.trading_trainer.TrainingSessionRepository', return_value=self.store)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_daily_history_derives_previous_close_before_display_window(self):
         dates = pd.bdate_range("2026-08-17", periods=4)
         frame = pd.DataFrame({

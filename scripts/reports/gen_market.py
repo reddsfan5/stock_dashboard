@@ -159,13 +159,13 @@ def build_payload(daily, sd1, sd2, piv, chg, src, latest_date) -> dict:
 
     # ---- 指数 JSON ----
     dates = [d.strftime("%Y-%m-%d") for d in piv.index]
-    idx_colors = {"sh000001": "#1a73e8", "sz399001": "#d32f2f", "sh000300": "#34a853"}
+    idx_colors = {"sh000001": "#1a73e8", "sz399001": "#d32f2f", "sh000300": "#34a853", "sz399006": "#9333ea", "sh000688": "#0891b2"}
     idx_json = json.dumps({
         "dates": dates,
         "series": [{
             "name": INDEXES[code], "close": [round(float(v), 2) for v in piv[code]],
             "chg": [r2(v) for v in chg[code]],
-            "color": idx_colors[code],
+            "color": idx_colors.get(code, ["#2563eb", "#9333ea", "#0891b2", "#d97706"][sum(code.encode()) % 4]),
         } for code in INDEXES],
     }, ensure_ascii=False)
 

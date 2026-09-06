@@ -49,6 +49,7 @@ state/backups/
 
 # 前端库本地缓存（页面在局域网离线可用）
 output/vendor/
+output/ui-qa/
 
 # API 密钥配置
 config/openai.yaml
