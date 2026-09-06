@@ -338,19 +338,20 @@ body[data-page=trainer].wb-training-active #app-toast-host {top:calc(64px + var(
 .training-index-row .training-index-items b {font-size:12px;}
 .training-index-row--compact .training-index-items {gap:4px 10px;align-items:center;}
 .training-index-groups {
-  display:flex;flex:1;min-width:0;align-items:center;gap:10px;
+  display:flex;flex:1;min-width:0;align-items:center;gap:18px;
   overflow-x:auto;scrollbar-width:thin;flex-wrap:nowrap;
 }
 .training-index-group {
   display:flex;align-items:center;gap:6px;flex:0 0 auto;min-width:0;
 }
 .training-index-group:not(:first-child) {
-  padding-left:10px;
-  border-left:1px solid var(--app-border);
+  margin-left:4px;
+  padding-left:16px;
+  border-left:2px solid color-mix(in srgb, var(--app-border) 85%, var(--app-text) 15%);
 }
 .training-index-group-label {
-  flex:0 0 auto;color:var(--app-muted);font-size:10px;font-weight:500;
-  letter-spacing:.02em;line-height:1;white-space:nowrap;
+  flex:0 0 auto;color:var(--app-muted);font-size:10px;font-weight:600;
+  letter-spacing:.02em;line-height:1;white-space:nowrap;opacity:.92;
 }
 .training-index-group .training-index-items {
   display:flex;flex:0 1 auto;min-width:0;gap:4px 10px;align-items:center;
@@ -412,9 +413,13 @@ body[data-page=trainer].wb-training-active #app-clock {display:none;}
 }
 
 @media(max-width:767px){
- .training-index-groups {gap:8px;}
+ .training-index-groups {gap:12px;}
  .training-index-group {gap:4px;}
- .training-index-group:not(:first-child) {padding-left:8px;}
+ .training-index-group:not(:first-child) {
+   margin-left:2px;
+   padding-left:12px;
+   border-left:2px solid color-mix(in srgb, var(--app-border) 85%, var(--app-text) 15%);
+ }
  .training-index-row--compact .training-index-items,
  .training-index-group .training-index-items {gap:8px;}
  .training-index-chip {gap:3px;}
