@@ -44,8 +44,11 @@ state/*.sqlite3
 state/*.sqlite3-*
 state/backups/
 
-# vectorbt 专属虚拟环境
+# Python 虚拟环境（含 3.12 候选环境与可恢复旧环境）
 .venv/
+.venv-py312/
+.venv-py39-backup*/
+.venv-failed-clone*/
 
 # 前端库本地缓存（页面在局域网离线可用）
 output/vendor/

@@ -6,6 +6,8 @@
 <title>标的上下文</title>
 <link rel="stylesheet" href="/assets/app.css">
 <script src="/assets/training-context.js"></script>
+<link rel="stylesheet" href="/assets/classification.css">
+<script src="/assets/classification.js" defer></script>
 <style>
 :root{--bg:var(--app-bg,#f3f5f8);--card:var(--app-surface,#fff);--line:var(--app-border,#e3e8f0);--blue:var(--app-accent,#2563eb);--muted:var(--app-muted,#758096);--red:var(--app-up,#d32f2f);--green:var(--app-down,#159568);--amber:#b54708;--text:var(--app-text,#182033)}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -81,6 +83,7 @@ th{color:var(--muted);font-weight:600}
     <div class="links" id="quickLinks"></div>
   </div>
 
+  <section class="panel" id="classificationPanel"></section>
   <div class="panel">
     <h2>最新选股命中 <span class="meta" id="screenMeta"></span></h2>
     <div id="screenHits" class="empty">加载后显示</div>
@@ -168,6 +171,7 @@ function updateTabs(code){
 
 function render(data){
   currentCode = data.code;
+  window.dispatchEvent(new CustomEvent("stock:classification",{detail:{code:data.code,training:!!data.training_time}}));
   updateTabs(data.code);
   $('symbolName').textContent = data.name || data.code;
   $('symbolCode').textContent = data.code;

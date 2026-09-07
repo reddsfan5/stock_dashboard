@@ -87,6 +87,13 @@ stock/
 │   ├── daily_update.py           # 每日分阶段更新 + 质量门禁
 │   └── config.py                 # YAML 加载与参数注入
 │
+├── stock_mcp/                    # Codex 本地只读 MCP（STDIO）
+│   ├── contracts.py              # 输入模型、分页、统一返回与 JSON 清洗
+│   ├── repositories.py           # Parquet 条件下推、SQLite mode=ro、报告白名单
+│   ├── research_service.py       # 11 个只读研究用例门面
+│   ├── security.py               # MCP 子进程网络访问阻断
+│   └── server.py                 # MCPServer 注册、注解、STDIO 入口
+│
 ├── scripts/                      # 命令入口（顶层仅全局编排）
 │   ├── update_cache.py           # → pipeline.daily_update
 │   ├── screen.py / backtest.py / run_all_strategies.py
@@ -414,6 +421,11 @@ cache 行情事实
 
 静态报告（另一进程，127.0.0.1:8000）
     scripts.serve → 兼容索引与 output/ 静态 HTML
+
+Codex 本地研究接口（按需 STDIO 子进程，无端口）
+    .codex/config.toml → python -m stock_mcp.server
+      只读：cache/*.parquet + state/*.sqlite3(mode=ro) + output/白名单
+      禁止：联网、更新、写日记、训练推进、账户与交易
 
 每日缓存更新是工作日计划任务，不是常驻微服务。
 ```

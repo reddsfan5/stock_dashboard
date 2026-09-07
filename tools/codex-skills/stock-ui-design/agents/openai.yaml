@@ -1,0 +1,8 @@
+interface:
+  display_name: "股票网页设计规范"
+  short_description: "统一行情、交易训练、网格回放与复盘页面的设计和浏览器验收"
+  brand_color: "#3B82F6"
+  default_prompt: "使用 $stock-ui-design 审查当前股票网页，并在保持交易逻辑正确的前提下改进布局、视觉层级和交互体验。"
+
+policy:
+  allow_implicit_invocation: true

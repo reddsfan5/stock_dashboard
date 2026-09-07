@@ -14,6 +14,7 @@
     {key:'trainer',href:'/trading_trainer.html',label:'交易训练',icon:'▷',group:'交易训练'},
     {key:'grid',href:'/grid_simulator.html',label:'网格回放',icon:'⊞',group:'交易训练'},
     {key:'journal',href:'/stock_journal.html',label:'选股日记',icon:'▤',group:'研究复盘'},
+    {key:'sectors',href:'/sector_atlas.html',label:'板块图谱',icon:'◈',group:'研究复盘'},
     {key:'home',href:'/index.html',label:'全部工具',icon:'⋯',group:'研究复盘'}
   ];
   var PATH_KEY = {'/':'home'};

@@ -29,19 +29,14 @@ PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_DIR)
 
 from data.storage import atomic_write_parquet
+from data.instruments import INDEX_CATALOG
 
 CACHE_FILE = os.path.join(PROJECT_DIR, "cache", "index_kline_cache.parquet")
 
 COLUMNS = ["日期", "开盘", "最高", "最低", "收盘", "成交量(手)"]
 
 # 指数代码（缓存格式）→ 名称
-INDEXES = {
-    "sh000001": "上证指数",
-    "sz399001": "深证成指",
-    "sh000300": "沪深300",
-    "sz399006": "创业板指",
-    "sh000688": "科创50",
-}
+INDEXES = INDEX_CATALOG
 
 # ETF 兜底映射: 指数代码 → 代理 ETF（ETF 缓存为纯数字格式）
 ETF_FALLBACK = {"sh000001": "510050", "sz399001": "159901", "sh000300": "510300", "sz399006": "159915", "sh000688": "588000"}

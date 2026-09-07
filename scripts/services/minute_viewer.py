@@ -112,6 +112,7 @@ def build_grid_payload(repository, params: dict) -> dict:
         params.get("code", [""])[0], params.get("date", [None])[0]
     )
     config = IntradayGridConfig(
+        tick_size=_query_number(params, "tick_size", 0.001),
         mode=params.get("mode", ["transaction_driven"])[0],
         initial_cash=_query_number(params, "cash", 100_000),
         initial_shares=_query_number(params, "shares", 1_000, integer=True),
@@ -493,6 +494,19 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
                 return self._send_json(read_context(self, parsed.path, params))
             except (ValueError, LookupError) as exc:
                 return self._send_json({'error': str(exc)}, status=409)
+        if parsed.path in ('/api/classification', '/api/classification/members'):
+            from data.classifications import ClassificationRepository, normalize
+            from scripts.services.classification_sync import pending
+            try:
+                repo = ClassificationRepository()
+                if parsed.path.endswith('/members'):
+                    return self._send_json(repo.members(params.get('name',[''])[0]))
+                code = normalize(params.get('code',[''])[0])
+                result = repo.read(code)
+                result['pending'] = pending(code)
+                return self._send_json(result)
+            except ValueError as exc:
+                return self._send_json({'error': str(exc)}, status=400)
         if parsed.path == "/api/system/status":
             from scripts.services.system_status import public_status
             return self._send_json(public_status())
@@ -612,6 +626,15 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
+        if parsed.path == '/api/classification/sync':
+            from scripts.services.classification_sync import enqueue
+            try:
+                payload = self._read_json()
+                if payload.get('training_session') or parse_qs(parsed.query).get('training_session'):
+                    return self._send_json({'error':'训练过程中不加载当前板块资料'}, status=409)
+                return self._send_json(enqueue(payload.get('code',''), force=bool(payload.get('force'))))
+            except ValueError as exc:
+                return self._send_json({'error':str(exc)}, status=400)
         if parsed.path.startswith("/api/news/"):
             return self._news_post(parsed)
         if parsed.path.startswith("/api/journal/"):
@@ -1047,6 +1070,8 @@ def main():
         write_news_app()
         write_watchlist_app()
         write_symbol_app()
+        from scripts.reports.gen_sector_atlas import generate as generate_sector_atlas
+        generate_sector_atlas()
         try:
             from scripts.reports.gen_daily_ops import generate as generate_daily_ops
             generate_daily_ops(skip_sector=True)

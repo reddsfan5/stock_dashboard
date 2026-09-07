@@ -210,24 +210,42 @@ class TonghuashunImportantNewsClient:
 class MarketNewsRepository:
     """资讯本地缓存和用户影响记录仓储。"""
 
-    def __init__(self, path=DEFAULT_DB_PATH, client=None, refresh_seconds=180):
+    def __init__(
+        self, path=DEFAULT_DB_PATH, client=None, refresh_seconds=180,
+        *, read_only=False,
+    ):
         self.path = Path(path)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.client = client or TonghuashunImportantNewsClient()
+        self.read_only = bool(read_only)
+        if not self.read_only:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.client = client if self.read_only else (client or TonghuashunImportantNewsClient())
         self.refresh_seconds = max(int(refresh_seconds), 30)
-        self._initialize()
+        if not self.read_only:
+            self._initialize()
 
     @contextmanager
     def _connect(self):
-        connection = sqlite3.connect(self.path, timeout=20)
+        if self.read_only:
+            if not self.path.exists():
+                raise FileNotFoundError(f"资讯缓存不存在: {self.path.name}")
+            connection = sqlite3.connect(
+                f"file:{self.path.resolve()}?mode=ro", uri=True, timeout=20
+            )
+        else:
+            connection = sqlite3.connect(self.path, timeout=20)
         connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA foreign_keys=ON")
-        connection.execute("PRAGMA busy_timeout=20000")
+        if self.read_only:
+            connection.execute("PRAGMA query_only=ON")
+        else:
+            connection.execute("PRAGMA foreign_keys=ON")
+            connection.execute("PRAGMA busy_timeout=20000")
         try:
             yield connection
-            connection.commit()
+            if not self.read_only:
+                connection.commit()
         except Exception:
-            connection.rollback()
+            if not self.read_only:
+                connection.rollback()
             raise
         finally:
             connection.close()
@@ -285,6 +303,14 @@ class MarketNewsRepository:
         self, market_date, *, as_of=None, refresh=False,
         include_announcements=False,
     ) -> dict:
+        if self.read_only:
+            if refresh:
+                raise PermissionError("只读资讯仓储禁止刷新")
+            return self.cached_day(
+                market_date,
+                as_of=as_of,
+                include_announcements=include_announcements,
+            )
         market_date = _iso_date(market_date)
         target_date = date.fromisoformat(market_date)
         if target_date > datetime.now(SHANGHAI_TZ).date():
@@ -299,14 +325,49 @@ class MarketNewsRepository:
                     raise
                 warning = f"实时刷新失败，已显示本地缓存：{exc}"
 
+        return self._query_cached_day(
+            market_date,
+            as_of_time=as_of_time,
+            include_announcements=include_announcements,
+            warning=warning,
+        )
+
+    def cached_day(
+        self, market_date, *, as_of=None, phase=None,
+        include_announcements=False,
+    ) -> dict:
+        """仅查询已有 SQLite 缓存，绝不抓取、建表或更新抓取日志。"""
+        market_date = _iso_date(market_date)
+        target_date = date.fromisoformat(market_date)
+        if target_date > datetime.now(SHANGHAI_TZ).date():
+            raise ValueError("不能查询未来资讯")
+        as_of_time = _iso_time(as_of, "截止时刻", allow_empty=True)
+        if phase not in (None, *PHASES):
+            raise ValueError(f"phase 只能是 {', '.join(PHASES)}")
+        return self._query_cached_day(
+            market_date,
+            as_of_time=as_of_time,
+            phase=phase,
+            include_announcements=include_announcements,
+        )
+
+    def _query_cached_day(
+        self, market_date: str, *, as_of_time=None, phase=None,
+        include_announcements=False, warning="",
+    ) -> dict:
         params = [market_date]
-        cutoff_clause = "" if include_announcements else " AND tags_json NOT LIKE '%\"公告\"%'"
+        clauses = ["market_date=?"]
+        if not include_announcements:
+            clauses.append("tags_json NOT LIKE '%\"公告\"%'")
         if as_of_time:
-            cutoff_clause = " AND published_at<=?"
+            clauses.append("published_at<=?")
             params.append(f"{market_date}T{as_of_time}")
+        if phase:
+            clauses.append("phase=?")
+            params.append(phase)
         with self._connect() as connection:
             rows = connection.execute(
-                "SELECT * FROM market_news WHERE market_date=?" + cutoff_clause
+                "SELECT * FROM market_news WHERE " + " AND ".join(clauses)
                 + " ORDER BY published_at,id",
                 params,
             ).fetchall()
