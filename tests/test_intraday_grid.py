@@ -92,7 +92,7 @@ class IntradayGridTest(unittest.TestCase):
         self.assertEqual(row["reserved_cash"], 0)
         self.assertEqual(row["reserved_shares"], 0)
         self.assertAlmostEqual(result["trades"][0]["trigger_price"], 9.9)
-        self.assertAlmostEqual(result["trades"][0]["price"], 9.9099)
+        self.assertAlmostEqual(result["trades"][0]["price"], 9.91)
         self.assertEqual(result["trades"][0]["order_type"], "到价触发委托")
         self.assertTrue(all(row["pending_count"] == 0 for row in result["timeline"]))
 
@@ -183,7 +183,7 @@ class IntradayGridTest(unittest.TestCase):
         )
         self.assertEqual(result["events"][0]["type"], "armed")
         self.assertEqual(result["events"][1]["reason"], "累计反弹触发买入")
-        self.assertAlmostEqual(result["trades"][0]["price"], 9.393)
+        self.assertAlmostEqual(result["trades"][0]["price"], 9.4)
         self.assertAlmostEqual(result["trades"][0]["anchor_after"], 9.5)
 
     def test_floor_trigger_uses_original_grid_before_large_rebound_target(self):
@@ -230,7 +230,7 @@ class IntradayGridTest(unittest.TestCase):
         )
         self.assertEqual(result["events"][0]["type"], "armed")
         self.assertEqual(result["events"][1]["reason"], "累计回落触发卖出")
-        self.assertAlmostEqual(result["trades"][0]["price"], 10.593)
+        self.assertAlmostEqual(result["trades"][0]["price"], 10.59)
         self.assertAlmostEqual(result["trades"][0]["anchor_after"], 10.5)
 
     def test_passive_order_reserves_after_trigger_and_updates_on_fill(self):
@@ -258,7 +258,7 @@ class IntradayGridTest(unittest.TestCase):
         self.assertGreater(pending_row["reserved_cash"], 0)
         self.assertEqual(pending_row["anchor"], 10.0)
         self.assertEqual(result["summary"]["trade_count"], 1)
-        self.assertAlmostEqual(result["summary"]["closing_anchor"], 9.4905)
+        self.assertAlmostEqual(result["summary"]["closing_anchor"], 9.48)
 
     def test_trigger_update_can_move_base_before_passive_order_fills(self):
         result = simulate_intraday_grid(

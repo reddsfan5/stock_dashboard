@@ -93,9 +93,9 @@ class DecisionSnapshotTest(unittest.TestCase):
         self.assertIn("成交量比20", desktop)
         self.assertIn("指标口径", desktop)
         self.assertIn("区间涨跌", desktop)
-        self.assertIn("量 1.19×", mobile)
-        self.assertIn("ATR", mobile)
-        self.assertIn("区间涨跌", mobile)
+        # 手机版地址已统一跳转到同一响应式 dashboard，指标只维护一份。
+        self.assertIn('href="dashboard.html"', mobile)
+        self.assertIn('location.replace("dashboard.html"', mobile)
 
 
 if __name__ == "__main__":

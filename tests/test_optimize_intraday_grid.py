@@ -105,9 +105,12 @@ class OptimizeIntradayGridTest(unittest.TestCase):
             sell_tax_bps=0.0,
             slippage_bps=2.0,
             max_trades=2_000,
+            tick_size=0.01,
         )
         candidate = Candidate(TRANSACTION_DRIVEN, "diff", 0.01, 500)
         result = run_one_day(candidate, "2026-08-25", frame([1.40, 1.39, 1.40]), args)
+        self.assertEqual(result["matching_model_version"], "grid-v2")
+        self.assertEqual(result["tick_size"], 0.01)
         self.assertEqual(result["trade_count"], 2)
         self.assertAlmostEqual(result["initial_equity"], 100_000)
         self.assertGreater(result["turnover_pct"], 0)

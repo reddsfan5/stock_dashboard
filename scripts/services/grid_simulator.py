@@ -33,7 +33,8 @@ def build_html() -> str:
     <div class="primary">
       <div class="field search"><label>标的代码或名称</label><input id="code" value="518880" autocomplete="off" data-clear-on-focus="1" placeholder="例如 518880"><div class="results" id="results"></div></div>
       <div class="field"><label>交易日</label><select id="date"><option value="">自动取最新</option></select></div>
-      <div class="field"><label>银河网格模式</label><select id="mode"><option value="transaction_driven">成交驱动型</option><option value="price_triggered">到价触发型</option></select></div>
+      <div class="field"><label>网格模式（研究模拟）</label><select id="mode"><option value="transaction_driven">成交驱动型</option><option value="price_triggered">到价触发型</option></select></div>
+      <div class="field"><label>报价单位（元）</label><select id="tickSize"><option value="0.001">0.001（ETF）</option><option value="0.01">0.01（股票报价；仍假设T+0）</option></select></div>
       <div class="field"><label>初始现金（元）</label><input id="cash" type="number" value="100000" min="0" step="10000"></div>
       <div class="field"><label>初始持仓（份）</label><input id="shares" type="number" value="1000" min="0" step="100"></div>
       <button class="primary-btn" id="run">开始模拟</button>
@@ -82,10 +83,10 @@ def build_html() -> str:
       <div class="field"><label>有效价格上限（可空）</label><input id="priceCeiling" type="number" placeholder="不限制" min="0.001" step="0.001"></div>
       <div class="field"><label>保留底仓（份）</label><input id="minPosition" type="number" value="0" min="0" step="100"></div>
       <div class="field"><label>最大持仓（份）</label><input id="maxPosition" type="number" value="5000" min="100" step="100"></div>
-      <div class="check-field"><input id="multiplierEnabled" type="checkbox"><label for="multiplierEnabled">开启倍数委托</label></div>
+      <div class="check-field"><input id="multiplierEnabled" type="checkbox"><label id="multiplierLabel" for="multiplierEnabled">开启倍数委托</label></div>
       <div class="field conditional" id="buyMultiplierField" hidden><label id="buyMultiplierLabel">买入委托倍数</label><input id="buyMultiplier" type="number" value="3" min="1" max="100" step="1"></div>
       <div class="field conditional" id="sellMultiplierField" hidden><label id="sellMultiplierLabel">卖出委托倍数</label><input id="sellMultiplier" type="number" value="3" min="1" max="100" step="1"></div>
-      <div class="check-field transaction-only"><input id="cageToMarket" type="checkbox"><label for="cageToMarket">超笼子废单转市价</label></div>
+      <div class="check-field transaction-only"><input id="cageToMarket" type="checkbox" disabled><label for="cageToMarket">超笼子转市价（暂不支持）</label></div>
       <div class="field conditional transaction-only" id="priceCageField" hidden><label>模拟价格笼子（%）</label><input id="priceCagePct" type="number" value="2" min="0.1" max="20" step="0.1"></div>
       <div class="check-field"><input id="afterCloseUpdate" type="checkbox"><label for="afterCloseUpdate">次日基准价=当日收盘价</label></div>
       <div class="field"><label>策略有效期</label><select id="validityDays"><option value="90">3个月</option><option value="180">半年</option><option value="365">1年</option><option value="1095">3年</option></select></div>
@@ -114,7 +115,7 @@ def build_html() -> str:
 <script>
 const $=id=>document.getElementById(id),chart=echarts.init($('chart'));let result=null,index=0,timer=null,searchTimer=null;
 const money=v=>(+v).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2});
-const price=v=>+v<10?(+v).toFixed(3):(+v).toFixed(2);const signed=v=>`${v>=0?'+':''}${money(v)}`;const changePct=(value,base)=>base>0?((+value/+base)-1)*100:0;const signedPct=v=>`${v>=0?'+':''}${(+v).toFixed(2)}%`;const pnlClass=v=>v>=0?'up':'down';const marketClass=v=>v>0?'up':v<0?'down':'';
+const price=v=>(+v).toFixed((result?.tick_size??+$('tickSize').value)===0.01?2:3);const signed=v=>`${v>=0?'+':''}${money(v)}`;const changePct=(value,base)=>base>0?((+value/+base)-1)*100:0;const signedPct=v=>`${v>=0?'+':''}${(+v).toFixed(2)}%`;const pnlClass=v=>v>=0?'up':'down';const marketClass=v=>v>0?'up':v<0?'down':'';
 const modeTexts={
   transaction_driven:'成交驱动型：上下两侧预埋限价单，提前占用资金和证券；一侧全部成交后撤销另一侧并重新双挂。',
   price_triggered:'到价触发型：先监控网格价，达到条件后才报单。累计反弹/回落会继续跟踪极值；保底价保证反转回到原网格线时直接触发。'
@@ -124,7 +125,7 @@ function loading(on){$('loading').style.display=on?'flex':'none'}
 async function api(path){const r=await fetch(path,{cache:'no-store'}),body=await r.json();if(!r.ok)throw new Error(body.error||`HTTP ${r.status}`);return body}
 function updateModeHelp(){
   const arrival=$('mode').value==='price_triggered';
-  $('modeHelp').textContent=modeTexts[$('mode').value]+(arrival?' 页面中的盘口、触发和排队均由分钟OHLC近似，不代表银河柜台真实撮合。':' 价格笼子也只能用分钟端点近似。')+' 有效期和次日基准价属于跨日设置，本页只回放所选交易日。';
+  $('modeHelp').textContent=modeTexts[$('mode').value]+(arrival?' 页面中的盘口、触发和排队均由分钟OHLC近似，不代表银河柜台真实撮合。':' 固定数量放大属于研究设置；暂不支持价格笼子转市价。')+' 有效期和次日基准价属于跨日设置，本页只回放所选交易日。';
 }
 function updateConditionalControls(){
   const splitSteps=$('separateSteps').checked,splitLots=$('separateLots').checked,isDiff=$('stepMode').value==='diff',arrival=$('mode').value==='price_triggered';
@@ -134,18 +135,19 @@ function updateConditionalControls(){
   $('priceCageField').hidden=arrival||!$('cageToMarket').checked;
   $('reboundValueField').hidden=!arrival||!$('reboundEnabled').checked;$('pullbackValueField').hidden=!arrival||!$('pullbackEnabled').checked;
   const hasTurn=$('reboundEnabled').checked||$('pullbackEnabled').checked;$('floorTriggerEnabled').disabled=!hasTurn;if(!hasTurn)$('floorTriggerEnabled').checked=false;
-  const passive=arrival&&$('orderPriceMode').value==='passive';$('orderOffsetField').hidden=!passive;$('autoCancelToggle').hidden=!passive;$('autoCancelMinutesField').hidden=!passive||!$('autoCancelEnabled').checked;
+  const passive=arrival&&$('orderPriceMode').value==='passive',limit=arrival&&$('orderPriceMode').value!=='counterparty';$('orderOffsetField').hidden=!passive;$('autoCancelToggle').hidden=!limit;$('autoCancelMinutesField').hidden=!limit||!$('autoCancelEnabled').checked;
   const fillOption=[...$('baseUpdatePrice').options].find(o=>o.value==='fill'),updateOnTrigger=$('baseUpdateTiming').value==='triggered';fillOption.disabled=updateOnTrigger;if(updateOnTrigger&&$('baseUpdatePrice').value==='fill')$('baseUpdatePrice').value='grid';
   const unit=isDiff?'元':'%';$('buyStepLabel').textContent=splitSteps?`每下跌（${unit}）`:`每上涨/下跌（${unit}）`;$('sellStepLabel').textContent=`每上涨（${unit}）`;$('buyLotLabel').textContent=splitLots?'每笔买入（份）':'每笔委托（份）';
   const turnUnit=$('turnMode').value==='diff'?'元':'%';$('reboundValueLabel').textContent=`最低点反弹（${turnUnit}）`;$('pullbackValueLabel').textContent=`最高点回落（${turnUnit}）`;
-  $('buyMultiplierLabel').textContent=arrival?'跳格买入最大倍数':'买入委托倍数';$('sellMultiplierLabel').textContent=arrival?'跳格卖出最大倍数':'卖出委托倍数';
+  $('multiplierLabel').textContent=arrival?'开启跨格倍数（研究设置）':'开启固定数量放大（研究设置）';
+  $('buyMultiplierLabel').textContent=arrival?'跳格买入最大倍数':'买入固定数量放大（研究设置）';$('sellMultiplierLabel').textContent=arrival?'跳格卖出最大倍数':'卖出固定数量放大（研究设置）';
 }
 function query(){
   const splitSteps=$('separateSteps').checked,splitLots=$('separateLots').checked,buyStep=$('buyStep').value,sellStep=splitSteps?$('sellStep').value:buyStep,buyLot=$('buyLot').value,sellLot=splitLots?$('sellLot').value:buyLot;
-  const p=new URLSearchParams({code:$('code').value.trim(),mode:$('mode').value,cash:$('cash').value,shares:$('shares').value,step_mode:$('stepMode').value,grid_pct:buyStep,buy_step:buyStep,sell_step:sellStep,lot:buyLot,buy_lot:buyLot,sell_lot:sellLot,multiplier_enabled:$('multiplierEnabled').checked?'1':'0',buy_multiplier:$('buyMultiplier').value,sell_multiplier:$('sellMultiplier').value,price_floor:$('priceFloor').value,price_ceiling:$('priceCeiling').value,min_position:$('minPosition').value,max_position:$('maxPosition').value,cage_to_market:$('cageToMarket').checked?'1':'0',price_cage_pct:$('priceCagePct').value,rebound_enabled:$('reboundEnabled').checked?'1':'0',rebound_value:$('reboundValue').value,pullback_enabled:$('pullbackEnabled').checked?'1':'0',pullback_value:$('pullbackValue').value,turn_mode:$('turnMode').value,floor_trigger_enabled:$('floorTriggerEnabled').checked?'1':'0',order_price_mode:$('orderPriceMode').value,order_offset_bps:$('orderOffsetBps').value,base_update_timing:$('baseUpdateTiming').value,base_update_price:$('baseUpdatePrice').value,auto_cancel_enabled:$('autoCancelEnabled').checked?'1':'0',auto_cancel_minutes:$('autoCancelMinutes').value,monitor_price_mode:$('monitorPriceMode').value,after_close_update_base:$('afterCloseUpdate').checked?'1':'0',validity_days:$('validityDays').value,commission:$('commission').value,min_commission:$('minCommission').value,sell_tax:$('sellTax').value,slippage_bps:$('slippage').value});
+  const p=new URLSearchParams({code:$('code').value.trim(),tick_size:$('tickSize').value,mode:$('mode').value,cash:$('cash').value,shares:$('shares').value,step_mode:$('stepMode').value,grid_pct:buyStep,buy_step:buyStep,sell_step:sellStep,lot:buyLot,buy_lot:buyLot,sell_lot:sellLot,multiplier_enabled:$('multiplierEnabled').checked?'1':'0',buy_multiplier:$('buyMultiplier').value,sell_multiplier:$('sellMultiplier').value,price_floor:$('priceFloor').value,price_ceiling:$('priceCeiling').value,min_position:$('minPosition').value,max_position:$('maxPosition').value,cage_to_market:$('cageToMarket').checked?'1':'0',price_cage_pct:$('priceCagePct').value,rebound_enabled:$('reboundEnabled').checked?'1':'0',rebound_value:$('reboundValue').value,pullback_enabled:$('pullbackEnabled').checked?'1':'0',pullback_value:$('pullbackValue').value,turn_mode:$('turnMode').value,floor_trigger_enabled:$('floorTriggerEnabled').checked?'1':'0',order_price_mode:$('orderPriceMode').value,order_offset_bps:$('orderOffsetBps').value,base_update_timing:$('baseUpdateTiming').value,base_update_price:$('baseUpdatePrice').value,auto_cancel_enabled:$('autoCancelEnabled').checked?'1':'0',auto_cancel_minutes:$('autoCancelMinutes').value,monitor_price_mode:$('monitorPriceMode').value,after_close_update_base:$('afterCloseUpdate').checked?'1':'0',validity_days:$('validityDays').value,commission:$('commission').value,min_commission:$('minCommission').value,sell_tax:$('sellTax').value,slippage_bps:$('slippage').value});
   if($('basePrice').value)p.set('base_price',$('basePrice').value);if($('date').value)p.set('date',$('date').value);return p;
 }
-async function runSimulation(){stop();loading(true);notice('');try{result=await api('/api/grid/simulate?'+query());$('code').value=result.code;if(window.StockAppShell&&StockAppShell.bindClearOnFocus){const c=StockAppShell.bindClearOnFocus($('code'));if(c)c.arm()}const selected=result.date;$('date').innerHTML=result.dates.map(d=>`<option value="${d}" ${d===selected?'selected':''}>${d}</option>`).join('');$('cursor').max=result.timeline.length-1;index=0;$('cursor').value=0;$('assumptions').innerHTML=result.assumptions.map(x=>`• ${x}`).join('<br>');const u=new URL(location.href);u.searchParams.set('code',result.code);u.searchParams.set('date',result.date);u.searchParams.set('mode',result.config.mode);history.replaceState(null,'',u);render()}catch(e){notice(e.message)}finally{loading(false)}}
+async function runSimulation(){stop();loading(true);notice('');try{result=await api('/api/grid/simulate?'+query());$('code').value=result.code;if(window.StockAppShell&&StockAppShell.bindClearOnFocus){const c=StockAppShell.bindClearOnFocus($('code'));if(c)c.arm()}const selected=result.date;$('date').innerHTML=result.dates.map(d=>`<option value="${d}" ${d===selected?'selected':''}>${d}</option>`).join('');$('cursor').max=result.timeline.length-1;index=0;$('cursor').value=0;$('assumptions').innerHTML=[`撮合版本：${result.matching_model_version}；报价单位：${result.tick_size}元`,...result.assumptions].map(x=>`• ${x}`).join('<br>');const u=new URL(location.href);u.searchParams.set('code',result.code);u.searchParams.set('date',result.date);u.searchParams.set('mode',result.config.mode);history.replaceState(null,'',u);render()}catch(e){notice(e.message)}finally{loading(false)}}
 function stop(){if(timer){clearInterval(timer);timer=null}$('play').textContent='▶ 动态分时'}
 function play(){if(!result)return;if(timer){stop();return}if(index>=result.timeline.length-1)index=0;$('play').textContent='Ⅱ 暂停';timer=setInterval(()=>{index=Math.min(index+(+$('speed').value),result.timeline.length-1);$('cursor').value=index;render();if(index>=result.timeline.length-1)stop()},140)}
 function visibleTrades(){return result.trades.filter(t=>t.index<=index)}

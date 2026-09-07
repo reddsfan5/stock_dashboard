@@ -37,6 +37,7 @@ sys.path.insert(0, PROJECT_DIR)
 
 from backtest.intraday_grid import (  # noqa: E402
     IntradayGridConfig,
+    MATCHING_MODEL_VERSION,
     PRICE_TRIGGERED,
     TRANSACTION_DRIVEN,
     simulate_intraday_grid,
@@ -258,6 +259,7 @@ def config_for_day(candidate: Candidate, frame: pd.DataFrame, args) -> IntradayG
     turn_enabled = candidate.mode == PRICE_TRIGGERED and candidate.turn_value > 0
     return IntradayGridConfig(
         mode=candidate.mode,
+        tick_size=getattr(args, "tick_size", 0.001),
         initial_cash=cash,
         initial_shares=shares,
         base_price=open_price,
@@ -313,6 +315,8 @@ def run_one_day(candidate: Candidate, date: str, frame: pd.DataFrame, args) -> D
     )
     return {
         "candidate_id": candidate.key,
+        "matching_model_version": MATCHING_MODEL_VERSION,
+        "tick_size": config.tick_size,
         "date": date,
         "mode": candidate.mode,
         "step_mode": candidate.step_mode,
@@ -447,7 +451,7 @@ def create_parser() -> argparse.ArgumentParser:
     parser.add_argument("--sell-tax-bps", type=float, default=0.0)
     parser.add_argument("--slippage-bps", type=float, default=2.0)
     parser.add_argument("--passive-offset-bps", type=float, default=0.0)
-    parser.add_argument("--tick-size", type=float, default=0.001)
+    parser.add_argument("--tick-size", type=float, choices=[0.001, 0.01], default=0.001)
     parser.add_argument("--max-trades", type=int, default=2_000)
     parser.add_argument("--min-train-trades", type=float, default=1.0)
     parser.add_argument("--top", type=int, default=10)
@@ -541,13 +545,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         daily_frame.insert(2, "split", daily_frame["date"].map(split_map))
 
         prefix = args.output_prefix or os.path.join(
-            PROJECT_DIR, "output", f"grid_search_{code[2:]}"
+            PROJECT_DIR, "output", f"grid_search_{code[2:]}_{MATCHING_MODEL_VERSION}"
         )
         output_dir = os.path.dirname(os.path.abspath(prefix))
         os.makedirs(output_dir, exist_ok=True)
         ranking_path = prefix + ".csv"
         daily_path = prefix + "_daily.csv"
         best_path = prefix + "_best.json"
+        # Never replace prior research results, including explicitly named prefixes.
+        if any(os.path.exists(path) for path in (ranking_path, daily_path, best_path)):
+            raise ValueError("输出文件已存在，请使用新的 --output-prefix；历史结果不会覆盖")
+        ranking["matching_model_version"] = MATCHING_MODEL_VERSION
+        ranking["tick_size"] = args.tick_size
         ranking.to_csv(ranking_path, index=False, encoding="utf-8-sig", float_format="%.6f")
         daily_frame.to_csv(daily_path, index=False, encoding="utf-8-sig", float_format="%.6f")
 
@@ -559,6 +568,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             if not mode_rows.empty:
                 best_by_mode[mode] = mode_rows.iloc[0].to_dict()
         payload = {
+            "matching_model_version": MATCHING_MODEL_VERSION,
+            "tick_size": args.tick_size,
             "generated_as_of": dates[-1],
             "code": code,
             "method": args.method,
@@ -588,6 +599,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "best_by_mode": best_by_mode,
             "best_daily": best_daily.to_dict(orient="records"),
             "limitations": [
+                "grid-v2修正撮合顺序、跳空和报价单位；与旧版收益不可直接比较",
                 f"仅使用最近{len(dates)}个可用交易日时，样本很小，结果不能直接外推到未来",
                 "一分钟OHLC无法还原分笔先后、盘口排队、部分成交和真实滑点",
                 "每天独立重置账户用于公平调参，不模拟隔夜持仓连续演化",

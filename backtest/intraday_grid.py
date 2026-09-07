@@ -9,6 +9,9 @@
 """
 
 from dataclasses import asdict, dataclass
+from datetime import datetime
+from decimal import Decimal, ROUND_CEILING, ROUND_FLOOR
+import math
 from typing import Dict, Iterable, List, Optional, Tuple
 
 
@@ -18,11 +21,13 @@ class IntradayGridError(ValueError):
 
 TRANSACTION_DRIVEN = "transaction_driven"
 PRICE_TRIGGERED = "price_triggered"
+MATCHING_MODEL_VERSION = "grid-v2"
 GRID_MODES = {TRANSACTION_DRIVEN, PRICE_TRIGGERED}
 
 
 @dataclass(frozen=True)
 class IntradayGridConfig:
+    tick_size: float = 0.001
     mode: str = TRANSACTION_DRIVEN
     initial_cash: float = 100_000.0
     initial_shares: int = 1_000
@@ -65,6 +70,10 @@ class IntradayGridConfig:
     max_trades: int = 2_000
 
     def validate(self) -> None:
+        if self.tick_size not in {0.001, 0.01}:
+            raise IntradayGridError("报价单位必须为0.001或0.01元")
+        if self.cage_to_market:
+            raise IntradayGridError("暂不支持超笼子转市价：分钟行情无法核实报单及废单过程")
         if self.mode not in GRID_MODES:
             raise IntradayGridError("网格模式必须是成交驱动型或到价触发型")
         if self.step_mode not in {"pct", "diff"}:
@@ -166,7 +175,8 @@ def _bar_prices(bar: Dict, index: int) -> Tuple[float, float, float, float]:
     except (KeyError, TypeError, ValueError):
         raise IntradayGridError(f"第 {index + 1} 根分钟线价格无效")
     if (
-        min(open_price, high, low, close) <= 0
+        not all(math.isfinite(v) for v in (open_price, high, low, close))
+        or min(open_price, high, low, close) <= 0
         or high < max(open_price, close, low)
         or low > min(open_price, close, high)
     ):
@@ -181,12 +191,31 @@ def _intrabar_path(open_price: float, high: float, low: float, close: float) -> 
     return [open_price, high, low, close]
 
 
+def _timestamp(value) -> datetime:
+    text = str(value)
+    for fmt in ("%H:%M", "%H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S"):
+        try:
+            return datetime.strptime(text, fmt)
+        except ValueError:
+            pass
+    raise IntradayGridError("自动撤单需要有效且递增的行情时间")
+
+
 def simulate_intraday_grid(points: Iterable[Dict], config: IntradayGridConfig) -> Dict:
     """模拟一个交易日并返回适合前端逐分钟回放的 JSON。"""
     config.validate()
     bars = list(points)
     if not bars:
         raise IntradayGridError("分钟数据为空")
+
+    times = [_timestamp(bar.get("time")) for bar in bars] if config.auto_cancel_enabled else []
+    if times and any(a >= b for a, b in zip(times, times[1:])):
+        raise IntradayGridError("自动撤单需要有效且递增的行情时间")
+    tick = Decimal(str(config.tick_size))
+
+    def quote(value, up=False):
+        rounding = ROUND_CEILING if up else ROUND_FLOOR
+        return float((Decimal(str(value)) / tick).to_integral_value(rounding=rounding) * tick)
 
     first_open, _, _, _ = _bar_prices(bars[0], 0)
     cash = float(config.initial_cash)
@@ -219,16 +248,16 @@ def simulate_intraday_grid(points: Iterable[Dict], config: IntradayGridConfig) -
     if config.step_mode == "diff" and buy_step >= anchor:
         raise IntradayGridError("下跌差价必须小于初始基准价")
 
-    previous_close = first_open
     sequence = 0
     buy_tracker = {"active": False, "grid": None, "extreme": None}
     sell_tracker = {"active": False, "grid": None, "extreme": None}
 
     def levels(anchor_value: Optional[float] = None) -> Tuple[float, float]:
-        value = anchor if anchor_value is None else anchor_value
+        value = Decimal(str(anchor if anchor_value is None else anchor_value))
+        buy, sell = Decimal(str(buy_step)), Decimal(str(sell_step))
         if config.step_mode == "diff":
-            return value - buy_step, value + sell_step
-        return value * (1 - buy_step / 100.0), value * (1 + sell_step / 100.0)
+            return float(value - buy), float(value + sell)
+        return float(value * (1 - buy / 100)), float(value * (1 + sell / 100))
 
     def pending_reservations(exclude_order_id: Optional[int] = None) -> Tuple[float, int, int, int]:
         reserved_cash = 0.0
@@ -249,6 +278,7 @@ def simulate_intraday_grid(points: Iterable[Dict], config: IntradayGridConfig) -
 
     def order_state() -> Dict:
         buy_price, sell_price = levels()
+        buy_price, sell_price = quote(buy_price), quote(sell_price, True)
         reserved_cash, reserved_shares, pending_buy_shares, pending_sell_shares = pending_reservations()
         buy_amount = buy_price * base_buy_lot
         buy_fee = _fee(buy_amount, "buy", config)
@@ -310,20 +340,20 @@ def simulate_intraday_grid(points: Iterable[Dict], config: IntradayGridConfig) -
 
     def record_fill(order: Dict, fill_price: float, index: int, bar: Dict,
                     reason: str) -> Tuple[bool, str]:
-        nonlocal cash, shares, average_cost, anchor, realized_pnl, total_fee, sequence
+        nonlocal cash, shares, average_cost, anchor, realized_pnl, total_fee, sequence, min_shares, max_shares
         if len(trades) >= config.max_trades:
             return False, "达到最大成交笔数"
         side = order["side"]
         trade_shares = order["shares"]
         amount = fill_price * trade_shares
         fee = _fee(amount, side, config)
-        _, _, pending_buy_shares, pending_sell_shares = pending_reservations(
+        reserved_cash, _, pending_buy_shares, pending_sell_shares = pending_reservations(
             exclude_order_id=order.get("id")
         )
         if side == "buy":
             if shares + pending_buy_shares + trade_shares > config.max_position:
                 return False, "成交时达到最大持仓"
-            if cash + 1e-9 < amount + fee:
+            if cash - reserved_cash + 1e-9 < amount + fee:
                 return False, "触发后因成交价变化导致现金不足"
             old_cost = average_cost * shares
             cash -= amount + fee
@@ -340,6 +370,8 @@ def simulate_intraday_grid(points: Iterable[Dict], config: IntradayGridConfig) -
             if shares == 0:
                 average_cost = 0.0
 
+        min_shares = min(min_shares, shares)
+        max_shares = max(max_shares, shares)
         total_fee += fee
         anchor_before = anchor
         if config.mode == TRANSACTION_DRIVEN or config.base_update_timing == "filled":
@@ -396,14 +428,8 @@ def simulate_intraday_grid(points: Iterable[Dict], config: IntradayGridConfig) -
                 return False, "高于有效价格上限"
             return False, "触及保留底仓"
 
-        cage_gap_pct = abs(trigger / observed_price - 1) * 100
-        cage_converted = config.cage_to_market and cage_gap_pct > config.price_cage_pct
-        fill_price = observed_price if cage_converted else trigger
-        reason = (
-            "限价超出模拟价格笼子，转市价成交后撤单重挂"
-            if cage_converted else
-            "预埋限价单全部成交，撤销反向委托并重新双挂"
-        )
+        fill_price = quote(observed_price, side == "buy")
+        reason = "预埋限价单全部成交，撤销反向委托并重新双挂"
         order = {
             "id": -1,
             "side": side,
@@ -411,8 +437,8 @@ def simulate_intraday_grid(points: Iterable[Dict], config: IntradayGridConfig) -
             "grid_price": trigger,
             "trigger_price": trigger,
             "order_price": trigger,
-            "order_type": "笼子外转市价" if cage_converted else "预埋限价单",
-            "cage_converted": cage_converted,
+            "order_type": "预埋限价单",
+            "cage_converted": False,
             "cancelled_side": "sell" if side == "buy" else "buy",
         }
         return record_fill(order, fill_price, index, bar, reason)
@@ -420,9 +446,9 @@ def simulate_intraday_grid(points: Iterable[Dict], config: IntradayGridConfig) -
     def turn_target(side: str, extreme: float, grid_price: float) -> Tuple[float, bool]:
         value = config.rebound_value if side == "buy" else config.pullback_value
         if config.turn_mode == "pct":
-            normal = extreme * (1 + value / 100.0) if side == "buy" else extreme * (1 - value / 100.0)
+            normal = float(Decimal(str(extreme)) * (1 + (1 if side == "buy" else -1) * Decimal(str(value)) / 100))
         else:
-            normal = extreme + value if side == "buy" else extreme - value
+            normal = float(Decimal(str(extreme)) + (1 if side == "buy" else -1) * Decimal(str(value)))
         if not config.floor_trigger_enabled:
             return normal, False
         if side == "buy" and normal >= grid_price:
@@ -435,9 +461,10 @@ def simulate_intraday_grid(points: Iterable[Dict], config: IntradayGridConfig) -
         if not config.multiplier_enabled:
             return 1
         step = buy_step if side == "buy" else sell_step
-        distance = anchor_before - observed_extreme if side == "buy" else observed_extreme - anchor_before
-        one_grid = step if config.step_mode == "diff" else anchor_before * step / 100.0
-        crossed = max(1, int((distance + 1e-10) // one_grid))
+        base, extreme = Decimal(str(anchor_before)), Decimal(str(observed_extreme))
+        distance = base - extreme if side == "buy" else extreme - base
+        one_grid = Decimal(str(step)) if config.step_mode == "diff" else base * Decimal(str(step)) / 100
+        crossed = max(1, int(distance // one_grid))
         cap = config.buy_multiplier if side == "buy" else config.sell_multiplier
         return min(crossed, cap)
 
@@ -450,27 +477,30 @@ def simulate_intraday_grid(points: Iterable[Dict], config: IntradayGridConfig) -
         if config.multiplier_enabled and multiplier > 1:
             step = buy_step if side == "buy" else sell_step
             if config.step_mode == "diff":
-                grid_price = anchor_before + (-step if side == "buy" else step) * multiplier
+                grid_price = float(Decimal(str(anchor_before)) + (-1 if side == "buy" else 1) * Decimal(str(step)) * multiplier)
             else:
                 direction = -1 if side == "buy" else 1
-                grid_price = anchor_before * (1 + direction * step / 100.0 * multiplier)
+                grid_price = float(Decimal(str(anchor_before)) * (1 + direction * Decimal(str(step)) / 100 * multiplier))
         base_lot = base_buy_lot if side == "buy" else base_sell_lot
         trade_shares = base_lot * multiplier
         direction = 1 if side == "buy" else -1
         if config.order_price_mode == "counterparty":
-            order_price = trigger_price * (1 + direction * config.slippage_rate)
+            order_price = Decimal(str(trigger_price)) * (1 + direction * Decimal(str(config.slippage_rate)))
             order_type = "到价触发委托"
             immediate_fill = True
         elif config.order_price_mode == "trigger":
             order_price = trigger_price
             order_type = "到价触发-触发价限价"
-            immediate_fill = True
+            immediate_fill = False
         else:
             offset = config.order_offset_bps / 10_000.0
-            order_price = trigger_price * (1 - offset if side == "buy" else 1 + offset)
+            order_price = Decimal(str(trigger_price)) * (1 + (-1 if side == "buy" else 1) * Decimal(str(offset)))
             order_type = "到价触发-排队限价"
             immediate_fill = False
 
+        order_price = quote(order_price, side == "buy" if immediate_fill else side == "sell")
+        if order_price <= 0:
+            return False, "委托价格必须大于0"
         reserved_cash, reserved_shares, pending_buy_shares, pending_sell_shares = pending_reservations()
         amount = order_price * trade_shares
         fee = _fee(amount, side, config)
@@ -517,176 +547,108 @@ def simulate_intraday_grid(points: Iterable[Dict], config: IntradayGridConfig) -
         pending_orders.append(order)
         return True, ""
 
-    def resolve_pending(index: int, bar: Dict, high: float, low: float) -> Tuple[List[int], str, bool]:
-        """用后续分钟 OHLC 处理排队限价；返回成交ID、阻塞原因、是否仍在等待。"""
-        minute_trade_ids: List[int] = []
+    def observe(price: float, index: int, bar: Dict) -> str:
+        """一次观察只消费已有委托或一次新触发，不在同一观察内递归重挂。"""
+        filled_any = False
         blocked = ""
         for order in list(pending_orders):
-            age = index - order["submitted_index"]
-            if config.auto_cancel_enabled and age >= config.auto_cancel_minutes:
-                pending_orders.remove(order)
-                add_event(index, bar, "cancel", order["side"], order["order_price"],
-                          f"排队限价等待{config.auto_cancel_minutes}分钟未成交，自动撤单")
-                continue
-            crossed = (
-                order["side"] == "buy" and low <= order["order_price"]
-            ) or (
-                order["side"] == "sell" and high >= order["order_price"]
-            )
-            if age <= 0 or not crossed:
+            marketable = price <= order["order_price"] if order["side"] == "buy" else price >= order["order_price"]
+            if not marketable:
                 continue
             pending_orders.remove(order)
-            before = len(trades)
-            filled, blocked = record_fill(
-                order, order["order_price"], index, bar,
-                f"{order['trigger_reason']}；排队限价在后续分钟全部成交",
-            )
-            if filled:
-                minute_trade_ids.extend(range(before, len(trades)))
-            else:
-                add_event(index, bar, "reject", order["side"], order["order_price"], blocked)
-        waiting = bool(pending_orders) and config.base_update_timing == "filled"
-        return minute_trade_ids, blocked, waiting
-
-    def arm_tracker(side: str, grid_price: float, extreme: float,
-                    index: int, bar: Dict) -> None:
-        tracker = buy_tracker if side == "buy" else sell_tracker
-        if tracker["active"]:
-            if side == "buy":
-                tracker["extreme"] = min(tracker["extreme"], extreme)
-            else:
-                tracker["extreme"] = max(tracker["extreme"], extreme)
-            return
-        tracker.update(active=True, grid=grid_price, extreme=extreme)
-        add_event(
-            index, bar, "armed", side, grid_price,
-            "跌破买入网格，开始跟踪最低价并等待累计反弹"
-            if side == "buy" else
-            "突破卖出网格，开始跟踪最高价并等待累计回落",
-        )
-
-    def process_price_segment(segment_start: float, segment_end: float,
-                              index: int, bar: Dict) -> Tuple[List[int], str]:
-        minute_trade_ids: List[int] = []
-        blocked = ""
-        cursor = segment_start
-        guard = 0
-        while cursor != segment_end and guard < config.max_trades + 4:
-            guard += 1
-            buy_grid, sell_grid = levels()
-            candidates: List[Tuple[float, str, float, float, str]] = []
-            if segment_end > cursor:
-                if buy_tracker["active"]:
-                    target, floor_used = turn_target(
-                        "buy", buy_tracker["extreme"], buy_tracker["grid"]
-                    )
-                    if cursor < target <= segment_end:
-                        reason = "保底价触发买入" if floor_used else "累计反弹触发买入"
-                        candidates.append((target, "buy", buy_tracker["grid"], buy_tracker["extreme"], reason))
-                if not config.pullback_enabled and cursor < sell_grid <= segment_end:
-                    trigger = segment_end if config.multiplier_enabled else sell_grid
-                    reason = "跳格到价触发卖出" if config.multiplier_enabled else "到达卖出网格"
-                    candidates.append((trigger, "sell", sell_grid, segment_end, reason))
-                if candidates:
-                    target, side, grid_price, extreme, reason = min(candidates, key=lambda item: item[0])
-                    before = len(trades)
-                    submitted, blocked = submit_price_order(
-                        side, grid_price, target, extreme, reason, index, bar
-                    )
-                    if not submitted:
-                        add_event(index, bar, "reject", side, target, blocked)
-                        break
-                    minute_trade_ids.extend(range(before, len(trades)))
-                    cursor = target
-                    if config.base_update_timing == "filled" and pending_orders:
-                        break
+            filled, blocked = record_fill(order, quote(price, order["side"] == "buy"), index, bar,
+                                          "限价委托在后续行情事件全部成交")
+            filled_any = filled_any or filled
+            if not filled:
+                add_event(index, bar, "reject", order["side"], price, blocked)
+        if filled_any or (pending_orders and config.base_update_timing == "filled"):
+            return blocked
+        buy_grid, sell_grid = levels()
+        if config.mode == TRANSACTION_DRIVEN:
+            state = order_state()
+            for side in ("buy", "sell"):
+                limit = state[side + "_price"]
+                if (price <= limit if side == "buy" else price >= limit):
+                    _, blocked = transaction_execute(side, limit, price, index, bar)
+                    break
+            return blocked
+        for side, grid, tracker, enabled in (
+            ("buy", buy_grid, buy_tracker, config.rebound_enabled),
+            ("sell", sell_grid, sell_tracker, config.pullback_enabled),
+        ):
+            reached = price <= quote(grid) if side == "buy" else price >= quote(grid, True)
+            reason = "到达买入网格" if side == "buy" else "到达卖出网格"
+            extreme = price
+            if enabled:
+                if not tracker["active"]:
+                    if reached:
+                        tracker.update(active=True, grid=grid, extreme=price)
+                        add_event(index, bar, "armed", side, price, "开始跟踪反弹/回落极值")
                     continue
-                if config.pullback_enabled and segment_end >= sell_grid:
-                    arm_tracker("sell", sell_grid, segment_end, index, bar)
-                elif sell_tracker["active"]:
-                    sell_tracker["extreme"] = max(sell_tracker["extreme"], segment_end)
-            else:
-                if sell_tracker["active"]:
-                    target, floor_used = turn_target(
-                        "sell", sell_tracker["extreme"], sell_tracker["grid"]
-                    )
-                    if segment_end <= target < cursor:
-                        reason = "保底价触发卖出" if floor_used else "累计回落触发卖出"
-                        candidates.append((target, "sell", sell_tracker["grid"], sell_tracker["extreme"], reason))
-                if not config.rebound_enabled and segment_end <= buy_grid < cursor:
-                    trigger = segment_end if config.multiplier_enabled else buy_grid
-                    reason = "跳格到价触发买入" if config.multiplier_enabled else "到达买入网格"
-                    candidates.append((trigger, "buy", buy_grid, segment_end, reason))
-                if candidates:
-                    target, side, grid_price, extreme, reason = max(candidates, key=lambda item: item[0])
-                    before = len(trades)
-                    submitted, blocked = submit_price_order(
-                        side, grid_price, target, extreme, reason, index, bar
-                    )
-                    if not submitted:
-                        add_event(index, bar, "reject", side, target, blocked)
-                        break
-                    minute_trade_ids.extend(range(before, len(trades)))
-                    cursor = target
-                    if config.base_update_timing == "filled" and pending_orders:
-                        break
-                    continue
-                if config.rebound_enabled and segment_end <= buy_grid:
-                    arm_tracker("buy", buy_grid, segment_end, index, bar)
-                elif buy_tracker["active"]:
-                    buy_tracker["extreme"] = min(buy_tracker["extreme"], segment_end)
-            break
-        return minute_trade_ids, blocked
+                tracker["extreme"] = (min if side == "buy" else max)(tracker["extreme"], price)
+                extreme = tracker["extreme"]
+                target, floor_used = turn_target(side, extreme, tracker["grid"])
+                target = quote(target, side == "buy")
+                reached = price >= target if side == "buy" else price <= target
+                grid = tracker["grid"]
+                reason = ("保底价触发" if floor_used else "累计反弹触发" if side == "buy" else "累计回落触发") + ("买入" if side == "buy" else "卖出")
+            if reached:
+                submitted, blocked = submit_price_order(side, grid, price, extreme, reason, index, bar)
+                if not submitted:
+                    add_event(index, bar, "reject", side, price, blocked)
+                return blocked
+        return blocked
+
+    def next_event(cursor: float, end: float) -> float:
+        """跳到下一个相关报价，避免枚举整段每一个 tick。"""
+        up = end > cursor
+        next_tick = float(Decimal(str(cursor)) + (tick if up else -tick))
+        candidates = [end]
+        def add(target):
+            if (up and cursor < target <= end) or (not up and end <= target < cursor):
+                candidates.append(target)
+        for order in pending_orders:
+            limit = order["order_price"]
+            marketable = cursor <= limit if order["side"] == "buy" else cursor >= limit
+            add(next_tick if marketable else limit)
+        if not pending_orders or config.base_update_timing != "filled":
+            for side, grid, tracker, enabled in (
+                ("buy", levels()[0], buy_tracker, config.rebound_enabled),
+                ("sell", levels()[1], sell_tracker, config.pullback_enabled),
+            ):
+                is_turn = config.mode == PRICE_TRIGGERED and enabled and tracker["active"]
+                if is_turn:
+                    target, _ = turn_target(side, tracker["extreme"], tracker["grid"])
+                    add(quote(target, side == "buy"))
+                else:
+                    add(quote(grid, side == "sell"))
+        return min(candidates) if up else max(candidates)
 
     for index, bar in enumerate(bars):
         open_price, high, low, close = _bar_prices(bar, index)
-        minute_trade_ids: List[int] = []
+        if any(Decimal(str(v)) % tick != 0 for v in (open_price, high, low, close)):
+            raise IntradayGridError(f"第 {index + 1} 根分钟线价格不符合报价单位 {config.tick_size}")
+        before = len(trades)
         blocked = ""
-        waiting_for_fill = False
-        if config.mode == PRICE_TRIGGERED:
-            resolved_ids, blocked, waiting_for_fill = resolve_pending(index, bar, high, low)
-            minute_trade_ids.extend(resolved_ids)
-
-        if config.monitor_price_mode == "close" and config.mode == PRICE_TRIGGERED:
-            path = [previous_close, close]
-            if index == 0 and anchor != previous_close:
-                path.insert(0, anchor)
-        else:
-            path = _intrabar_path(open_price, high, low, close)
-            if index == 0 and anchor != open_price:
-                path.insert(0, anchor)
-            elif index and previous_close != open_price:
-                path.insert(0, previous_close)
-
-        if not waiting_for_fill:
-            for segment_start, segment_end in zip(path, path[1:]):
-                if config.mode == TRANSACTION_DRIVEN:
-                    cursor = segment_start
-                    guard = 0
-                    while cursor != segment_end and guard < config.max_trades + 2:
-                        guard += 1
-                        state = order_state()
-                        if segment_end > cursor:
-                            side, trigger = "sell", state["sell_price"]
-                            crossed = cursor < trigger <= segment_end
-                        else:
-                            side, trigger = "buy", state["buy_price"]
-                            crossed = segment_end <= trigger < cursor
-                        if not crossed:
-                            break
-                        before = len(trades)
-                        filled, blocked = transaction_execute(
-                            side, trigger, segment_end, index, bar
-                        )
-                        if not filled:
-                            break
-                        minute_trade_ids.extend(range(before, len(trades)))
-                        cursor = trigger
-                else:
-                    ids, blocked = process_price_segment(segment_start, segment_end, index, bar)
-                    minute_trade_ids.extend(ids)
-                if blocked:
+        if config.auto_cancel_enabled:
+            for order in list(pending_orders):
+                age = (times[index] - times[order["submitted_index"]]).total_seconds()
+                if age >= config.auto_cancel_minutes * 60:
+                    pending_orders.remove(order)
+                    add_event(index, bar, "cancel", order["side"], order["order_price"],
+                              f"委托等待{config.auto_cancel_minutes}分钟未成交，自动撤单")
+        path = ([close] if config.monitor_price_mode == "close" and config.mode == PRICE_TRIGGERED
+                else _intrabar_path(open_price, high, low, close))
+        blocked = observe(path[0], index, bar)
+        for start, end in zip(path, path[1:]):
+            cursor = start
+            while cursor != end:
+                cursor = next_event(cursor, end)
+                blocked = observe(cursor, index, bar) or blocked
+                if len(trades) >= config.max_trades:
+                    blocked = "达到最大成交笔数"
                     break
+        minute_trade_ids = list(range(before, len(trades)))
 
         equity = cash + shares * close
         hold_equity = config.initial_cash + config.initial_shares * close
@@ -742,7 +704,6 @@ def simulate_intraday_grid(points: Iterable[Dict], config: IntradayGridConfig) -
             "trade_ids": minute_trade_ids,
             "blocked": blocked,
         })
-        previous_close = close
 
     final_price = float(bars[-1]["close"])
     final_equity = cash + shares * final_price
@@ -751,6 +712,8 @@ def simulate_intraday_grid(points: Iterable[Dict], config: IntradayGridConfig) -
     mode_name = "成交驱动型" if config.mode == TRANSACTION_DRIVEN else "到价触发型"
     assumptions = [
         "假设标的允许日内T+0买卖，模拟器不自动核验交易所规则",
+        "撮合模型grid-v2；与旧版收益不可直接比较；报价单位由用户指定",
+        "跳空仅观察开盘价；限价委托从后续行情事件开始参与成交",
         "分钟内按阳线 O→L→H→C、阴线 O→H→L→C 推定触发先后",
         "分钟K线不含盘口、排队和部分成交，所有成交按整笔处理",
         "收盘不强制平仓，剩余持仓按最后一分钟价格计入净值",
@@ -758,19 +721,21 @@ def simulate_intraday_grid(points: Iterable[Dict], config: IntradayGridConfig) -
     if config.mode == TRANSACTION_DRIVEN:
         assumptions.insert(1, "成交驱动型模拟双侧预埋限价单，占用资金和证券；一侧全成后撤另一侧并重挂")
     else:
-        assumptions.insert(1, "到价触发型在触价前不占用资券；触发后的排队限价才冻结对应资金或证券")
+        assumptions.insert(1, "到价触发型在触价前不占用资券；触发后的限价单才冻结对应资金或证券")
         if config.monitor_price_mode == "close":
             assumptions.append("监控行情选择分钟收盘价，分钟内短暂触价将被忽略")
         else:
             assumptions.append("监控行情使用分钟OHLC路径代理实时最新价，不等同于银河柜台逐笔Level-1行情")
-        if config.order_price_mode == "passive":
-            assumptions.append("排队限价仅从下一分钟起用OHLC判断能否整笔成交，无法还原盘口队列和部分成交")
-    if config.cage_to_market:
-        assumptions.append("超笼子转市价使用分钟端点和设定笼子比例近似，真实判定需要逐笔盘口")
+        if config.order_price_mode != "counterparty":
+            assumptions.append("限价单沿后续OHLC路径整笔撮合，同分钟允许成交；没有真实队列")
+        else:
+            assumptions.append("对手价采用滑点近似且立即整笔成交，不代表真实盘口")
     if config.after_close_update_base:
         assumptions.append("次日基准价更新仅计算下一交易日基准，本页单日回放不会继续跨日撮合")
 
     return {
+        "matching_model_version": MATCHING_MODEL_VERSION,
+        "tick_size": config.tick_size,
         "config": asdict(config),
         "mode_name": mode_name,
         "summary": {

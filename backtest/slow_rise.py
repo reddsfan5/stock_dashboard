@@ -180,7 +180,9 @@ def prepare_slow_rise_panel(
         exit_reason[intraday_hit] = "止盈"
         target_hit |= gap_hit | intraday_hit
 
-    exit_dates = np.full(len(panel), np.datetime64("NaT"), dtype="datetime64[ns]")
+    exit_dates = np.full(
+        len(panel), np.datetime64("NaT", "ns"), dtype="datetime64[ns]"
+    )
     for day in range(1, config.hold_days + 1):
         mask = exit_day == day
         exit_dates[mask] = panel.loc[mask, f"未来{day}日日期"].to_numpy(dtype="datetime64[ns]")
