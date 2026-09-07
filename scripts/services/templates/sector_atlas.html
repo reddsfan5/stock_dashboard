@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>__NAME__ · 板块图谱</title>
+<link rel="stylesheet" href="/assets/app.css">
+<link id="workbench-css" rel="stylesheet" href="/assets/workbench.css">
+<link rel="stylesheet" href="/assets/sector-atlas.css">
+<script src="/assets/app-shell.js" defer></script>
+<script id="workbench-js" src="/assets/workbench.js" defer></script>
+<script src="/assets/sector-atlas.js" defer></script>
+<link rel="stylesheet" href="/assets/classification.css">
+<script src="/assets/classification.js" defer></script>
+</head>
+<body class="app-workbench" data-page="sectors">
+<div id="app-shell" data-active="sectors"></div>
+<main class="atlas">
+<header class="atlas-header"><div><p class="atlas-kicker">产业认知 / SECTOR ATLAS</p><h1>板块图谱</h1><p class="atlas-meta">看懂定义、产业链与公司所处的位置。</p></div><label>专题<select id="sectorSelect">__OPTIONS__</select><small>已收录 __COUNT__ 个专题</small></label></header>
+<div class="atlas-layout">
+<aside class="atlas-toc"><span>本篇阅读路线</span><nav aria-label="专题章节">__TOC__</nav></aside>
+<div class="atlas-content">
+<section id="definition" class="atlas-intro"><div class="atlas-intro-copy"><span class="atlas-tag">跨行业主题 · 研究分类</span><h2>__NAME__</h2><p class="intro-line">__SUBTITLE__</p><p>__DEFINITION__</p><p class="atlas-meta">__BOUNDARY__</p><div class="intro-links"><a href="#overview">开始读图 ↓</a><a href="#stocks">查看相关个股 →</a></div></div><div class="atlas-cover"><button class="atlas-image" data-image="__COVER__" data-caption="__NAME__全景" aria-label="放大__NAME__全景"><img src="__COVER__" alt="__NAME__产业链全景预览" width="1168" height="784"></button><div><strong>一张图建立产业坐标</strong><p>先看全景，再逐层理解技术与业务。</p><small>5 张原图 · 点击放大阅读</small></div></div></section>
+<section id="chain" class="atlas-section"><div class="chapter-heading"><span>先建立分类坐标</span><h2>从供给到应用，顺着交付关系读</h2><p>上游 / 中游 / 下游描述的是相对关系，同一家企业可能跨越多个环节。</p></div><div class="atlas-chain">__LAYERS__</div><p class="chain-loop">材料与部件 → 整机与运力 → 在轨能力 → 地面接入 → 客户付费 ↺ 反馈建设需求</p></section>
+__CHAPTERS__
+<section id="parts" class="atlas-section"><div class="chapter-heading"><span>术语与部件 / QUICK REFERENCE</span><h2>零部件速查</h2><p>按系统展开，用文字辅助阅读原图。</p></div><div class="atlas-parts">__PARTS__</div></section>
+<section id="database-members" class="atlas-section"><div class="chapter-heading"><span>数据商板块成分 · 本地数据库</span><h2>__NAME__关联标的</h2><p>下方为已同步标的中的东方财富同名板块成员；覆盖数量不代表全市场完整成分。正文精选示例与数据商分类独立维护。</p></div><div id="atlasMemberships" data-board="__NAME__" style="padding:0 24px 24px">正在读取本地数据…</div></section>
+<section id="stocks" class="atlas-section"><div class="chapter-heading"><span>从产业链回到公司</span><h2>相关个股 · 业务映射示例</h2><p>按官方业务资料归入相应环节，非完整概念成分表；同一公司可能跨层。未验证商业航天收入占比。</p></div><div class="stock-filter"><label>名称 / 代码<input id="stockSearch" type="search" placeholder="搜索公司或业务关键词"></label><label>产业链环节<select id="stockLayer"><option value="">全部环节</option>__FILTERS__</select></label><span id="stockCount" role="status"></span></div><div class="atlas-stocks">__STOCKS__</div><div id="stockEmpty" hidden>本篇暂未收录符合条件的公司。<button id="resetStocks">清空筛选</button></div></section>
+<section id="sources" class="atlas-section atlas-sources"><h2>资料与分类说明</h2><p>图解与初始提纲：用户提供。图片按“全景 → 火箭 → 卫星 → 地面与应用 → 载人与在轨设施”排序，保留原图。正文为整理后的阅读说明；图片中的小字、编号和财务排序不作为独立事实依据。</p><p>公司映射依据已附在各卡片中，资料核对日：__CHECKED__。这里的分类用于理解业务关系，不代表投资评级、正式指数成员或企业全部业务。</p><p>本页为当前产业学习资料，未按历史训练时点归档；不用于无剧透训练过程。</p><a href="#definition">回到本篇顶部 ↑</a></section>
+</div></div>
+</main>
+<dialog id="atlasLightbox" aria-labelledby="lightboxTitle"><header><h2 id="lightboxTitle">图片详情</h2><button id="imageZoom" aria-pressed="false">原始尺寸</button><button id="imageClose">关闭</button></header><div class="lightbox-body" tabindex="0"><img id="lightboxImage" alt=""></div></dialog>
+</body></html>
