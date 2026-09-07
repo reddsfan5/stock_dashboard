@@ -70,64 +70,39 @@ def build_screening_html(
     """生成选股仪表盘 HTML（桌面版）"""
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
     decision_map = snapshot_lookup(decision_snapshot)
+    market_date = "—"
+    if decision_snapshot is not None and "指标日期" in decision_snapshot.columns:
+        dates = pd.to_datetime(
+            decision_snapshot["指标日期"], errors="coerce"
+        ).dropna()
+        if len(dates):
+            market_date = dates.max().strftime("%Y-%m-%d")
 
-    # ---- 收集K线数据（最多1000只） ----
-    all_codes = set()
+    # 首屏只嵌入轻量的标的元数据。日 K 在用户点开侧栏时通过现有只读
+    # API 按代码加载，避免把最多 1000 × 60 根 K 线塞入 HTML。
+    all_codes = []
+    seen_codes = set()
+    kline_meta = {}
     for df in results.values():
         if len(df) > 0 and "代码" in df.columns:
-            all_codes.update(df["代码"].head(500).tolist())
-    all_codes = list(all_codes)[:1000]
-
-    kline_json = "{}"
-    if data is not None and all_codes:
-        from tqdm import tqdm
-        # 一次过滤出所有需要的K线，避免逐只全表扫描
-        full_cache = data.cache  # 只取一次，避免 CombinedData 重复 concat
-        cache = full_cache[full_cache["代码"].isin(all_codes)].copy()
-        cache = cache.sort_values(["代码", "日期"])
-        # 每只股票只保留最近 60 天
-        cache = cache.groupby("代码").tail(60)
-        if "开盘" not in cache.columns:
-            cache["开盘"] = cache["收盘"].shift(1).fillna(cache["收盘"])
-
-        # 行业信息
-        try:
-            from data.industry import StockInfo
-            info = StockInfo()
-            sector_map = dict(zip(info.df["代码"], info.df["申万1级"]))
-        except Exception:
-            sector_map = {}
-
-        kline_map = {}
-        for code, grp in tqdm(cache.groupby("代码"), desc="K线数据",
-                              total=len(all_codes), unit="只"):
-            try:
-                grp = grp.sort_values("日期")
-                if len(grp) > 0:
-                    grp["涨跌%"] = grp["收盘"].pct_change() * 100
-                    grp["前收"] = grp["收盘"].shift(1)
-                    changes = [round(v, 2) if not pd.isna(v) else None for v in grp["涨跌%"].values]
-                    prevs = [round(v, 2) if not pd.isna(v) else None for v in grp["前收"].values]
-                    volumes = [float(v) if not pd.isna(v) else 0 for v in grp["成交额"].values]
-                    ohlc = []
-                    for _, r in grp.iterrows():
-                        ohlc.append([
-                            float(r["开盘"]), float(r["收盘"]),
-                            float(r["最低"]), float(r["最高"]),
-                        ])
-                    kline_map[code] = {
-                        "dates": grp["日期"].dt.strftime("%Y-%m-%d").tolist(),
-                        "data": ohlc,
-                        "prevs": prevs,
-                        "changes": changes,
-                        "volumes": volumes,
-                        "name": data.get_stock_name(code),
-                        "sector": sector_map.get(code, ""),
-                        "metrics": decision_map.get(str(code), {}),
-                    }
-            except Exception:
-                pass
-        kline_json = json.dumps(kline_map, ensure_ascii=False)
+            for _, row in df.head(500).iterrows():
+                code = str(row.get("代码", ""))
+                if not code or code in seen_codes or len(all_codes) >= 1000:
+                    continue
+                seen_codes.add(code)
+                all_codes.append(code)
+                name = row.get("名称", "")
+                sector = row.get("申万1级", "")
+                if pd.isna(name):
+                    name = ""
+                if pd.isna(sector):
+                    sector = ""
+                kline_meta[code] = {
+                    "name": str(name),
+                    "sector": str(sector),
+                    "metrics": decision_map.get(code, {}),
+                }
+    kline_meta_json = json.dumps(kline_meta, ensure_ascii=False)
 
     tab_buttons = ""
     tables_html = ""
@@ -215,13 +190,13 @@ def build_screening_html(
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <script>try{{var root=document.documentElement;root.dataset.theme=localStorage.getItem('stockAppTheme')||'light';root.dataset.density=localStorage.getItem('stockAppDensity')||'comfortable';root.dataset.sidebar=localStorage.getItem('stockAppSidebar')||(innerWidth<1280?'collapsed':'expanded');}}catch(_){{}}</script>
-<title>{title} — {now}</title>
+<title>{title} — 行情 {market_date}</title>
 <link rel="stylesheet" href="vendor/jquery.dataTables.min.css">
 <link rel="stylesheet" href="/assets/app.css">
 <script src="/assets/app-shell.js" defer></script>
 <script id="workbench-js" src="/assets/workbench.js" defer></script>
 <style>
-.screen-pending .header,.screen-pending .tabs,.screen-pending .stats,.screen-pending .decision-tools,.screen-pending .content,.screen-pending .wb-screen-toolbar,.screen-pending footer {{visibility:hidden}}
+.screen-pending .content,.screen-pending .wb-screen-toolbar,.screen-pending footer {{visibility:hidden}}
 .screen-pending .content {{max-height:360px;overflow:hidden}}
 #screen-loading {{position:absolute;top:100px;left:calc(var(--wb-side,216px) + 24px);right:24px;padding:24px;border:1px solid var(--app-border);border-radius:12px;background:var(--app-surface);color:var(--app-muted)}}
 #screen-loading .placeholder {{height:44px;margin-top:16px;border-radius:8px;background:var(--app-surface-2)}}
@@ -259,14 +234,20 @@ table.dataTable {{ font-size:12px; }}
 .kline-panel.active {{ display:block; }}
 .kline-panel .close {{ position:sticky; top:0; background:#1a73e8; color:white; border:none; width:100%; padding:12px; font-size:14px; cursor:pointer; z-index:1; }}
 .kline-metrics {{ display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#e0e5ed }}.kline-metric {{ background:#fff;padding:8px 10px }}.kline-metric span {{ display:block;color:#818b9d;font-size:9px;margin-bottom:3px }}.kline-metric b {{ font-size:13px;font-variant-numeric:tabular-nums }}
-.kline-panel .chart {{ width:100%; height:600px; }}
+.kline-panel .chart {{ width:100%; height:600px; touch-action:none; overscroll-behavior:contain; }}
+#klineChart.chart-touch-lock {{ touch-action:none; overscroll-behavior:contain; }}
+.kline-tip-bar {{ margin:0;padding:8px 12px;font-size:12px;line-height:1.45;background:#f5f7fb;border-bottom:1px solid #e0e5ed;color:#1f2937;font-variant-numeric:tabular-nums;position:sticky;top:44px;z-index:2;box-sizing:border-box; }}
+.kline-tip-bar[hidden] {{ display:none !important; }}
+.kline-tip-bar b {{ font-weight:700; }}
+.kline-state {{ margin:16px 12px;padding:14px;border:1px solid var(--app-border);border-radius:8px;background:var(--app-surface-2);color:var(--app-muted);font-size:12px }}
+.kline-state[hidden] {{ display:none }}
 .journal-action {{ display:block;margin:10px 12px;padding:9px;text-align:center;text-decoration:none;background:#edf4ff;color:#1a73e8;border:1px solid #bfd2f7;border-radius:8px;font-weight:650;width:calc(100% - 24px);cursor:pointer;font:inherit }}
 .kline-overlay {{ display:none; position:fixed; inset:0; background:rgba(0,0,0,.2); z-index:999; }}
 .kline-overlay.active {{ display:block; }}
 .code-clickable {{ cursor:pointer; }}
 .code-clickable:hover {{ background:#e8f0fe !important; }}
 footer {{ text-align:center; color:#999; font-size:11px; padding:20px; }}
-@media(max-width:768px){{ .kline-panel{{width:100vw}}.decision-tools{{padding:8px 12px}}.metric-guide{{margin-left:0}}.metric-guide ul{{position:fixed;left:10px;right:10px;top:150px;width:auto}} }}
+@media(max-width:768px){{ .kline-panel{{width:100vw}}.kline-tip-bar{{font-size:11px;padding:6px 10px;top:44px;max-height:38vh;overflow:auto;-webkit-overflow-scrolling:touch}}.decision-tools{{padding:8px 12px}}.metric-guide{{margin-left:0}}.metric-guide ul{{position:fixed;left:10px;right:10px;top:150px;width:auto}} }}
 </style>
 <link id="workbench-css" rel="stylesheet" href="/assets/workbench.css">
 </head>
@@ -282,11 +263,13 @@ footer {{ text-align:center; color:#999; font-size:11px; padding:20px; }}
   <button class="journal-action" id="klineWatchBtn" type="button">👀 加入观察池</button>
   <a class="journal-action" id="klineWatchLink" href="http://127.0.0.1:8765/watchlist.html">打开观察池</a>
   <div class="notice" id="klineWatchNotice" style="margin:0 12px 8px;color:#7b8495;font-size:11px"></div>
+  <div class="kline-state" id="klineState" role="status" hidden></div>
+  <div class="kline-tip-bar" id="klineTipBar" hidden></div>
   <div class="chart" id="klineChart"></div>
 </div>
 <div class="header">
   <h1>{title}</h1>
-  <div class="date">{now} · 申万一级行业分类 · 点击代码查看K线 · <a href="http://127.0.0.1:8765/watchlist.html" style="color:#9ec1ff">观察池</a></div>
+  <div class="date">行情数据日 {market_date} · 页面生成 {now} · 点击代码按需加载日 K · <a href="http://127.0.0.1:8765/watchlist.html" style="color:#9ec1ff">观察池</a></div>
 </div>
 <div class="stats">{stats}</div>
 <div class="tabs">{tab_buttons}</div>
@@ -300,7 +283,7 @@ footer {{ text-align:center; color:#999; font-size:11px; padding:20px; }}
   <details class="metric-guide"><summary>指标口径</summary><ul>{definitions_html}</ul></details>
 </div>
 <div class="content">{tables_html}</div>
-<footer>数据每日 18:30 自动更新 · 点击股票代码查看K线图</footer>
+<footer>行情数据日 {market_date} · 每个工作日 18:30 自动更新 · 点击股票代码按需加载 K 线</footer>
 
 <script src="vendor/jquery.min.js"></script>
 <script>window.jQuery || document.write(`<script src='https://code.jquery.com/jquery-3.7.0.min.js'><\/script>`);</script>
@@ -337,13 +320,14 @@ $(document).ready(function(){{
 }});
 setTimeout(function(){{if(document.documentElement.classList.contains('screen-pending')){{document.querySelector('#screen-loading span').textContent='列表加载尚未完成，请重试';document.getElementById('screen-retry').hidden=false;}}}},8000);
 </script>
-<script src="vendor/echarts.min.js"></script>
-<script>window.echarts || document.write(`<script src='https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js'><\/script>`);</script>
 <script>
-var KLINES={kline_json};
+var KLINE_META={kline_meta_json};
 var TAB_CODES={tab_codes_json};
 var klineChart=null;
 var currentKlineCode=null;
+var currentKlineData=null;
+var klineRequestId=0;
+var klineCache={{}};
 {KLINE_TOOLTIP_JS}
 function metricHtml(m){{if(!m)return'';var defs=[['成交量比20','成交量比20','×'],['成交额比20','成交额比20','×'],['换手率%','换手率','%'],['20日动量%','20日动量','%'],['市场相对强弱20%','市场相对强弱','%'],['ATR14%','ATR14','%'],['20日年化波动%','20日年化波动','%'],['距60日高点%','距60日高点','%'],['动态PE','动态PE',''],['流通市值(亿)','流通市值','亿'],['供应商量比','供应商量比','×']];return defs.map(function(x){{var v=m[x[0]],text=v===null||v===undefined?'—':(+v).toFixed(2)+x[2];return'<div class="kline-metric"><span>'+x[1]+'</span><b>'+text+'</b></div>'}}).join('')}}
 
@@ -353,7 +337,7 @@ function getCodeList(){{
     var tabId=btns[0].getAttribute('onclick').match(/'(.*?)'/)[1];
     if(TAB_CODES[tabId]) return TAB_CODES[tabId];
   }}
-  return Object.keys(KLINES).sort();
+  return Object.keys(KLINE_META).sort();
 }}
 
 function navKline(dir){{
@@ -374,56 +358,143 @@ document.addEventListener('keydown',function(e){{
   if(e.key=='Escape'){{e.preventDefault();closeKline();}}
 }});
 
-function showKline(code){{
-  var d=KLINES[code]; if(!d) return;
+function loadEcharts(){{
+  if(window.echarts)return Promise.resolve(window.echarts);
+  if(window.klineEchartsPromise)return window.klineEchartsPromise;
+  window.klineEchartsPromise=new Promise(function(resolve,reject){{
+    var script=document.createElement('script');script.src='vendor/echarts.min.js';script.onload=function(){{window.echarts?resolve(window.echarts):reject(new Error('图表组件未就绪'))}};script.onerror=function(){{reject(new Error('图表组件加载失败'))}};document.head.appendChild(script);
+  }});
+  return window.klineEchartsPromise;
+}}
+function loadKline(code){{
+  if(klineCache[code])return Promise.resolve(klineCache[code]);
+  return fetch('/api/journal/kline?code='+encodeURIComponent(code)+'&days=60',{{cache:'no-store'}}).then(function(r){{return r.json().then(function(body){{if(!r.ok)throw new Error(body.error||('HTTP '+r.status));return body}})}}).then(function(body){{klineCache[code]=body;return body}});
+}}
+function clearKlineTipBar(){{
+  var bar=document.getElementById('klineTipBar');
+  if(bar){{bar.hidden=true;bar.innerHTML='';}}
+}}
+function setKlineTipBarHtml(html){{
+  var bar=document.getElementById('klineTipBar');
+  if(!bar)return;
+  if(!html){{clearKlineTipBar();return;}}
+  bar.innerHTML=html;
+  bar.hidden=false;
+}}
+function lockKlineChartTouch(el){{
+  if(!el)return;
+  el.classList.add('chart-touch-lock');
+  if(el.dataset.klineTouchLock==='1')return;
+  el.dataset.klineTouchLock='1';
+  el.addEventListener('touchmove',function(e){{e.preventDefault();}},{{passive:false}});
+}}
+function renderKline(d){{
+  var bars=d.bars||[],dates=bars.map(function(x){{return x.date}}),ohlc=bars.map(function(x){{return [x.open,x.close,x.low,x.high]}}),changes=bars.map(function(x){{return x.change_pct}}),prevs=bars.map(function(x){{return x.pre_close}}),vols=bars.map(function(x){{return x.amount||0}}),ma5=[],ma10=[];
+  if(!bars.length)throw new Error('本地缓存中没有日 K 数据');
+  for(var i=0;i<ohlc.length;i++){{
+    ma5.push(i>=4?(ohlc.slice(i-4,i+1).reduce(function(s,x){{return s+x[1]}},0)/5).toFixed(2):'-');
+    ma10.push(i>=9?(ohlc.slice(i-9,i+1).reduce(function(s,x){{return s+x[1]}},0)/10).toFixed(2):'-');
+  }}
+  clearKlineTipBar();
+  if(klineChart){{klineChart.dispose();klineChart=null;}}
+  var chartEl=document.getElementById('klineChart');
+  lockKlineChartTouch(chartEl);
+  klineChart=echarts.init(chartEl);
+  var coarse=window.matchMedia&&window.matchMedia('(pointer:coarse)').matches;
+  function tipHtmlFromParams(ps){{return klineTooltipHtml(ps,ohlc,dates,prevs,vols,changes,'最新收');}}
+  function tipHtmlFromIndex(idx){{
+    if(idx==null||idx<0||!ohlc[idx])return '';
+    return tipHtmlFromParams([{{seriesName:'K线',dataIndex:idx}}]);
+  }}
+  function indexFromAxisEvent(ev){{
+    if(!ev)return -1;
+    if(ev.dataIndex!=null)return ev.dataIndex;
+    var axes=ev.axesInfo||[];
+    for(var i=0;i<axes.length;i++){{
+      var v=axes[i]&&axes[i].value;
+      if(v==null)continue;
+      if(typeof v==='number')return v;
+      var ix=dates.indexOf(v);
+      if(ix>=0)return ix;
+    }}
+    return -1;
+  }}
+  klineChart.setOption({{
+    tooltip:{{
+      trigger:'axis',
+      axisPointer:{{type:'cross'}},
+      confine:true,
+      showContent:!coarse,
+      position:function(pos,params,el,elRect,size){{
+        var viewW=size.viewSize[0],viewH=size.viewSize[1],tipW=size.contentSize[0],tipH=size.contentSize[1];
+        var x=Math.min(Math.max(pos[0]-tipW/2,8),Math.max(8,viewW-tipW-8));
+        var y=(pos[1]<viewH*0.45)?Math.max(8,viewH-tipH-8):8;
+        return [x,y];
+      }},
+      formatter:function(ps){{
+        var html=tipHtmlFromParams(ps);
+        setKlineTipBarHtml(html);
+        return html;
+      }}
+    }},
+    axisPointer:{{link:[{{xAxisIndex:'all'}}]}},
+    grid:[{{left:'8%',right:'2%',top:'5%',height:'46%'}},{{left:'8%',right:'2%',top:'57%',height:'13%'}},{{left:'8%',right:'2%',top:'76%',height:'12%'}}],
+    xAxis:[{{data:dates,axisLabel:{{rotate:30,fontSize:10}},gridIndex:0}},{{data:dates,axisLabel:{{show:false}},gridIndex:1}},{{data:dates,axisLabel:{{show:false}},gridIndex:2}}],
+    yAxis:[{{scale:true,gridIndex:0,splitArea:{{show:true}}}},{{gridIndex:1,splitNumber:2,axisLabel:{{formatter:function(v){{return (v/1e8).toFixed(1)+'亿'}}}}}},{{gridIndex:2,splitNumber:3,axisLabel:{{formatter:'{{value}}%'}}}}],
+    series:[
+      {{name:'K线',type:'candlestick',data:ohlc,xAxisIndex:0,yAxisIndex:0,dimensions:['open','close','lowest','highest'],itemStyle:{{color:'#d32f2f',color0:'#34a853',borderColor:'#d32f2f',borderColor0:'#34a853'}},barWidth:'60%'}},
+      {{name:'MA5',type:'line',data:ma5,xAxisIndex:0,yAxisIndex:0,smooth:true,lineStyle:{{width:1,color:'#ff9800'}},symbol:'none'}},
+      {{name:'MA10',type:'line',data:ma10,xAxisIndex:0,yAxisIndex:0,smooth:true,lineStyle:{{width:1,color:'#2196f3'}},symbol:'none'}},
+      {{name:'成交额',type:'bar',data:vols,xAxisIndex:1,yAxisIndex:1,itemStyle:{{color:function(p){{var i=p.dataIndex,o=ohlc[i][0],c=ohlc[i][1];return c>=o?'#d32f2f':'#34a853'}}}}}},
+      {{name:'涨跌%',type:'bar',data:changes,xAxisIndex:2,yAxisIndex:2,itemStyle:{{color:function(p){{return p.value>=0?'#d32f2f':'#34a853'}}}}}}
+    ]
+  }});
+  klineChart.off('updateAxisPointer');
+  klineChart.off('showTip');
+  klineChart.off('hideTip');
+  klineChart.on('updateAxisPointer',function(ev){{
+    var idx=indexFromAxisEvent(ev);
+    if(idx>=0)setKlineTipBarHtml(tipHtmlFromIndex(idx));
+  }});
+  klineChart.on('showTip',function(ev){{
+    var idx=indexFromAxisEvent(ev);
+    if(idx>=0)setKlineTipBarHtml(tipHtmlFromIndex(idx));
+  }});
+  klineChart.on('hideTip',function(){{clearKlineTipBar();}});
+  klineChart.resize();
+}}
+async function showKline(code){{
+  var meta=KLINE_META[code]; if(!meta) return;
   currentKlineCode=code;
+  currentKlineData=null;
+  var requestId=++klineRequestId;
   var list=getCodeList();
   var idx=list.indexOf(code);
   document.getElementById("klineNav").textContent=(idx+1)+"/"+list.length;
   document.getElementById("overlay").classList.add("active");
   document.getElementById("klinePanel").classList.add("active");
-  var sector=d.sector||"";
-  document.getElementById("klineTitle").innerHTML=code+" "+(d.name||"")+(sector?"<br><small style='opacity:.6'>"+sector+"</small>":"");
+  var sector=meta.sector||"";
+  document.getElementById("klineTitle").textContent=code+" "+(meta.name||"")+(sector?" · "+sector:"");
   document.getElementById("klineJournalLink").href=StockAppShell.webUrl("/stock_journal.html")+"?code="+encodeURIComponent(code);
   var sym=document.getElementById("klineSymbolLink"); if(sym) sym.href=StockAppShell.webUrl("/symbol.html")+"?code="+encodeURIComponent(code);
   document.getElementById("klineWatchLink").href=StockAppShell.webUrl("/watchlist.html");
   document.getElementById("klineWatchNotice").textContent="";
-  document.getElementById("klineMetrics").innerHTML=metricHtml(d.metrics);
-  setTimeout(function(){{
-    if(klineChart){{klineChart.dispose();klineChart=null;}}
-    klineChart=echarts.init(document.getElementById("klineChart"));
-    var dates=d.dates,ohlc=d.data,changes=d.changes||[],prevs=d.prevs||[],vols=d.volumes||[],ma5=[],ma10=[];
-    for(var i=0;i<ohlc.length;i++){{
-      ma5.push(i>=4?(ohlc.slice(i-4,i+1).reduce(function(s,x){{return s+x[1]}},0)/5).toFixed(2):"-");
-      ma10.push(i>=9?(ohlc.slice(i-9,i+1).reduce(function(s,x){{return s+x[1]}},0)/10).toFixed(2):"-");
-    }}
-    klineChart.setOption({{
-      tooltip:{{trigger:"axis",axisPointer:{{type:"cross"}},confine:true,formatter:function(ps){{return klineTooltipHtml(ps,ohlc,dates,prevs,vols,changes,"最新收")}}}},
-      axisPointer:{{link:[{{xAxisIndex:"all"}}]}},
-      grid:[{{left:"8%",right:"2%",top:"5%",height:"46%"}},{{left:"8%",right:"2%",top:"57%",height:"13%"}},{{left:"8%",right:"2%",top:"76%",height:"12%"}}],
-      xAxis:[{{data:dates,axisLabel:{{rotate:30,fontSize:10}},gridIndex:0}},{{data:dates,axisLabel:{{show:false}},gridIndex:1}},{{data:dates,axisLabel:{{show:false}},gridIndex:2}}],
-      yAxis:[{{scale:true,gridIndex:0,splitArea:{{show:true}}}},{{gridIndex:1,splitNumber:2,axisLabel:{{formatter:function(v){{return (v/1e8).toFixed(1)+"亿"}}}}}},{{gridIndex:2,splitNumber:3,axisLabel:{{formatter:"{{value}}%"}}}}],
-      series:[
-        {{name:"K线",type:"candlestick",data:ohlc,xAxisIndex:0,yAxisIndex:0,
-          dimensions:["open","close","lowest","highest"],
-          itemStyle:{{color:"#d32f2f",color0:"#34a853",borderColor:"#d32f2f",borderColor0:"#34a853"}},barWidth:"60%"}},
-        {{name:"MA5",type:"line",data:ma5,xAxisIndex:0,yAxisIndex:0,smooth:true,lineStyle:{{width:1,color:"#ff9800"}},symbol:"none"}},
-        {{name:"MA10",type:"line",data:ma10,xAxisIndex:0,yAxisIndex:0,smooth:true,lineStyle:{{width:1,color:"#2196f3"}},symbol:"none"}},
-        {{name:"成交额",type:"bar",data:vols,xAxisIndex:1,yAxisIndex:1,
-          itemStyle:{{color:function(p){{var i=p.dataIndex,o=ohlc[i][0],c=ohlc[i][1];return c>=o?"#d32f2f":"#34a853";}}}}}},
-        {{name:"涨跌%",type:"bar",data:changes,xAxisIndex:2,yAxisIndex:2,
-          itemStyle:{{color:function(p){{return p.value>=0?"#d32f2f":"#34a853";}}}}}}
-      ]
-    }});
-    klineChart.resize();
-  }},100);
+  document.getElementById("klineMetrics").innerHTML=metricHtml(meta.metrics);
+  var state=document.getElementById('klineState');state.hidden=false;state.textContent='正在读取本地日 K…';
+  document.getElementById('klineChart').setAttribute('aria-busy','true');
+  try{{
+    var loaded=await Promise.all([loadKline(code),loadEcharts()]);
+    if(requestId!==klineRequestId||currentKlineCode!==code)return;
+    currentKlineData=loaded[0];renderKline(loaded[0]);state.hidden=true;
+  }}catch(e){{if(requestId===klineRequestId){{state.hidden=false;state.textContent='K 线加载失败：'+e.message;}}}}
+  finally{{if(requestId===klineRequestId)document.getElementById('klineChart').removeAttribute('aria-busy')}}
 }}
 async function addToWatchlist(){{
   if(!currentKlineCode)return;
-  var d=KLINES[currentKlineCode]||{{}}, notice=document.getElementById("klineWatchNotice");
+  var d=KLINE_META[currentKlineCode]||{{}}, notice=document.getElementById("klineWatchNotice");
   notice.textContent="提交中…";
   try{{
-    var screenDate=(d.dates&&d.dates.length)?d.dates[d.dates.length-1]:"";
+    var screenDate=currentKlineData?.latest?.date||d.metrics?.['指标日期']||"";
     var r=await fetch(StockAppShell.webUrl("/api/watchlist/add"),{{
       method:"POST",headers:{{"Content-Type":"application/json"}},
       body:JSON.stringify({{code:currentKlineCode,name:d.name||"",status:"watching",
@@ -438,6 +509,7 @@ async function addToWatchlist(){{
 document.getElementById("klineWatchBtn").onclick=addToWatchlist;
 function closeKline(){{
   currentKlineCode=null;
+  clearKlineTipBar();
   document.getElementById("overlay").classList.remove("active");
   document.getElementById("klinePanel").classList.remove("active");
 }}
