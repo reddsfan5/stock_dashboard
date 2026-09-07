@@ -5,3 +5,4 @@ tqdm>=4.60
 pyarrow>=14.0
 pyyaml>=6.0
 baostock>=0.8.9  # 双数据源（腾讯接口故障降级）
+mcp>=2,<3
