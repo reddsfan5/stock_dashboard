@@ -394,6 +394,29 @@ var klineRequestId=0;
 var klineCache={{}};
 {KLINE_TOOLTIP_JS}
 function metricHtml(m){{if(!m)return'';var defs=[['成交量比20','成交量比20','×'],['成交额比20','成交额比20','×'],['换手率%','换手率','%'],['20日动量%','20日动量','%'],['市场相对强弱20%','市场相对强弱','%'],['ATR14%','ATR14','%'],['20日年化波动%','20日年化波动','%'],['距60日高点%','距60日高点','%'],['动态PE','动态PE',''],['流通市值(亿)','流通市值','亿'],['供应商量比','供应商量比','×']];return defs.map(function(x){{var v=m[x[0]],text=v===null||v===undefined?'—':(+v).toFixed(2)+x[2];return'<div class="kline-metric"><span>'+x[1]+'</span><b>'+text+'</b></div>'}}).join('')}}
+function rangeReturnPctFromBars(bars){{
+  if(!bars||!bars.length)return null;
+  var start=+bars[0].open, end=+bars[bars.length-1].close;
+  if(!(start>0)||!Number.isFinite(end))return null;
+  return (end-start)/start*100;
+}}
+function upsertRangeReturnMetric(bars){{
+  var box=document.getElementById('klineMetrics');
+  if(!box)return;
+  var old=box.querySelector('[data-metric="range-return"]');
+  if(old)old.remove();
+  var pct=rangeReturnPctFromBars(bars);
+  var text='—', color='#758096';
+  if(pct!=null&&Number.isFinite(pct)){{
+    text=(pct>=0?'+':'')+pct.toFixed(2)+'%';
+    color=pct>0?'#d32f2f':pct<0?'#34a853':'#758096';
+  }}
+  var el=document.createElement('div');
+  el.className='kline-metric';
+  el.setAttribute('data-metric','range-return');
+  el.innerHTML='<span>区间涨幅</span><b style="color:'+color+'">'+text+'</b>';
+  box.insertBefore(el, box.firstChild);
+}}
 
 function getCodeList(){{
   var btns=document.querySelectorAll('.tab-btn.active');
@@ -491,10 +514,24 @@ function exitKlineScrub(){{
     try{{klineChart.setOption({{tooltip:{{trigger:coarse?'none':'axis',triggerOn:coarse?'none':'mousemove|click',showContent:!coarse}},axisPointer:{{show:!coarse,type:'cross'}}}},false);}}catch(e){{}}
   }}
   clearKlineTipBar();
-  klineScrubCtx=null;
+  // Keep klineScrubCtx so the next long-press can scrub again without re-render.
+}}
+function ensureKlineScrubCtx(){{
+  if(klineScrubCtx)return klineScrubCtx;
+  var d=currentKlineData, bars=d&&d.bars;
+  if(!bars||!bars.length)return null;
+  klineScrubCtx={{
+    dates:bars.map(function(x){{return x.date}}),
+    ohlc:bars.map(function(x){{return [x.open,x.close,x.low,x.high]}}),
+    prevs:bars.map(function(x){{return x.pre_close}}),
+    vols:bars.map(function(x){{return x.amount||0}}),
+    changes:bars.map(function(x){{return x.change_pct}})
+  }};
+  return klineScrubCtx;
 }}
 function enterKlineScrub(touch){{
   if(klineScrubActive)return;
+  if(!ensureKlineScrubCtx())return;
   klineScrubActive=true;
   var el=document.getElementById('klineChart');
   var panel=document.getElementById('klinePanel');
@@ -516,7 +553,7 @@ function enterKlineScrub(touch){{
   if(touch)updateKlineScrubFromTouch(touch);
 }}
 function updateKlineScrubFromTouch(touch){{
-  if(!klineChart||!klineScrubCtx)return;
+  if(!klineChart||!ensureKlineScrubCtx())return;
   var el=document.getElementById('klineChart');
   if(!el)return;
   var rect=el.getBoundingClientRect();
@@ -545,12 +582,14 @@ function bindKlineScrub(chartEl){{
   chartEl.dataset.klineScrubBound='1';
   chartEl.addEventListener('touchstart',function(e){{
     if(!e.touches||e.touches.length!==1)return;
+    if(klineScrubActive)exitKlineScrub();
     var t=e.touches[0];
     klineTouchStartXY={{x:t.clientX,y:t.clientY}};
     if(klineLongPressTimer)clearTimeout(klineLongPressTimer);
     klineLongPressTimer=setTimeout(function(){{
       klineLongPressTimer=null;
-      enterKlineScrub(t);
+      if(!klineTouchStartXY)return;
+      enterKlineScrub({{clientX:klineTouchStartXY.x,clientY:klineTouchStartXY.y}});
     }},350);
   }},{{passive:true}});
   chartEl.addEventListener('touchmove',function(e){{
@@ -562,6 +601,8 @@ function bindKlineScrub(chartEl){{
       clearTimeout(klineLongPressTimer);
       klineLongPressTimer=null;
       klineTouchStartXY=null;
+    }} else {{
+      klineTouchStartXY={{x:t.clientX,y:t.clientY}};
     }}
   }},{{passive:true}});
   chartEl.addEventListener('touchend',function(){{exitKlineScrub();}},{{passive:true}});
@@ -570,6 +611,7 @@ function bindKlineScrub(chartEl){{
 function renderKline(d){{
   var bars=d.bars||[],dates=bars.map(function(x){{return x.date}}),ohlc=bars.map(function(x){{return [x.open,x.close,x.low,x.high]}}),changes=bars.map(function(x){{return x.change_pct}}),prevs=bars.map(function(x){{return x.pre_close}}),vols=bars.map(function(x){{return x.amount||0}}),ma5=[],ma10=[];
   if(!bars.length)throw new Error('本地缓存中没有日 K 数据');
+  upsertRangeReturnMetric(bars);
   for(var i=0;i<ohlc.length;i++){{
     ma5.push(i>=4?(ohlc.slice(i-4,i+1).reduce(function(s,x){{return s+x[1]}},0)/5).toFixed(2):'-');
     ma10.push(i>=9?(ohlc.slice(i-9,i+1).reduce(function(s,x){{return s+x[1]}},0)/10).toFixed(2):'-');

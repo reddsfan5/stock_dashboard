@@ -102,6 +102,8 @@ body.app-workbench.wb-modal-open {overflow:hidden;}
 .app-workbench .kline-nav-btn:disabled {opacity:.35;}
 .app-workbench .kline-overlay {z-index:1199;}
 .app-workbench .kline-metric {background:var(--app-surface);}
+.app-workbench .kline-metric b.up {color:#d32f2f;}
+.app-workbench .kline-metric b.down {color:#34a853;}
 .app-workbench .kline-tip-overlay {color:#f8fafc;background:color-mix(in srgb, var(--app-surface) 18%, rgba(15,23,42,.82));}
 .app-workbench .kline-panel .chart {touch-action:pan-y;overscroll-behavior:contain;}
 .app-workbench .kline-panel .chart.is-scrubbing,.app-workbench #klineChart.is-scrubbing {touch-action:none;}
