@@ -41,6 +41,7 @@ STAGES = ("stocks", "etfs", "index", "minute", "enrich", "validate", "news", "ma
 REPORT_JOBS = (
     ("行情与板块报告", (sys.executable, "-m", "scripts.reports.gen_market")),
     ("选股仪表盘", (sys.executable, "-m", "scripts.screen")),
+    ("交互页面与日常清单", (sys.executable, "-m", "scripts.reports.refresh_apps")),
 )
 
 
@@ -661,7 +662,7 @@ class DailyUpdatePipeline:
                     f"{label}刷新失败（退出码 {result.returncode}）: {error}",
                     details,
                 )
-        return True, "行情、板块和选股网页已刷新", details
+        return True, "行情、板块、选股与交互页面已刷新", details
 
 
     def _market_context_stage(self):

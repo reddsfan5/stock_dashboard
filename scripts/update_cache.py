@@ -17,6 +17,7 @@ from contextlib import contextmanager
 import fcntl
 import logging
 import os
+import subprocess
 import sys
 
 
@@ -79,6 +80,45 @@ def parse_args():
     return parser.parse_args()
 
 
+
+def ensure_services(logger: logging.Logger) -> bool:
+    """日更结束后拉起/重启 HTTP 服务；默认开局域网以便手机访问。
+
+    使用 ``restart``（而非 ``start``），以便把已在 127.0.0.1 监听的 web
+    切到 ``--lan``。服务失败只记日志，不覆盖数据更新结果。
+    """
+    cmd = [
+        sys.executable, "-m", "scripts.serve",
+        "restart", "all", "--replace-conflicts",
+    ]
+    if os.environ.get("STOCK_SERVE_LAN", "1").strip() != "0":
+        cmd.append("--lan")
+    logger.info("确保服务可用: %s", " ".join(cmd[1:]))
+    try:
+        result = subprocess.run(
+            cmd,
+            cwd=PROJECT_DIR,
+            capture_output=True,
+            text=True,
+            timeout=180,
+        )
+    except Exception as exc:
+        logger.error("服务重启异常（不影响数据更新结果）: %s", exc)
+        return False
+    for stream_name, blob in (("stdout", result.stdout), ("stderr", result.stderr)):
+        for line in (blob or "").splitlines():
+            if line.strip():
+                logger.info("[serve %s] %s", stream_name, line)
+    if result.returncode != 0:
+        logger.error(
+            "服务重启失败（退出码 %s，不影响数据更新结果）",
+            result.returncode,
+        )
+        return False
+    logger.info("服务重启完成")
+    return True
+
+
 def main():
     args = parse_args()
     if args.validate_only and args.only:
@@ -110,6 +150,11 @@ def main():
     logger.info("每日更新%s，目标交易日 %s",
                 "成功" if ok else "失败",
                 pipeline.target_date.date() if pipeline.target_date is not None else "未知")
+
+    # 校验-only 不碰服务；其余情况（含管线失败）都尽量把网页服务拉起来
+    if not args.validate_only:
+        ensure_services(logger)
+
     return 0 if ok else 1
 
 
