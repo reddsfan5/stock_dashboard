@@ -97,10 +97,16 @@ body.app-workbench.wb-modal-open {overflow:hidden;}
 .wb-card-metrics {display:flex;flex-wrap:wrap;gap:8px 16px;font-size:12px;margin-top:10px;color:var(--app-muted);}
 .wb-card-metrics b {color:var(--app-text);font-variant-numeric:tabular-nums;}
 .app-workbench .kline-panel {background:var(--app-surface);color:var(--app-text);height:100dvh;z-index:1200;max-width:100vw;}
+.app-workbench .kline-head {background:var(--app-accent,#1a73e8);color:#fff;}
+.app-workbench .kline-back,.app-workbench .kline-nav-btn {background:rgba(255,255,255,.14);color:#fff;}
+.app-workbench .kline-nav-btn:disabled {opacity:.35;}
 .app-workbench .kline-overlay {z-index:1199;}
 .app-workbench .kline-metric {background:var(--app-surface);}
-.app-workbench .kline-tip-bar {background:var(--app-surface-2);color:var(--app-text);border-bottom:1px solid var(--app-border);}
-.app-workbench .kline-panel .chart,.app-workbench #klineChart.chart-touch-lock {touch-action:none;overscroll-behavior:contain;}
+.app-workbench .kline-tip-overlay {color:#f8fafc;background:color-mix(in srgb, var(--app-surface) 18%, rgba(15,23,42,.82));}
+.app-workbench .kline-panel .chart {touch-action:pan-y;overscroll-behavior:contain;}
+.app-workbench .kline-panel .chart.is-scrubbing,.app-workbench #klineChart.is-scrubbing {touch-action:none;}
+.app-workbench .kline-actions {display:flex;flex-wrap:wrap;gap:6px;padding:8px 12px;}
+.app-workbench .journal-action {display:inline-flex;align-items:center;justify-content:center;margin:0;padding:6px 10px;width:auto;flex:1 1 calc(50% - 6px);border-radius:999px;font-size:12px;line-height:1.2;box-sizing:border-box;}
 /* Watchlist, daily and context pages. */
 .app-workbench[data-page=watchlist] .wrap {display:grid;grid-template-columns:minmax(0,1fr) 300px;align-items:start;gap:20px;}
 .wb-watch-main {min-width:0;}
@@ -211,8 +217,18 @@ body.app-workbench.wb-modal-open {overflow:hidden;}
  .app-workbench[data-page=dashboard]:not(.wb-full-table) table.dataTable {display:none;}
  .app-workbench[data-page=dashboard]:not(.wb-full-table) .wb-screen-cards {display:block;}
  .app-workbench .kline-panel {width:100%;}
- .app-workbench .kline-panel .chart {height:430px;touch-action:none;overscroll-behavior:contain;}
- .app-workbench .kline-tip-bar {position:sticky;top:44px;z-index:2;font-size:11px;max-height:38vh;overflow:auto;}
+ .app-workbench .kline-head {padding:5px 6px;min-height:38px;gap:4px;}
+ .app-workbench .kline-back {padding:0 8px;font-size:11px;min-height:34px;}
+ .app-workbench .kline-nav-btn {width:34px;min-width:34px;min-height:34px;font-size:17px;}
+ .app-workbench .kline-head-title {font-size:11px;}
+ .app-workbench .kline-metrics {grid-template-columns:repeat(4,minmax(0,1fr));gap:0;padding:4px 6px 2px;background:transparent;border-bottom:1px solid var(--app-border);}
+ .app-workbench .kline-metric {padding:3px 4px;background:transparent;}
+ .app-workbench .kline-metric span {font-size:8px;margin-bottom:1px;}
+ .app-workbench .kline-metric b {font-size:11px;line-height:1.15;}
+ .app-workbench .kline-actions {gap:4px;padding:4px 8px 6px;}
+ .app-workbench .journal-action {flex:1 1 calc(25% - 4px);padding:5px 4px;font-size:11px;font-weight:600;border-radius:8px;}
+ .app-workbench .kline-panel .chart {height:min(62vh,560px);min-height:360px;touch-action:pan-y;overscroll-behavior:contain;}
+ .app-workbench .kline-tip-overlay {font-size:10px;padding:4px 8px;}
  .app-workbench[data-page=watchlist] .wrap,.app-workbench[data-page=daily] .wrap,.app-workbench[data-page=symbol] .wrap {grid-template-columns:minmax(0,1fr);}
  .app-workbench[data-page=watchlist] .wb-watch-main>.panel {padding:16px;}
  .app-workbench[data-page=watchlist] #watchBody tr {display:grid;grid-template-columns:1fr 1fr;padding:12px 0;border-bottom:1px solid var(--app-border);}
