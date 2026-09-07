@@ -39,7 +39,7 @@ function klineFmtAmt(vol){
 }
 function klineRangePctToIndex(ohlc,idx){
   if(!ohlc||!ohlc.length||idx==null||idx<0||!ohlc[idx])return null;
-  var start=+ohlc[0][0], end=+ohlc[idx][1];
+  var start=+ohlc[idx][0], last=ohlc[ohlc.length-1], end=last?+last[1]:NaN;
   if(!(start>0)||!Number.isFinite(end))return null;
   return (end-start)/start*100;
 }
