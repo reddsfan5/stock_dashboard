@@ -37,17 +37,26 @@ function klineFmtAmt(vol){
   if(vol>=1e4)return (vol/1e4).toFixed(0)+'万';
   return String(Math.round(vol));
 }
+function klineRangePctToIndex(ohlc,idx){
+  if(!ohlc||!ohlc.length||idx==null||idx<0||!ohlc[idx])return null;
+  var start=+ohlc[0][0], end=+ohlc[idx][1];
+  if(!(start>0)||!Number.isFinite(end))return null;
+  return (end-start)/start*100;
+}
 function klineTooltipCompact(idx,ohlc,dates,prevs,volumes,changes){
   if(idx==null||idx<0||!ohlc[idx])return '';
   var raw=ohlc[idx],o=+raw[0],c=+raw[1],l=+raw[2],h=+raw[3];
   var chg=changes[idx],vol=+(volumes[idx]||0);
   var dt=String(dates[idx]||''); if(dt.length>=10)dt=dt.slice(5,10);
   var chgTxt=chg==null?'':((chg>0?'+':'')+(+chg).toFixed(2)+'%');
+  var rangePct=klineRangePctToIndex(ohlc,idx);
+  var rangeTxt=rangePct==null?'':('区间'+(rangePct>=0?'+':'')+rangePct.toFixed(2)+'%');
   var amt=klineFmtAmt(vol);
   var parts=[dt,'开'+klineFmtPx(o),'高'+klineFmtPx(h),'低'+klineFmtPx(l),'收'+klineFmtPx(c)];
   if(chgTxt)parts.push(chgTxt);
+  if(rangeTxt)parts.push(rangeTxt);
   if(amt)parts.push('额'+amt);
-  return parts.join('  ');
+  return parts.join(' ');
 }
 function klineTooltipHtml(ps,ohlc,dates,prevs,volumes,changes,endLabel){
   var idx=klinePickIndex(ps);
