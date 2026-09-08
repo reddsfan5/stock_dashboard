@@ -7,6 +7,7 @@ from datetime import datetime
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 OUTPUT_DIR = os.path.join(PROJECT_DIR, "output")
 INDEX_FILE = os.path.join(OUTPUT_DIR, "index.html")
+DASHBOARD_URL = "http://127.0.0.1:8765/dashboard.html"
 MINUTE_VIEW_URL = "http://127.0.0.1:8765/minute_view.html"
 GRID_SIMULATOR_URL = "http://127.0.0.1:8765/grid_simulator.html"
 TRADING_TRAINER_URL = "http://127.0.0.1:8765/trading_trainer.html"
@@ -14,8 +15,9 @@ STOCK_JOURNAL_URL = "http://127.0.0.1:8765/stock_journal.html"
 MARKET_NEWS_URL = "http://127.0.0.1:8765/market_news.html"
 WATCHLIST_URL = "http://127.0.0.1:8765/watchlist.html"
 SYMBOL_URL = "http://127.0.0.1:8765/symbol.html"
-DAILY_OPS_URL = "daily_ops.html"
+DAILY_OPS_URL = "http://127.0.0.1:8765/daily_ops.html"
 SERVICE_URLS = {
+    "dashboard.html": DASHBOARD_URL,
     "minute_view.html": MINUTE_VIEW_URL,
     "grid_simulator.html": GRID_SIMULATOR_URL,
     "trading_trainer.html": TRADING_TRAINER_URL,
@@ -296,7 +298,7 @@ main{{max-width:1300px;margin:0 auto;padding:8px 32px 20px}}
     <h2>每日操盘，从这里开始</h2>
     <p class="lead">先过每日操盘清单，再进入训练、观察池与资讯。下面保留完整工具归档，需要时再展开。</p>
     <div class="ops-ctas">
-      <a class="ops-cta ops-cta-primary" href="/daily_ops.html">打开每日清单</a>
+      <a class="ops-cta ops-cta-primary" href="{DAILY_OPS_URL}">打开每日清单</a>
       <a class="ops-cta" href="{TRADING_TRAINER_URL}">进入交易训练</a>
       <a class="ops-cta" href="{WATCHLIST_URL}">观察池</a>
       <a class="ops-cta" href="{MARKET_NEWS_URL}">市场资讯</a>
