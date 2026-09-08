@@ -9,15 +9,15 @@
     <array>
         <string>/bin/bash</string>
         <string>-c</string>
-        <!-- 数据统一更新并通过质量门禁后，才刷新选股仪表盘 -->
-        <string>cd /Users/dong_007/D/stock &amp;&amp; /usr/local/bin/python -m scripts.update_cache &amp;&amp; /usr/local/bin/python -m scripts.screen</string>
+        <!-- update_cache 内部通过质量门禁后会统一刷新行情、板块和选股报告 -->
+        <string>cd /Users/dong_007/D/stock &amp;&amp; /Users/dong_007/D/stock/.venv/bin/python -m scripts.update_cache</string>
     </array>
     <key>WorkingDirectory</key>
     <string>/Users/dong_007/D/stock</string>
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
-        <string>/usr/local/bin:/usr/bin:/bin</string>
+        <string>/Users/dong_007/D/stock/.venv/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
     </dict>
     <!-- 唤醒/登录时补跑（增量更新，重复跑无害） -->
     <key>RunAtLoad</key>

@@ -339,16 +339,40 @@ class DailyUpdatePipeline:
                         len(field_failed),
                     )
         inserted = data.upsert(rows_to_upsert)
-        quote_coverage = len(quotes["代码"].unique()) / max(len(stocks), 1)
+        snapshot_codes = set(quotes["代码"].astype(str).unique())
+        expected_codes = set(stocks["代码"].astype(str).unique())
+        # 腾讯的批量收盘快照目前不能稳定返回北交所。北交所缺口仍记录
+        # 在 overall/bj 明细中，但不能因此阻断只使用沪深股票的日常报告。
+        # 沪深覆盖率仍是硬门禁，避免真实的数据缺失被掩盖。
+        required_codes = {
+            code for code in expected_codes if code.startswith(("sh", "sz"))
+        }
+        required_covered = len(snapshot_codes & required_codes)
+        quote_coverage = len(snapshot_codes) / max(len(expected_codes), 1)
+        required_coverage = required_covered / max(len(required_codes), 1)
+        bj_expected = sum(code.startswith("bj") for code in expected_codes)
+        bj_covered = sum(code.startswith("bj") for code in snapshot_codes)
         all_failed = sorted(set(final_failed) | set(field_failed))
-        ok = quote_coverage >= 0.95 and len(all_failed) <= max(2, int(len(stocks) * 0.01))
+        ok = required_coverage >= 0.95 and len(all_failed) <= max(2, int(len(stocks) * 0.01))
+        market_note = (
+            f"，沪深覆盖 {required_covered:,}/{len(required_codes):,}"
+            f" ({required_coverage:.1%})"
+        )
+        if bj_expected:
+            market_note += f"，北交所快照 {bj_covered:,}/{bj_expected:,}（不阻断）"
         return ok, (f"{target.date()} 快照 {len(quotes):,} 只，"
                     f"历史修复 {len(repair)} 只，字段回填 {len(field_repair)} 只，"
-                    f"最终失败 {len(all_failed)} 只"), {
+                    f"最终失败 {len(all_failed)} 只{market_note}"), {
             "target_date": _date_text(target),
             "expected_codes": len(stocks),
             "snapshot_codes": int(quotes["代码"].nunique()),
             "snapshot_coverage": round(quote_coverage, 6),
+            "required_markets": ["sh", "sz"],
+            "required_snapshot_codes": required_covered,
+            "required_expected_codes": len(required_codes),
+            "required_snapshot_coverage": round(required_coverage, 6),
+            "bj_snapshot_codes": bj_covered,
+            "bj_expected_codes": bj_expected,
             "inserted_rows": inserted,
             "daily_basic_inserted_rows": basic_inserted,
             "repair_codes": len(repair),
@@ -522,22 +546,54 @@ class DailyUpdatePipeline:
         return True, f"分钟线补齐日成交量 {filled:,} 条", details
 
     @staticmethod
-    def _daily_coverage(path: str, target, prefix=None) -> Dict:
+    def _daily_coverage(path: str, target, prefix=None,
+                        required_markets=None) -> Dict:
         if not os.path.exists(path):
             return {"covered": 0, "expected": 0, "coverage": 0.0, "codes": set()}
         frame = pd.read_parquet(path, columns=["代码", "日期"])
         frame["日期"] = pd.to_datetime(frame["日期"]).dt.normalize()
+        frame["代码"] = frame["代码"].astype(str)
+        frame["市场"] = frame["代码"].str[:2].where(
+            frame["代码"].str[:2].isin(("sh", "sz", "bj")), "other"
+        )
         counts = frame.groupby("日期")["代码"].nunique().sort_index()
         recent = counts[counts.index <= target].tail(5)
-        expected = int(recent.max()) if len(recent) else 0
+        overall_expected = int(recent.max()) if len(recent) else 0
         target_codes = set(frame.loc[frame["日期"] == target, "代码"].astype(str))
+        market_counts = (
+            frame.loc[frame["日期"] <= target]
+            .groupby(["日期", "市场"])["代码"].nunique()
+            .unstack(fill_value=0)
+            .tail(5)
+        )
+        markets = {}
+        for market in market_counts.columns:
+            expected_count = int(market_counts[market].max())
+            covered_count = int(
+                frame.loc[
+                    (frame["日期"] == target) & (frame["市场"] == market),
+                    "代码",
+                ].nunique()
+            )
+            markets[str(market)] = {
+                "covered": covered_count,
+                "expected": expected_count,
+                "coverage": covered_count / max(expected_count, 1),
+            }
+        required_markets = tuple(required_markets or markets.keys())
+        covered = sum(markets.get(m, {}).get("covered", 0) for m in required_markets)
+        expected = sum(markets.get(m, {}).get("expected", 0) for m in required_markets)
         if prefix:
             target_codes = {prefix(code) for code in target_codes}
-        covered = len(target_codes)
         return {
             "covered": covered,
             "expected": expected,
             "coverage": covered / max(expected, 1),
+            "overall_covered": len(target_codes),
+            "overall_expected": overall_expected,
+            "overall_coverage": len(target_codes) / max(overall_expected, 1),
+            "required_markets": list(required_markets),
+            "markets": markets,
             "codes": target_codes,
         }
 
@@ -545,7 +601,9 @@ class DailyUpdatePipeline:
         if target is None:
             return {"covered": 0, "expected": 0, "coverage": 0.0,
                     "missing_sample": []}
-        stock = self._daily_coverage(STOCK_CACHE_FILE, target)
+        stock = self._daily_coverage(
+            STOCK_CACHE_FILE, target, required_markets=("sh", "sz")
+        )
         etf = self._daily_coverage(ETF_CACHE_FILE, target, prefix=_prefix_etf)
         expected_codes = stock["codes"] | etf["codes"]
         if not os.path.exists(MINUTE_CACHE_FILE):
@@ -576,7 +634,9 @@ class DailyUpdatePipeline:
             self.target_date = max(candidates)
         target = self.target_date
 
-        stock = self._daily_coverage(STOCK_CACHE_FILE, target)
+        stock = self._daily_coverage(
+            STOCK_CACHE_FILE, target, required_markets=("sh", "sz")
+        )
         etf = self._daily_coverage(ETF_CACHE_FILE, target)
         minute = self._minute_coverage(target)
         index = pd.read_parquet(INDEX_CACHE_FILE, columns=["代码", "日期"])
@@ -610,8 +670,22 @@ class DailyUpdatePipeline:
             "daily_basic": daily_basic,
         }
         failed = [name for name, passed in checks.items() if not passed]
-        return not failed, ("全部数据通过新鲜度门禁" if not failed else
-                            f"未通过: {', '.join(failed)}"), details
+        warnings = []
+        bj = stock.get("markets", {}).get("bj")
+        if bj and bj["expected"] and bj["coverage"] < 0.90:
+            warnings.append(
+                "北交所当日日线 {}/{}（上游快照暂不稳定，不进入沪深仪表盘门禁）".format(
+                    bj["covered"], bj["expected"]
+                )
+            )
+        details["warnings"] = warnings
+        if failed:
+            message = f"未通过: {', '.join(failed)}"
+        elif warnings:
+            message = "核心数据通过；" + "；".join(warnings)
+        else:
+            message = "全部数据通过新鲜度门禁"
+        return not failed, message, details
 
     @staticmethod
     def _field_coverage(path: str, target, field: str, positive: bool = True) -> Dict:

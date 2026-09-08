@@ -15,6 +15,7 @@
 
 import os
 import logging
+import threading
 import time
 from contextlib import contextmanager
 from typing import Callable, Iterable, List, Optional, Tuple
@@ -45,6 +46,8 @@ MAIN_BOARD_PREFIX = (
 BS_AMOUNT_SCALE = 1.0
 
 _BS_LOGGED_IN = False  # baostock 模块级会话标志
+_SINA_RUNTIME_LOCK = threading.Lock()
+_SINA_RUNTIME = None
 
 TX_QUOTE_URL = "https://qt.gtimg.cn/q="
 TX_QUOTE_BATCH = 400
@@ -119,12 +122,31 @@ def ak_fetch_kline(code: str, start: str, end: str, timeout: int = 5) -> Optiona
         return None
 
 
+def _ensure_sina_runtime():
+    """在主调用线程初始化一次 V8，避免并发回退时竞争初始化地址池。
+
+    AkShare 的新浪日线适配器会为每次解码创建 MiniRacer。macOS 后台任务
+    首次同时创建多个实例时，mini-racer 可能在原生层直接退出（code 133），
+    Python 无法捕获。保留一个进程级哨兵实例可先完成全局初始化。
+    """
+    global _SINA_RUNTIME
+    if _SINA_RUNTIME is not None:
+        return
+    with _SINA_RUNTIME_LOCK:
+        if _SINA_RUNTIME is None:
+            from py_mini_racer import MiniRacer
+            runtime = MiniRacer()
+            runtime.eval("1+1")
+            _SINA_RUNTIME = runtime
+
+
 def sina_fetch_kline(code: str, start: str, end: str) -> Optional[pd.DataFrame]:
     """新浪全历史日 K，适合首次重建和字段迁移。
 
     与腾讯分页历史接口相比，该接口单次返回完整日期区间；原始成交量单位是股，
     turnover 是小数，适配后统一为百分数。
     """
+    _ensure_sina_runtime()
     for attempt in range(3):
         try:
             frame = ak.stock_zh_a_daily(
