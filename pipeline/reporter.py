@@ -9,6 +9,7 @@
 
 import json
 import os
+from html import escape
 from datetime import datetime
 from typing import Dict, List, Optional
 
@@ -142,6 +143,7 @@ def build_screening_html(
 
     tab_buttons = ""
     tables_html = ""
+    table_data_html = ""
 
     for i, mod in enumerate(pipeline_modules):
         df = results.get(mod.id)
@@ -162,38 +164,68 @@ def build_screening_html(
             for c in cols
         )
         orig_cols = list(df.columns)
-        rows = ""
+        rows = []
+        column_classes = []
+        for disp_c in cols:
+            if disp_c == "代码":
+                column_classes.append("code-clickable")
+            elif any(k in disp_c for k in (
+                "振幅", "位置", "重叠", "累计", "接续", "涨跌", "涨幅",
+                "换手", "量比", "斜率", "评分", "成交", "金额", "额",
+                "价", "最高", "最低", "收", "开", "ATR", "PE", "PB",
+                "市值", "动量", "波动", "回撤",
+            )):
+                column_classes.append("num")
+            else:
+                column_classes.append("")
         for _, row in df.head(2000).iterrows():
-            cells = ""
+            cells = []
             for orig_c, disp_c in zip(orig_cols, cols):
                 val = row[orig_c]
                 if isinstance(val, float) and not pd.isna(val):
                     if any(k in disp_c for k in ("振幅", "位置", "重叠", "累计", "接续",
                                                    "涨跌", "涨幅", "换手", "量比", "斜率", "评分")):
-                        cells += f'<td class="num">{val:.2f}</td>'
+                        cells.append(f"{val:.2f}")
                     elif any(k in disp_c for k in ("成交", "金额", "额")):
-                        cells += f'<td class="num">{val:,.0f}</td>'
+                        cells.append(f"{val:,.0f}")
                     elif any(k in disp_c for k in ("价", "最高", "最低", "收", "开")):
-                        cells += f'<td class="num">{val:.2f}</td>'
+                        cells.append(f"{val:.2f}")
                     else:
-                        cells += f'<td class="num">{val:.3f}</td>'
+                        cells.append(f"{val:.3f}")
                 elif pd.isna(val):
-                    cells += "<td></td>"
+                    cells.append("")
                 elif isinstance(val, str) and val.startswith("sh"):
-                    cells += f'<td class="code-sh code-clickable" onclick="showKline(\'{val}\')">{val}</td>'
+                    safe = escape(val)
+                    cells.append(
+                        f'<button type="button" class="code-link code-sh" '
+                        f'onclick="showKline(\'{safe}\')">{safe}</button>'
+                    )
                 elif isinstance(val, str) and val.startswith("sz"):
-                    cells += f'<td class="code-sz code-clickable" onclick="showKline(\'{val}\')">{val}</td>'
+                    safe = escape(val)
+                    cells.append(
+                        f'<button type="button" class="code-link code-sz" '
+                        f'onclick="showKline(\'{safe}\')">{safe}</button>'
+                    )
                 else:
-                    cells += f"<td>{str(val)}</td>"
-            rows += f"<tr>{cells}</tr>"
+                    cells.append(escape(str(val)))
+            rows.append(cells)
 
         tables_html += f"""
             <div id="tab-{mod.id}" class="tab-content {active}">
               <table id="tbl-{mod.id}" class="display">
                 <thead><tr>{header}</tr></thead>
-                <tbody>{rows}</tbody>
+                <tbody></tbody>
               </table>
             </div>"""
+        payload = json.dumps(
+            {"rows": rows, "column_classes": column_classes},
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ).replace("</", "<\\/")
+        table_data_html += (
+            f'<script type="application/json" id="screen-data-{mod.id}">'
+            f'{payload}</script>'
+        )
 
     stats = "".join(
         f'<div class="stat"><span class="stat-num">{len(results.get(m.id, pd.DataFrame()))}</span><span class="stat-label">{m.title}</span></div>'
@@ -225,7 +257,12 @@ def build_screening_html(
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<script>try{{var root=document.documentElement;root.dataset.theme=localStorage.getItem('stockAppTheme')||'light';root.dataset.density=localStorage.getItem('stockAppDensity')||'comfortable';root.dataset.sidebar=localStorage.getItem('stockAppSidebar')||(innerWidth<1280?'collapsed':'expanded');}}catch(_){{}}</script>
+<script>
+if(location.protocol==='file:'){{
+  location.replace('http://127.0.0.1:8765/dashboard.html'+location.search+location.hash);
+}}
+try{{var root=document.documentElement;root.dataset.theme=localStorage.getItem('stockAppTheme')||'light';root.dataset.density=localStorage.getItem('stockAppDensity')||'comfortable';root.dataset.sidebar=localStorage.getItem('stockAppSidebar')||(innerWidth<1280?'collapsed':'expanded');}}catch(_){{}}
+</script>
 <title>{title} — 行情 {market_date}</title>
 <link rel="stylesheet" href="vendor/jquery.dataTables.min.css">
 <link rel="stylesheet" href="/assets/app.css">
@@ -292,6 +329,8 @@ table.dataTable {{ font-size:12px; }}
 .kline-overlay.active {{ display:block; }}
 .code-clickable {{ cursor:pointer; }}
 .code-clickable:hover {{ background:#e8f0fe !important; }}
+.code-link {{ appearance:none;border:0;background:transparent;padding:4px 2px;cursor:pointer;font:inherit;font-family:"SF Mono",monospace;white-space:nowrap; }}
+.code-link:hover,.code-link:focus-visible {{ text-decoration:underline;outline:none; }}
 footer {{ text-align:center; color:#999; font-size:11px; padding:20px; }}
 @media(max-width:768px){{
   .kline-panel{{width:100vw}}
@@ -357,6 +396,7 @@ footer {{ text-align:center; color:#999; font-size:11px; padding:20px; }}
   <details class="metric-guide"><summary>指标口径</summary><ul>{definitions_html}</ul></details>
 </div>
 <div class="content">{tables_html}</div>
+{table_data_html}
 <footer>行情数据日 {market_date} · 每个工作日 18:30 自动更新 · 点击股票代码按需加载 K 线</footer>
 
 <script src="vendor/jquery.min.js"></script>
@@ -381,7 +421,19 @@ document.getElementById('applyFilters').onclick=applyDecisionFilters;document.ge
 function initStrategyTable(id){{
   var table=$('#tbl-'+id);
   if($.fn.dataTable.isDataTable(table[0]))return table.DataTable();
+  var dataNode=document.getElementById('screen-data-'+id);
+  var payload={{rows:[],column_classes:[]}};
+  if(dataNode){{
+    try{{payload=JSON.parse(dataNode.textContent)}}catch(e){{console.error('选股缓存解析失败',id,e)}}
+    dataNode.remove();
+  }}
+  var columns=Array.from(table[0].querySelectorAll('thead th')).map(function(_,i){{
+    return {{data:i,className:payload.column_classes[i]||''}};
+  }});
   return table.DataTable({{
+      data:payload.rows,
+      columns:columns,
+      deferRender:true,
       pageLength:25,
       autoWidth:false,
       language:{{search:'搜索:',lengthMenu:'显示 _MENU_ 条记录',info:'第 _START_ 至 _END_ 条，共 _TOTAL_ 条',infoEmpty:'暂无记录',infoFiltered:'（筛选自 _MAX_ 条记录）',zeroRecords:'没有符合条件的标的',emptyTable:'暂无标的',paginate:{{first:'首页',previous:'上页',next:'下页',last:'末页'}}}},

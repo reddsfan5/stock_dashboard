@@ -95,6 +95,14 @@ class DecisionSnapshotTest(unittest.TestCase):
         self.assertIn("区间涨跌", desktop)
         self.assertIn("klineRangePctToIndex", desktop)
         self.assertIn("'区间'", desktop)
+        # 候选数据作为预生成 JSON 缓存嵌入；首屏不再预建全部 td，
+        # DataTables 只为当前分页创建 DOM，避免每日更新后首次打开卡顿。
+        self.assertIn('id="screen-data-demo"', desktop)
+        self.assertIn("deferRender:true", desktop)
+        self.assertIn("<tbody></tbody>", desktop)
+        self.assertNotIn('<td class="code-sh', desktop)
+        self.assertIn("location.protocol==='file:'", desktop)
+        self.assertIn("http://127.0.0.1:8765/dashboard.html", desktop)
         # 手机版地址已统一跳转到同一响应式 dashboard，指标只维护一份。
         self.assertIn('href="dashboard.html"', mobile)
         self.assertIn('location.replace("dashboard.html"', mobile)
