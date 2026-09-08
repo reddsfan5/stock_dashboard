@@ -1,17 +1,27 @@
-"""stock-data 本地 STDIO MCP Server。
+"""stock-data 本地 MCP Server（STDIO + 可选 Streamable HTTP）。
 
-stdout 由 MCP SDK 独占；任何诊断输出必须写 stderr。Server 由 Codex 按需启动，
-不监听网络端口，也不加入 ``scripts.serve``。
+默认 STDIO：stdout 由 MCP SDK 独占；任何诊断输出必须写 stderr。
+Codex 仍通过 STDIO 按需启动，不监听网络端口。
+
+可选 HTTP：``python -m stock_mcp.server --http``，默认仅绑定 127.0.0.1:8766，
+要求 ``STOCK_MCP_TOKEN``（或本地 mode-600 token 文件）。HTTP 供 Cursor / Grok Bot
+经反向隧道以 ``url`` MCP 接入；仍是只读研究服务，无交易能力。
 """
 
 from __future__ import annotations
 
+import argparse
 import json
+import sys
 from typing import Any, Optional
 
 from mcp.server import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
+from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
+from starlette.middleware import Middleware
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 from stock_mcp.contracts import (
     ArtifactQuery,
@@ -22,6 +32,17 @@ from stock_mcp.contracts import (
     NewsQuery,
     ScreenerQuery,
     SymbolQuery,
+)
+from stock_mcp.security import (
+    DEFAULT_HTTP_HOST,
+    DEFAULT_HTTP_PATH,
+    DEFAULT_HTTP_PORT,
+    TOKEN_ENV,
+    create_bearer_auth_middleware,
+    default_token_file,
+    install_network_guard,
+    mint_http_token,
+    require_http_token,
 )
 
 INSTRUCTIONS = """本 Server 只查询项目本地缓存，数据不是实时行情。
@@ -174,10 +195,95 @@ def get_research_artifacts(
     return _call("get_research_artifacts", **payload)
 
 
-def main() -> None:
-    from stock_mcp.security import install_network_guard
+@mcp.custom_route("/healthz", methods=["GET"])
+async def healthz(_request: Request) -> JSONResponse:
+    return JSONResponse({"status": "ok", "server": "stock-data", "readonly": True})
+
+
+def build_http_app(*, token: str, host: str = DEFAULT_HTTP_HOST):
+    """构建带 Bearer 鉴权的 Streamable HTTP ASGI 应用。
+
+    反向隧道场景下 Host 为 ``*.trycloudflare.com``，因此关闭 DNS rebinding
+    主机白名单，改由本机回环绑定 + Bearer Token 承担边界。
+    """
+    transport_security = TransportSecuritySettings(
+        enable_dns_rebinding_protection=False,
+    )
+    app = mcp.streamable_http_app(
+        streamable_http_path=DEFAULT_HTTP_PATH,
+        # 隧道客户端可能跨 Host；鉴权依赖 Bearer，而非 Origin/Host 白名单
+        transport_security=transport_security,
+        host=host,
+        # 便于单测与无状态探活；正式会话仍由 SDK 管理
+        stateless_http=True,
+        json_response=True,
+    )
+    app.user_middleware.insert(
+        0, Middleware(create_bearer_auth_middleware(token))
+    )
+    app.middleware_stack = None  # 强制重建中间件栈
+    return app
+
+
+def run_http(host: str, port: int) -> None:
+    import uvicorn
+
+    token = require_http_token()
+    if host not in ("127.0.0.1", "localhost", "::1"):
+        print(
+            f"拒绝绑定 {host!r}：HTTP MCP 默认仅允许回环地址。"
+            "请用云隧道暴露，不要直接监听局域网。",
+            file=sys.stderr,
+        )
+        raise SystemExit(2)
+
+    app = build_http_app(token=token, host=host)
+    print(
+        f"stock-data MCP HTTP listening on http://{host}:{port}{DEFAULT_HTTP_PATH} "
+        f"(Bearer {TOKEN_ENV}; token file {default_token_file()})",
+        file=sys.stderr,
+    )
+    uvicorn.run(app, host=host, port=port, log_level="info")
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="stock-data 只读 MCP Server")
+    parser.add_argument(
+        "--http",
+        action="store_true",
+        help="启用 Streamable HTTP（默认 STDIO）",
+    )
+    parser.add_argument("--host", default=DEFAULT_HTTP_HOST, help="HTTP 绑定地址")
+    parser.add_argument(
+        "--port", type=int, default=DEFAULT_HTTP_PORT, help="HTTP 端口"
+    )
+    parser.add_argument(
+        "--mint-token",
+        action="store_true",
+        help="生成/保留本地 Bearer Token 文件后退出（不启动服务）",
+    )
+    parser.add_argument(
+        "--overwrite-token",
+        action="store_true",
+        help="与 --mint-token 联用，强制轮换 Token",
+    )
+    return parser
+
+
+def main(argv: Optional[list[str]] = None) -> None:
+    args = build_parser().parse_args(argv)
+
+    if args.mint_token:
+        path = mint_http_token(overwrite=args.overwrite_token)
+        print(f"token file ready: {path} (mode 600)", file=sys.stderr)
+        return
 
     install_network_guard()
+
+    if args.http:
+        run_http(host=args.host, port=args.port)
+        return
+
     mcp.run(transport="stdio")
 
 
