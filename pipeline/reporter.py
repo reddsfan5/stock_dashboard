@@ -61,18 +61,19 @@ function klineTooltipCompact(idx,ohlc,dates,prevs,volumes,changes){
 function klineTooltipHtml(ps,ohlc,dates,prevs,volumes,changes,endLabel){
   var idx=klinePickIndex(ps);
   if(idx<0||!ohlc[idx])return "";
-  var raw=ohlc[idx],o=+raw[0],c=+raw[1],l=+raw[2],h=+raw[3],prev=+(prevs[idx]||0);
-  var chg=changes[idx],vol=+(volumes[idx]||0),ampUp=0,ampDown=0;
-  var r="<b>"+dates[idx]+"</b><br>开: "+o+"　收: "+c+"<br>高: "+h+"　低: "+l;
-  if(vol>0)r+="<br>成交额: "+(vol/1e8).toFixed(2)+"亿";
-  if(prev>0){ampUp=(h-prev)/prev*100;ampDown=(l-prev)/prev*100;}
-  if(chg!=null)r+="<br>涨跌幅: "+(chg>0?"+":"")+(+chg).toFixed(2)+"%　振幅: "+(ampUp-ampDown).toFixed(2)+"%";
+  var raw=ohlc[idx],o=+raw[0],c=+raw[1],l=+raw[2],h=+raw[3];
+  var chg=changes[idx],vol=+(volumes[idx]||0);
+  var r='<div style="font-size:12px;line-height:1.35"><b>'+dates[idx]+'</b>';
+  r+="<br>开 "+klineFmtPx(o)+"　高 "+klineFmtPx(h)+"　低 "+klineFmtPx(l)+"　收 "+klineFmtPx(c);
+  if(chg!=null)r+="<br>涨跌 "+(chg>0?"+":"")+(+chg).toFixed(2)+"%";
+  var amt=klineFmtAmt(vol); if(amt)r+="　额 "+amt;
   var last=ohlc[ohlc.length-1],start=o,end=last?+last[1]:NaN;
   if(start>0&&Number.isFinite(end)){
     var delta=end-start,pct=delta/start*100,color=delta>0?"#d32f2f":delta<0?"#159568":"#758096";
-    r+='<div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(128,128,128,.35)">区间涨跌 <b style="color:'+color+'">'+(delta>=0?'+':'')+delta.toFixed(start<10?3:2)+'（'+(pct>=0?'+':'')+pct.toFixed(2)+'%）</b><br><span style="color:#8a94a6">'+dates[idx]+' 开 '+start.toFixed(start<10?3:2)+' → '+dates[dates.length-1]+' '+(endLabel||'最新收')+' '+end.toFixed(end<10?3:2)+' · '+(ohlc.length-idx)+'根K线</span></div>';
+    r+='<br>区间 <b style="color:'+color+'">'+(delta>=0?'+':'')+klineFmtPx(delta)+'（'+(pct>=0?'+':'')+pct.toFixed(2)+'%）</b>'
+      +'<span style="color:#8a94a6"> · '+(endLabel||'最新收')+' · '+(ohlc.length-idx)+'根</span>';
   }
-  return r;
+  return r+"</div>";
 }
 """
 
@@ -267,20 +268,20 @@ table.dataTable {{ font-size:12px; }}
 .dataTables_wrapper {{ overflow-x:auto; }}
 .kline-panel {{ display:none; position:fixed; right:0; top:0; width:520px; height:100vh; background:white; box-shadow:-4px 0 20px rgba(0,0,0,.15); z-index:1000; overflow-y:auto; }}
 .kline-panel.active {{ display:block; }}
-.kline-head {{ position:sticky; top:0; z-index:3; display:flex; align-items:center; gap:6px; padding:6px 8px; background:#1a73e8; color:#fff; min-height:40px; box-sizing:border-box; }}
-.kline-back,.kline-nav-btn {{ appearance:none; border:0; background:rgba(255,255,255,.14); color:#fff; border-radius:8px; cursor:pointer; font:inherit; font-size:12px; font-weight:650; line-height:1; min-height:36px; min-width:36px; padding:0 10px; flex:0 0 auto; }}
-.kline-back {{ padding:0 10px; }}
-.kline-nav-btn {{ font-size:18px; padding:0; width:36px; }}
+.kline-head {{ position:sticky; top:0; z-index:3; display:flex; align-items:center; gap:4px; padding:4px 8px; background:#1a73e8; color:#fff; min-height:34px; box-sizing:border-box; }}
+.kline-back,.kline-nav-btn {{ appearance:none; border:0; background:rgba(255,255,255,.14); color:#fff; border-radius:8px; cursor:pointer; font:inherit; font-size:12px; font-weight:650; line-height:1; min-height:30px; min-width:30px; padding:0 8px; flex:0 0 auto; }}
+.kline-back {{ padding:0 8px; }}
+.kline-nav-btn {{ font-size:16px; padding:0; width:30px; }}
 .kline-back:active,.kline-nav-btn:active {{ background:rgba(255,255,255,.28); }}
 .kline-nav-btn:disabled {{ opacity:.35; cursor:default; }}
-.kline-head-title {{ flex:1 1 auto; min-width:0; font-size:12px; font-weight:650; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; line-height:1.25; }}
+.kline-head-title {{ flex:1 1 auto; min-width:0; font-size:12px; font-weight:650; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; line-height:1.2; }}
 .kline-head-nav {{ display:flex; align-items:center; gap:2px; flex:0 0 auto; }}
 .kline-nav-count {{ font-size:11px; opacity:.9; min-width:2.8em; text-align:center; font-variant-numeric:tabular-nums; }}
-.kline-metrics {{ display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#e0e5ed }}.kline-metric {{ background:#fff;padding:8px 10px }}.kline-metric span {{ display:block;color:#818b9d;font-size:9px;margin-bottom:3px }}.kline-metric b {{ font-size:13px;font-variant-numeric:tabular-nums }}
-.kline-actions {{ display:flex;flex-wrap:wrap;gap:6px;padding:8px 12px; }}
-.journal-action {{ display:inline-flex;align-items:center;justify-content:center;margin:0;padding:6px 10px;text-align:center;text-decoration:none;background:#edf4ff;color:#1a73e8;border:1px solid #bfd2f7;border-radius:999px;font-weight:650;width:auto;flex:1 1 calc(50% - 6px);min-width:0;cursor:pointer;font:inherit;font-size:12px;line-height:1.2;box-sizing:border-box }}
+.kline-metrics {{ display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;padding:3px 6px 1px;background:transparent;border-bottom:1px solid #e8edf5 }}.kline-metric {{ background:transparent;padding:2px 4px }}.kline-metric span {{ display:block;color:#8a94a6;font-size:8px;margin-bottom:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis }}.kline-metric b {{ font-size:11px;line-height:1.15;font-variant-numeric:tabular-nums }}
+.kline-actions {{ display:flex;flex-wrap:wrap;gap:4px;padding:4px 8px 6px; }}
+.journal-action {{ display:inline-flex;align-items:center;justify-content:center;margin:0;padding:5px 6px;text-align:center;text-decoration:none;background:#edf4ff;color:#1a73e8;border:1px solid #bfd2f7;border-radius:8px;font-weight:600;width:auto;flex:1 1 calc(25% - 4px);min-width:0;cursor:pointer;font:inherit;font-size:11px;line-height:1.2;box-sizing:border-box }}
 .kline-chart-wrap {{ position:relative; width:100%; }}
-.kline-panel .chart {{ width:100%; height:600px; touch-action:pan-y; overscroll-behavior:contain; }}
+.kline-panel .chart {{ width:100%; height:min(68vh,640px); min-height:420px; touch-action:pan-y; overscroll-behavior:contain; }}
 .kline-panel .chart.is-scrubbing, #klineChart.is-scrubbing {{ touch-action:none; }}
 .kline-tip-overlay {{ position:absolute; top:0; left:0; right:0; z-index:5; pointer-events:none; margin:0; padding:4px 8px; font-size:11px; line-height:1.25; color:#f8fafc; background:rgba(15,23,42,.78); font-variant-numeric:tabular-nums; box-sizing:border-box; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; border-radius:0 0 6px 6px; }}
 .kline-tip-overlay[hidden] {{ display:none !important; }}
@@ -660,6 +661,7 @@ function renderKline(d){{
       axisPointer:{{type:'cross'}},
       confine:true,
       showContent:!coarse,
+      extraCssText:'padding:6px 8px;border-radius:8px;box-shadow:0 4px 14px rgba(15,23,42,.18);',
       position:function(pos,params,el,elRect,size){{
         var viewW=size.viewSize[0],viewH=size.viewSize[1],tipW=size.contentSize[0],tipH=size.contentSize[1];
         var x=Math.min(Math.max(pos[0]-tipW/2,8),Math.max(8,viewW-tipW-8));
@@ -668,8 +670,9 @@ function renderKline(d){{
       }},
       formatter:function(ps){{
         var html=tipHtmlFromParams(ps);
-        if(!coarse)setKlineTipBarHtml(html);
-        else {{
+        // Desktop: single floating ECharts tip follows cursor.
+        // Mobile/coarse: long-press scrub uses the compact overlay bar only.
+        if(coarse){{
           var idx=klinePickIndex(ps);
           if(idx>=0)setKlineTipOverlayText(tipCompactFromIndex(idx));
         }}
@@ -692,18 +695,16 @@ function renderKline(d){{
   klineChart.off('showTip');
   klineChart.off('hideTip');
   klineChart.on('updateAxisPointer',function(ev){{
-    if(coarse&&!klineScrubActive)return;
+    if(!coarse||!klineScrubActive)return;
     var idx=indexFromAxisEvent(ev);
     if(idx<0)return;
-    if(coarse)setKlineTipOverlayText(tipCompactFromIndex(idx));
-    else setKlineTipBarHtml(tipHtmlFromIndex(idx));
+    setKlineTipOverlayText(tipCompactFromIndex(idx));
   }});
   klineChart.on('showTip',function(ev){{
-    if(coarse&&!klineScrubActive)return;
+    if(!coarse||!klineScrubActive)return;
     var idx=indexFromAxisEvent(ev);
     if(idx<0)return;
-    if(coarse)setKlineTipOverlayText(tipCompactFromIndex(idx));
-    else setKlineTipBarHtml(tipHtmlFromIndex(idx));
+    setKlineTipOverlayText(tipCompactFromIndex(idx));
   }});
   klineChart.on('hideTip',function(){{if(!klineScrubActive)clearKlineTipBar();}});
   klineChart.resize();

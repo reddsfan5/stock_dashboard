@@ -107,8 +107,16 @@ body.app-workbench.wb-modal-open {overflow:hidden;}
 .app-workbench .kline-tip-overlay {color:#f8fafc;background:color-mix(in srgb, var(--app-surface) 18%, rgba(15,23,42,.82));}
 .app-workbench .kline-panel .chart {touch-action:pan-y;overscroll-behavior:contain;}
 .app-workbench .kline-panel .chart.is-scrubbing,.app-workbench #klineChart.is-scrubbing {touch-action:none;}
-.app-workbench .kline-actions {display:flex;flex-wrap:wrap;gap:6px;padding:8px 12px;}
-.app-workbench .journal-action {display:inline-flex;align-items:center;justify-content:center;margin:0;padding:6px 10px;width:auto;flex:1 1 calc(50% - 6px);border-radius:999px;font-size:12px;line-height:1.2;box-sizing:border-box;}
+.app-workbench .kline-head {padding:4px 8px;min-height:34px;gap:4px;}
+.app-workbench .kline-back,.app-workbench .kline-nav-btn {min-height:30px;min-width:30px;}
+.app-workbench .kline-nav-btn {width:30px;font-size:16px;}
+.app-workbench .kline-metrics {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;padding:3px 6px 1px;background:transparent;border-bottom:1px solid var(--app-border);}
+.app-workbench .kline-metric {padding:2px 4px;background:transparent;}
+.app-workbench .kline-metric span {font-size:8px;margin-bottom:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.app-workbench .kline-metric b {font-size:11px;line-height:1.15;}
+.app-workbench .kline-panel .chart {height:min(68vh,640px);min-height:420px;}
+.app-workbench .kline-actions {display:flex;flex-wrap:wrap;gap:4px;padding:4px 8px 6px;}
+.app-workbench .journal-action {display:inline-flex;align-items:center;justify-content:center;margin:0;padding:5px 6px;width:auto;flex:1 1 calc(25% - 4px);border-radius:8px;font-size:11px;font-weight:600;line-height:1.2;box-sizing:border-box;}
 /* Watchlist, daily and context pages. */
 .app-workbench[data-page=watchlist] .wrap {display:grid;grid-template-columns:minmax(0,1fr) 300px;align-items:start;gap:20px;}
 .wb-watch-main {min-width:0;}
