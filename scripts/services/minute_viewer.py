@@ -435,6 +435,18 @@ def _safe_static_path(url_path: str):
     return candidate
 
 
+def _cache_policy(url_path: str) -> str:
+    """Keep market/API data fresh while allowing reusable UI assets to stay warm."""
+    path = urlparse(url_path).path
+    if path.startswith("/vendor/"):
+        return "public, max-age=604800, immutable"
+    if path.startswith("/assets/"):
+        return "public, max-age=300, stale-while-revalidate=86400"
+    if path.endswith(".html"):
+        return "no-cache"
+    return "no-store"
+
+
 
 class MinuteRequestHandler(SimpleHTTPRequestHandler):
     repository = None
@@ -446,10 +458,12 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
     symbol_context = None
 
     def end_headers(self):
-        """页面和接口都禁用浏览器缓存，始终读取服务端最新版本。"""
-        self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
-        self.send_header("Pragma", "no-cache")
-        self.send_header("Expires", "0")
+        """Cache versioned UI dependencies, but never cache market/API payloads."""
+        policy = _cache_policy(self.path)
+        self.send_header("Cache-Control", policy)
+        if policy == "no-store":
+            self.send_header("Pragma", "no-cache")
+            self.send_header("Expires", "0")
         super().end_headers()
 
     def _serve_static_asset(self, url_path: str):
