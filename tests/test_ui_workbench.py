@@ -44,9 +44,11 @@ class PublicStatusTest(unittest.TestCase):
 
 
 class ServiceCompatibilityTest(unittest.TestCase):
-    def test_lan_is_explicit(self):
-        self.assertFalse(serve.build_parser().parse_args([]).lan)
+    def test_lan_defaults_on(self):
+        self.assertTrue(serve.build_parser().parse_args([]).lan)
+        self.assertTrue(serve.build_parser().parse_args(['restart', 'web']).lan)
         self.assertTrue(serve.build_parser().parse_args(['restart', 'web', '--lan']).lan)
+        self.assertFalse(serve.build_parser().parse_args(['restart', 'web', '--no-lan']).lan)
 
     def test_listening_mode_mismatch_requires_restart(self):
         with patch.object(serve, 'web_is_healthy', return_value=True), patch.object(
@@ -82,6 +84,12 @@ class ServiceCompatibilityTest(unittest.TestCase):
         self.assertIn('location.search', html)
         self.assertIn('location.hash', html)
         self.assertIn('dashboard.html', html)
+
+    def test_dashboard_workbench_exposes_filtered_txt_export(self):
+        source = (ASSETS / 'workbench.js').read_text(encoding='utf-8')
+        self.assertIn('导出当前命中 TXT', source)
+        self.assertIn('exportScreeningTxt', source)
+        self.assertIn('screenExportStatus', source)
 
 
 if __name__ == '__main__':

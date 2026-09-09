@@ -7,6 +7,7 @@
     python -m scripts.serve status           # 查看服务与定时任务状态
     python -m scripts.serve start journal    # 启动选股日记所在的共享 Web 服务
     python -m scripts.serve restart web --replace-conflicts
+    python -m scripts.serve restart web --no-lan   # 仅本机
     python -m scripts.serve stop all
 
 minute、grid、trainer、journal、news、watchlist 是业务入口，共用一个 Web 进程；reports 是为了兼容
@@ -257,12 +258,12 @@ def _selected_web_url(requested_target):
     return "http://127.0.0.1:{}{}".format(WEB_PORT, path)
 
 
-def start_web(requested_target="web", replace_conflicts=False, lan=False):
+def start_web(requested_target="web", replace_conflicts=False, lan=True):
     if web_is_healthy():
         _, health = _http_json(WEB_HEALTH_URL)
         host = (health or {}).get('listen_host', '127.0.0.1')
         if (host == '0.0.0.0') != lan:
-            print('监听模式不同，请运行 python -m scripts.serve restart web' + (' --lan' if lan else ''))
+            print('监听模式不同，请运行 python -m scripts.serve restart web' + ('' if lan else ' --no-lan'))
             return False
         print("✓ 交互 Web 已运行：{}".format(_selected_web_url(requested_target)))
         return True
@@ -473,7 +474,19 @@ def build_parser():
         "--replace-conflicts", action="store_true",
         help="仅替换占用目标端口的本项目旧服务，不会终止无关进程",
     )
-    parser.add_argument("--lan", action="store_true", help="交互服务允许可信局域网设备直接访问")
+    parser.add_argument(
+        "--lan",
+        dest="lan",
+        action="store_true",
+        default=True,
+        help="交互服务默认允许可信局域网/Tailscale 访问（默认开启）",
+    )
+    parser.add_argument(
+        "--no-lan",
+        dest="lan",
+        action="store_false",
+        help="仅本机 127.0.0.1 监听，禁止局域网与 Tailscale 网卡访问",
+    )
     return parser
 
 

@@ -85,14 +85,14 @@ def ensure_services(logger: logging.Logger) -> bool:
     """日更结束后拉起/重启 HTTP 服务；默认开局域网以便手机访问。
 
     使用 ``restart``（而非 ``start``），以便把已在 127.0.0.1 监听的 web
-    切到 ``--lan``。服务失败只记日志，不覆盖数据更新结果。
+    默认保持局域网监听；仅当 ``STOCK_SERVE_LAN=0`` 时追加 ``--no-lan``。服务失败只记日志，不覆盖数据更新结果。
     """
     cmd = [
         sys.executable, "-m", "scripts.serve",
         "restart", "all", "--replace-conflicts",
     ]
-    if os.environ.get("STOCK_SERVE_LAN", "1").strip() != "0":
-        cmd.append("--lan")
+    if os.environ.get("STOCK_SERVE_LAN", "1").strip() == "0":
+        cmd.append("--no-lan")
     logger.info("确保服务可用: %s", " ".join(cmd[1:]))
     try:
         result = subprocess.run(

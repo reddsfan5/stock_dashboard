@@ -47,7 +47,7 @@
 
 ## 前置条件
 
-1. **家里 Mac 开机**，且交互 Web 在监听（`--lan` 或等价地绑定 `0.0.0.0:8765`）。仅监听 `127.0.0.1` 时，Tailscale 网卡也进不来。
+1. **家里 Mac 开机**，且交互 Web 在监听（默认即 `0.0.0.0:8765`；勿用 `--no-lan`）。仅监听 `127.0.0.1` 时，Tailscale 网卡也进不来。
 2. **Mac 与手机登录同一个 Tailscale 账号**，两端状态均为 Connected。
 3. 公司网络若拦截非标准出站端口或 UDP，可能影响直连；Tailscale 一般会回落到 DERP 中继，变慢但仍可能可用。若完全打不开，再考虑 HTTPS 隧道方案。
 
@@ -62,7 +62,7 @@ lsof -nP -iTCP:8765 -sTCP:LISTEN
 
 ```bash
 cd /Users/dong_007/D/stock
-.venv/bin/python -m scripts.serve restart web --lan --replace-conflicts
+.venv/bin/python -m scripts.serve restart web --replace-conflicts
 .venv/bin/python -m scripts.serve status
 ```
 
@@ -106,10 +106,10 @@ CLI 也可能在 `/usr/local/bin/tailscale`（随 App 提供的命令行包装�
 | 现象 | 排查 |
 |---|---|
 | 手机打不开页面 | 手机 Tailscale 是否 Connected；Mac 是否在线且 Tailscale Connected |
-| Mac 在线仍超时 | `lsof` 是否 `*:8765`；用 `--lan` 重启 web；本机 `curl` Tailscale IP |
+| Mac 在线仍超时 | `lsof` 是否 `*:8765`；确认未使用 `--no-lan` 后重启 web；本机 `curl` Tailscale IP |
 | 只能家里开、公司不行 | 公司网络策略；换蜂窝数据试一次；看 Tailscale 是否走 DERP |
 | IP 变了 | 再跑 `tailscale ip -4`，更新书签；或改用 MagicDNS 主机名 |
-| 服务「偶发」没了 | 看 `scripts.serve status`、`output/logs/interactive_web.log`；每日更新后应自动 `--lan` 拉起（见文档 15） |
+| 服务「偶发」没了 | 看 `scripts.serve status`、`output/logs/interactive_web.log`；每日更新后应自动以局域网模式拉起（见文档 15） |
 
 查看节点与连通：
 
@@ -132,3 +132,4 @@ tailscale ping iphone-13
 |---|---|
 | 2026-09-08 | Mac 安装 Tailscale；与 iPhone 13 同账号组网；确认 `100.112.224.109:8765` 可打开 dashboard |
 | 2026-09-09 | 本文档入库 |
+| 2026-09-09 | `scripts.serve` 默认开启局域网监听；仅本机改用 `--no-lan` |
