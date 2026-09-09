@@ -85,11 +85,12 @@ class ServiceCompatibilityTest(unittest.TestCase):
         self.assertIn('location.hash', html)
         self.assertIn('dashboard.html', html)
 
-    def test_dashboard_workbench_exposes_filtered_txt_export(self):
+    def test_dashboard_workbench_exposes_filtered_copy(self):
         source = (ASSETS / 'workbench.js').read_text(encoding='utf-8')
-        self.assertIn('导出当前命中 TXT', source)
-        self.assertIn('exportScreeningTxt', source)
+        self.assertIn('复制当前命中', source)
+        self.assertIn('copyScreeningList', source)
         self.assertIn('screenExportStatus', source)
+        self.assertNotIn('导出当前命中 TXT', source)
 
 
 if __name__ == '__main__':

@@ -218,6 +218,13 @@
       dt.columns.adjust().draw(false);
     }
     toolbar.append(tabs(groups,i=>{selectedGroup=i;if(window.jQuery) $$('table.dataTable').forEach(t=>{if(jQuery.fn.dataTable.isDataTable(t))columnGroup(jQuery(t).DataTable());});}));
+    const exportTxt=button('复制当前命中',()=>window.copyScreeningList?.());
+    exportTxt.classList.add('wb-screen-export');
+    exportTxt.title='复制当前策略中经过搜索和指标筛选后的六位代码+名称，便于粘贴到同花顺';
+    const exportStatus=document.createElement('span');
+    exportStatus.id='screenExportStatus';exportStatus.className='wb-screen-export-status';
+    exportStatus.setAttribute('role','status');exportStatus.setAttribute('aria-live','polite');
+    toolbar.append(exportTxt,exportStatus);
     const full=button('完整表格',()=>{const on=document.body.classList.toggle('wb-full-table');full.textContent=on?'摘要列表':'完整表格';full.setAttribute('aria-pressed',String(on));});full.classList.add('wb-mobile-only');toolbar.append(full);
     $('.content').before(toolbar);
     function attach(table) {

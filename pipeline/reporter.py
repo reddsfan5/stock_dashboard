@@ -106,6 +106,14 @@ def build_screening_html(
 ) -> str:
     """生成选股仪表盘 HTML（桌面版）"""
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
+    static_dir = os.path.join(PROJECT_DIR, "scripts", "services", "static")
+    asset_files = ("app.css", "app-shell.js", "workbench.js", "workbench.css")
+    asset_version = max(
+        (int(os.path.getmtime(os.path.join(static_dir, name)))
+         for name in asset_files
+         if os.path.exists(os.path.join(static_dir, name))),
+        default=int(datetime.now().timestamp()),
+    )
     decision_map = snapshot_lookup(decision_snapshot)
     market_date = "—"
     if decision_snapshot is not None and "指标日期" in decision_snapshot.columns:
@@ -233,6 +241,10 @@ def build_screening_html(
     )
 
     tab_ids = json.dumps([m.id for m in pipeline_modules if m.id in results])
+    tab_titles_json = json.dumps(
+        {m.id: m.title for m in pipeline_modules if m.id in results},
+        ensure_ascii=False,
+    )
 
     # 每个 tab 的股票代码列表（用于 K 线键盘导航限在当前 tab 内）
     tab_codes = {}
@@ -265,9 +277,9 @@ try{{var root=document.documentElement;root.dataset.theme=localStorage.getItem('
 </script>
 <title>{title} — 行情 {market_date}</title>
 <link rel="stylesheet" href="vendor/jquery.dataTables.min.css">
-<link rel="stylesheet" href="/assets/app.css">
-<script src="/assets/app-shell.js" defer></script>
-<script id="workbench-js" src="/assets/workbench.js" defer></script>
+<link rel="stylesheet" href="/assets/app.css?v={asset_version}">
+<script src="/assets/app-shell.js?v={asset_version}" defer></script>
+<script id="workbench-js" src="/assets/workbench.js?v={asset_version}" defer></script>
 <style>
 .screen-pending .content,.screen-pending .wb-screen-toolbar,.screen-pending footer {{visibility:hidden}}
 .screen-pending .content {{max-height:360px;overflow:hidden}}
@@ -350,7 +362,7 @@ footer {{ text-align:center; color:#999; font-size:11px; padding:20px; }}
   .metric-guide ul{{position:fixed;left:10px;right:10px;top:150px;width:auto}}
 }}
 </style>
-<link id="workbench-css" rel="stylesheet" href="/assets/workbench.css">
+<link id="workbench-css" rel="stylesheet" href="/assets/workbench.css?v={asset_version}">
 </head>
 <body class="app-workbench" data-page="dashboard">
 <div id="app-shell" data-active="dashboard"></div>
@@ -413,11 +425,71 @@ function switchTab(id){{
   initStrategyTable(id).columns.adjust().draw();
 }}
 var currentTabId=({tab_ids})[0]||null;
+var SCREEN_TAB_TITLES={tab_titles_json};
+var SCREEN_MARKET_DATE={json.dumps(market_date, ensure_ascii=False)};
 function filterValue(id){{var raw=document.getElementById(id).value;return raw===''?null:+raw}}
 function metricValue(settings,row,label){{var idx=-1;for(var i=0;i<settings.aoColumns.length;i++){{if(settings.aoColumns[i].nTh.textContent.trim()===label){{idx=i;break}}}}if(idx<0)return null;var raw=String(row[idx]??'').replace(/,/g,'').trim();if(raw==='')return null;var value=+raw;return Number.isFinite(value)?value:null}}
 $.fn.dataTable.ext.search.push(function(settings,row){{if(!currentTabId||settings.nTable.id!=='tbl-'+currentTabId)return true;var rules=[['fVolume','成交量比20','min'],['fTurnover','换手率%','min'],['fMomentum','20日动量%','min'],['fAtr','ATR14%','max'],['fPe','动态PE','max']];for(var i=0;i<rules.length;i++){{var wanted=filterValue(rules[i][0]);if(wanted===null)continue;var actual=metricValue(settings,row,rules[i][1]);if(actual===null)return false;if(rules[i][2]==='min'&&actual<wanted)return false;if(rules[i][2]==='max'&&actual>wanted)return false}}return true}});
 function applyDecisionFilters(){{if(currentTabId)$('#tbl-'+currentTabId).DataTable().draw()}}
 document.getElementById('applyFilters').onclick=applyDecisionFilters;document.getElementById('resetFilters').onclick=function(){{['fVolume','fTurnover','fMomentum','fAtr','fPe'].forEach(function(id){{document.getElementById(id).value=''}});applyDecisionFilters()}};
+function screeningPlainText(value){{
+  var node=document.createElement('div');
+  node.innerHTML=String(value??'');
+  return (node.textContent||'').trim();
+}}
+function copyScreeningList(){{
+  if(!currentTabId)return;
+  var dt=initStrategyTable(currentTabId);
+  var labels=dt.columns().header().toArray().map(function(node){{return node.textContent.trim()}});
+  var codeIndex=labels.indexOf('代码'),nameIndex=labels.indexOf('名称');
+  if(codeIndex<0||nameIndex<0){{
+    if(window.StockAppShell)StockAppShell.toast('当前结果缺少股票代码或名称',{{tone:'error'}});
+    return;
+  }}
+  var seen=new Set(),items=[];
+  dt.rows({{search:'applied',order:'applied'}}).data().toArray().forEach(function(row){{
+    var rawCode=screeningPlainText(row[codeIndex]);
+    var match=rawCode.match(/(?:sh|sz|bj)?(\\d{{6}})/i);
+    if(!match||seen.has(match[1]))return;
+    seen.add(match[1]);
+    var name=screeningPlainText(row[nameIndex]).replace(/[\\r\\n\\t]+/g,' ').trim();
+    items.push({{code:match[1],name:name}});
+  }});
+  if(!items.length){{
+    if(window.StockAppShell)StockAppShell.toast('当前筛选下没有可复制的标的',{{tone:'warn'}});
+    return;
+  }}
+  // 同花顺粘贴：一行「六位代码\\t名称」
+  var text=items.map(function(item){{return item.code+'\\t'+item.name}}).join('\\n');
+  function done(ok, detail){{
+    var status=document.getElementById('screenExportStatus');
+    if(status)status.textContent=ok?('已复制 '+items.length+' 只'):'复制失败';
+    if(window.StockAppShell)StockAppShell.toast(
+      ok?('已复制 '+items.length+' 只，可粘贴到同花顺'):('复制失败'+(detail?('：'+detail):'')),
+      {{tone:ok?'ok':'error'}}
+    );
+  }}
+  function fallbackCopy(value){{
+    var ta=document.createElement('textarea');
+    ta.value=value;ta.setAttribute('readonly','');
+    ta.style.cssText='position:fixed;left:-9999px;top:0';
+    document.body.appendChild(ta);ta.select();ta.setSelectionRange(0,value.length);
+    var ok=false;
+    try{{ok=document.execCommand('copy')}}catch(e){{ok=false}}
+    ta.remove();
+    return ok;
+  }}
+  if(navigator.clipboard&&window.isSecureContext){{
+    navigator.clipboard.writeText(text).then(function(){{done(true)}}).catch(function(err){{
+      done(fallbackCopy(text), err&&err.message);
+    }});
+  }}else{{
+    done(fallbackCopy(text));
+  }}
+}}
+window.copyScreeningList=copyScreeningList;
+window.exportScreeningTxt=copyScreeningList;
+
 function initStrategyTable(id){{
   var table=$('#tbl-'+id);
   if($.fn.dataTable.isDataTable(table[0]))return table.DataTable();
