@@ -169,7 +169,8 @@ body.app-workbench.wb-modal-open {overflow:hidden;}
 .app-workbench .sheet-body {overflow:auto;min-height:0;background:var(--app-surface);}
 .app-workbench .modal {z-index:1300;}
 .app-workbench[data-page=journal] .layout {grid-template-columns:minmax(0,1fr) 360px;gap:20px;}
-.app-workbench[data-page=journal] #dailyChart {height:500px;}
+.app-workbench[data-page=journal] #dailyChart {height:360px;}
+.app-workbench[data-page=journal] #minuteChart {height:240px;}
 .app-workbench[data-page=journal] .side {min-width:0;}
 .app-workbench[data-page=grid] .primary {grid-template-columns:minmax(180px,1.6fr) repeat(2,minmax(130px,1fr));}
 .app-workbench[data-page=grid] .main {grid-template-columns:minmax(0,1fr) 300px;}
@@ -290,7 +291,8 @@ body.app-workbench.wb-modal-open {overflow:hidden;}
  .app-workbench .modal.manage-mode .sheet {height:100dvh;max-height:100dvh;border-radius:0;}
  .app-workbench .sheet-body {flex:1;}
  .app-workbench .submit-row {padding-bottom:max(12px,env(safe-area-inset-bottom));}
- .app-workbench[data-page=journal] #dailyChart {height:380px;}
+ .app-workbench[data-page=journal] #dailyChart {height:280px;}
+ .app-workbench[data-page=journal] #minuteChart {height:200px;}
  .app-workbench[data-page=journal] .side {display:block;}
  .app-workbench[data-page=journal] .topbar .search-wrap {flex-basis:100%;width:100%;}
  .app-workbench[data-page=journal] .case-table {min-width:640px;}
