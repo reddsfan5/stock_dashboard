@@ -84,8 +84,23 @@ body.app-workbench.wb-modal-open {overflow:hidden;}
 .app-workbench[data-page=dashboard] .decision-tools {margin:12px 24px;padding:16px;border:1px solid var(--app-border);border-radius:12px;background:var(--app-surface);}
 .app-workbench[data-page=dashboard] .content {padding:12px 24px 24px;}
 .app-workbench[data-page=dashboard] .dataTables_wrapper {padding:16px;background:var(--app-surface);border:1px solid var(--app-border);border-radius:12px;overflow:auto;}
-.app-workbench[data-page=dashboard] .wb-screen-export {margin-left:auto;white-space:nowrap;}
-.app-workbench[data-page=dashboard] .wb-screen-export-status {align-self:center;color:var(--app-muted);font-size:11px;white-space:nowrap;}
+.app-workbench[data-page=dashboard] .wb-screen-actions {display:inline-flex;align-items:center;gap:8px;margin-left:auto;}
+.app-workbench[data-page=dashboard] .wb-screen-export-wrap {display:inline-flex;align-items:center;gap:8px;min-width:0;}
+.app-workbench[data-page=dashboard] .wb-screen-export.wb-btn {
+  border-radius:999px;padding:6px 14px;font-weight:600;letter-spacing:.02em;white-space:nowrap;
+  background:var(--app-accent-soft);border-color:transparent;color:var(--app-accent);
+  box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--app-accent) 28%, transparent);
+}
+.app-workbench[data-page=dashboard] .wb-screen-export.wb-btn.primary {
+  background:var(--app-accent);border-color:var(--app-accent);color:#fff;
+  box-shadow:0 1px 2px color-mix(in srgb, var(--app-accent) 35%, transparent);
+}
+.app-workbench[data-page=dashboard] .wb-screen-export .wb-copy-icon {width:15px;height:15px;flex:0 0 auto;}
+.app-workbench[data-page=dashboard] .wb-screen-export-status {
+  color:var(--app-muted);font-size:11px;line-height:1.2;white-space:nowrap;
+  padding:3px 8px;border-radius:999px;background:var(--app-surface-2);
+}
+.app-workbench[data-page=dashboard] .wb-screen-export-status:empty {display:none;}
 .app-workbench table.dataTable {color:var(--app-text);background:var(--app-surface);width:100%!important;}
 .app-workbench table.dataTable th {white-space:nowrap;line-height:1.5;padding:12px 22px 12px 10px;}
 .app-workbench table.dataTable td {white-space:nowrap;padding:12px 10px;background:var(--app-surface)!important;box-shadow:none!important;border-color:var(--app-border);}
@@ -219,11 +234,16 @@ body.app-workbench.wb-modal-open {overflow:hidden;}
  .wb-dialog-content .decision-tools {display:flex!important;margin:0!important;padding:0!important;border:0!important;}
  .wb-dialog-content .filter-field {width:100%;}
  .wb-dialog-content .filter-field input {width:100%;}
- .app-workbench .wb-screen-toolbar {margin:12px;}
- .app-workbench .wb-screen-toolbar .wb-tabs {margin:0;order:2;width:100%;flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px;}
+ .app-workbench .wb-screen-toolbar {margin:12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;}
+ .app-workbench .wb-screen-toolbar .wb-tabs {margin:0;order:2;width:100%;flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch;}
  .app-workbench .wb-screen-toolbar .wb-tabs button {flex-shrink:0;white-space:nowrap;}
- .app-workbench .wb-screen-toolbar {display:flex;flex-wrap:wrap;gap:8px;}
- .app-workbench[data-page=dashboard] .wb-screen-export {margin-left:0;}
+ .app-workbench[data-page=dashboard] .wb-screen-actions {
+   order:1;width:100%;margin-left:0;display:flex;align-items:center;gap:8px;
+ }
+ .app-workbench[data-page=dashboard] .wb-screen-export-wrap {margin-left:auto;}
+ .app-workbench[data-page=dashboard] .wb-screen-export.wb-btn {
+   min-height:44px;padding:8px 16px;font-size:14px;
+ }
  .app-workbench[data-page=dashboard] .dataTables_wrapper {padding:12px;}
  .app-workbench[data-page=dashboard] .dataTables_filter,.app-workbench[data-page=dashboard] .dataTables_length {text-align:left;float:none;margin:4px 0 12px;}
  .app-workbench[data-page=dashboard] .dataTables_filter input {max-width:180px;}

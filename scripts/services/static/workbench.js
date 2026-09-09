@@ -203,7 +203,7 @@
     const filterDialog=modalFor('筛选条件',controls,$('#applyFilters'));
     $('#applyFilters').addEventListener('click',()=>{if(filterDialog.dialog.open)filterDialog.dialog.close();});
     const toolbar=document.createElement('div');toolbar.className='wb-screen-toolbar';
-    const filterButton=button('筛选条件',filterDialog.open);filterButton.classList.add('wb-mobile-only');toolbar.append(filterButton);
+    const filterButton=button('筛选条件',filterDialog.open);filterButton.classList.add('wb-mobile-only');
     const groups=['核心指标','量价指标','风险指标','估值指标','全部指标'];
     let selectedGroup=0;
     function columnGroup(dt) {
@@ -218,14 +218,26 @@
       dt.columns.adjust().draw(false);
     }
     toolbar.append(tabs(groups,i=>{selectedGroup=i;if(window.jQuery) $$('table.dataTable').forEach(t=>{if(jQuery.fn.dataTable.isDataTable(t))columnGroup(jQuery(t).DataTable());});}));
-    const exportTxt=button('复制当前命中',()=>window.copyScreeningList?.());
+    const actions=document.createElement('div');actions.className='wb-screen-actions';
+    const exportWrap=document.createElement('div');exportWrap.className='wb-screen-export-wrap';
+    const exportTxt=button('',()=>window.copyScreeningList?.());
     exportTxt.classList.add('wb-screen-export');
-    exportTxt.title='复制当前策略中经过搜索和指标筛选后的六位代码+名称，便于粘贴到同花顺';
+    exportTxt.title='复制当前筛选命中的六位代码+名称，便于粘贴到同花顺';
+    exportTxt.setAttribute('aria-label','复制标的到剪贴板');
+    const exportIcon=document.createElementNS('http://www.w3.org/2000/svg','svg');
+    exportIcon.setAttribute('class','wb-copy-icon');
+    exportIcon.setAttribute('viewBox','0 0 24 24');
+    exportIcon.setAttribute('aria-hidden','true');
+    exportIcon.innerHTML='<path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>';
+    const exportLabel=document.createElement('span');exportLabel.textContent='复制标的';
+    exportTxt.replaceChildren(exportIcon,exportLabel);
     const exportStatus=document.createElement('span');
     exportStatus.id='screenExportStatus';exportStatus.className='wb-screen-export-status';
     exportStatus.setAttribute('role','status');exportStatus.setAttribute('aria-live','polite');
-    toolbar.append(exportTxt,exportStatus);
-    const full=button('完整表格',()=>{const on=document.body.classList.toggle('wb-full-table');full.textContent=on?'摘要列表':'完整表格';full.setAttribute('aria-pressed',String(on));});full.classList.add('wb-mobile-only');toolbar.append(full);
+    exportWrap.append(exportTxt,exportStatus);
+    const full=button('完整表格',()=>{const on=document.body.classList.toggle('wb-full-table');full.textContent=on?'摘要列表':'完整表格';full.setAttribute('aria-pressed',String(on));});full.classList.add('wb-mobile-only');
+    actions.append(filterButton,exportWrap,full);
+    toolbar.append(actions);
     $('.content').before(toolbar);
     function attach(table) {
       if(table.dataset.wbReady)return; table.dataset.wbReady='true';

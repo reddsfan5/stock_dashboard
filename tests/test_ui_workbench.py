@@ -87,9 +87,12 @@ class ServiceCompatibilityTest(unittest.TestCase):
 
     def test_dashboard_workbench_exposes_filtered_copy(self):
         source = (ASSETS / 'workbench.js').read_text(encoding='utf-8')
-        self.assertIn('复制当前命中', source)
+        self.assertIn('复制标的', source)
         self.assertIn('copyScreeningList', source)
         self.assertIn('screenExportStatus', source)
+        self.assertIn('wb-screen-export-wrap', source)
+        self.assertIn('wb-copy-icon', source)
+        self.assertIn('wb-screen-actions', source)
         self.assertNotIn('导出当前命中 TXT', source)
 
 
