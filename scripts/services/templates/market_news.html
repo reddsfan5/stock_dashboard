@@ -209,13 +209,67 @@
   .mn-feed.is-masonry{column-count:2}
   .mn-phase-head{top:calc(var(--app-nav-h) + 8px)}
 }
+.mn-tools > summary{display:none;list-style:none;cursor:pointer}
+.mn-tools > summary::-webkit-details-marker{display:none}
+.mn-tools-summary-text{min-inline-size:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media (min-width:641px){
+  .mn-tools{display:contents}
+}
 @media (max-width:640px){
-  .mn-page{padding:10px}
+  .mn-page{padding:8px 8px 12px}
+  .mn-hero{display:none}
   .mn-feed.is-masonry{column-count:1}
   .mn-form{grid-template-columns:1fr}
   .mn-form .full{grid-column:auto}
-  .mn-badges{margin-inline-start:0;width:100%}
-  .mn-controls{top:calc(var(--app-nav-h) + 2px)}
+  .mn-controls{
+    top:calc(var(--app-nav-h) + 2px);
+    gap:6px;padding:8px;margin-block-end:8px;
+    border-radius:10px;
+  }
+  .mn-tools > summary{
+    display:flex;align-items:center;justify-content:space-between;gap:8px;
+    height:32px;padding:0 10px;margin-block-end:0;
+    border:1px solid var(--app-border);border-radius:8px;
+    background:var(--app-surface-2);color:var(--app-text);
+    font-size:12px;font-weight:650;
+  }
+  .mn-tools > summary::after{
+    content:"筛选";flex:none;font-size:11px;font-weight:700;color:var(--app-accent);
+  }
+  .mn-tools[open] > summary::after{content:"收起"}
+  .mn-tools[open] > summary{margin-block-end:8px}
+  .mn-controls-row{gap:6px}
+  .mn-field{flex:1 1 calc(50% - 6px);gap:3px}
+  .mn-field:has(input[type=search]){flex:1 1 100%}
+  .mn-field label{font-size:10px}
+  .mn-field input[type=date],.mn-field input[type=time],.mn-field input[type=search]{
+    height:32px;min-inline-size:0;width:100%;padding:0 8px;font-size:13px;
+  }
+  .mn-actions{width:100%;gap:6px}
+  .mn-actions .btn{flex:1;min-inline-size:0;height:32px;padding:0 6px;font-size:12px}
+  .mn-hint{display:none}
+  .mn-seg{display:none}
+  .mn-chips{gap:5px}
+  .mn-chip{height:26px;padding:0 9px;font-size:11px}
+  .mn-phase-head{
+    top:calc(var(--app-nav-h) + 4px);
+    padding:8px 10px;
+  }
+  .mn-phase-head h2{font-size:13px}
+  .mn-phase-head small{display:none}
+  .mn-phase-count{height:24px;font-size:11px}
+  .mn-feed{padding:8px}
+  .mn-feed.is-list{gap:8px}
+  .mn-feed.is-masonry > .mn-card{margin:0 0 8px}
+  .mn-card{padding:9px 10px;border-radius:10px}
+  .mn-card:hover{transform:none}
+  .mn-card h3{margin:5px 0 4px;font-size:13px;-webkit-line-clamp:2}
+  .mn-card p{-webkit-line-clamp:2;font-size:11px;line-height:1.45}
+  .mn-card-actions{margin-block-start:8px;gap:6px}
+  .mn-card-actions a,.mn-card-actions button{height:28px;font-size:11px;padding:0 8px}
+  .mn-aside{margin-block-start:4px}
+  .mn-journal-head{padding:10px 12px}
+  .mn-journal-head p{display:none}
 }
 @media (prefers-reduced-motion:reduce){
   .mn-card{transition:none}
@@ -244,23 +298,26 @@
   </header>
 
   <section class="mn-controls" aria-label="筛选与时间">
-    <div class="mn-controls-row">
-      <div class="mn-field"><label for="marketDate">行情日期</label><input id="marketDate" type="date"></div>
-      <div class="mn-field"><label for="asOf">截至时刻</label><input id="asOf" type="time" step="60"></div>
-      <div class="mn-field"><label for="q">关键词</label><input id="q" type="search" placeholder="标题 / 摘要 / 标签" autocomplete="off"></div>
-      <div class="mn-actions">
-        <button class="btn btn-primary" type="button" id="load">按时点查看</button>
-        <button class="btn" type="button" id="fullDay">查看全天</button>
-        <button class="btn" type="button" id="refresh">刷新同花顺</button>
+    <details class="mn-tools" id="mnTools">
+      <summary><span class="mn-tools-summary-text" id="toolsSummary">筛选与时间</span></summary>
+      <div class="mn-controls-row">
+        <div class="mn-field"><label for="marketDate">行情日期</label><input id="marketDate" type="date"></div>
+        <div class="mn-field"><label for="asOf">截至时刻</label><input id="asOf" type="time" step="60"></div>
+        <div class="mn-field"><label for="q">关键词</label><input id="q" type="search" placeholder="标题 / 摘要 / 标签" autocomplete="off"></div>
+        <div class="mn-actions">
+          <button class="btn btn-primary" type="button" id="load">按时点查看</button>
+          <button class="btn" type="button" id="fullDay">查看全天</button>
+          <button class="btn" type="button" id="refresh">刷新同花顺</button>
+        </div>
+        <div class="mn-seg" role="group" aria-label="布局">
+          <button type="button" id="viewMasonry" class="is-on">瀑布</button>
+          <button type="button" id="viewList">列表</button>
+        </div>
       </div>
-      <div class="mn-seg" role="group" aria-label="布局">
-        <button type="button" id="viewMasonry" class="is-on">瀑布</button>
-        <button type="button" id="viewList">列表</button>
-      </div>
-    </div>
+      <p class="mn-hint">早盘 = 09:30 前 · 午间 = 09:30–12:59 · 收盘 = 13:00 后。无剧透训练请保留截止时刻。</p>
+    </details>
     <div class="mn-chips" id="phaseChips" role="tablist" aria-label="时段"></div>
     <div class="mn-chips" id="tagChips" hidden></div>
-    <p class="mn-hint">早盘 = 09:30 前 · 午间 = 09:30–12:59 · 收盘 = 13:00 后。无剧透训练请保留截止时刻。</p>
   </section>
 
   <div class="mn-notice" id="notice" hidden></div>
@@ -381,7 +438,13 @@ function newsCard(x){
 function render(){
   if(!payload)return;
   const asof=payload.as_of?`截至 ${payload.as_of.slice(0,5)}（无剧透）`:'全天复盘';
-  $('scope').textContent=`${payload.market_date} · ${asof} · ${payload.items.length} 条`;
+  const scopeText=`${payload.market_date} · ${asof} · ${payload.items.length} 条`;
+  $('scope').textContent=scopeText;
+  const tools=$('toolsSummary');
+  if(tools){
+    const shortAsof=payload.as_of?`截至${payload.as_of.slice(0,5)}`:'全天';
+    tools.textContent=`${payload.market_date} · ${shortAsof} · ${payload.items.length}条`;
+  }
   $('cache').textContent=payload.fetched_at?payload.fetched_at.replace('T',' ').slice(0,16):'尚无';
   if(payload.source_url)$('source').href=payload.source_url;
   if(payload.message)message(payload.message); else if(!$('notice').dataset.sticky)message('');
@@ -492,6 +555,13 @@ const u=new URL(location.href);
 const today=new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'});
 $('marketDate').value=u.searchParams.get('date')||today;
 $('asOf').value=(u.searchParams.get('as_of')||'').slice(0,5);
+(function syncToolsOpen(){
+  const d=$('mnTools'); if(!d)return;
+  const wide=window.matchMedia('(min-width:641px)');
+  const apply=()=>{d.open=wide.matches};
+  apply();
+  if(wide.addEventListener)wide.addEventListener('change',apply); else wide.addListener(apply);
+})();
 load(false);
 </script>
 <script src="/assets/app-shell.js"></script>
