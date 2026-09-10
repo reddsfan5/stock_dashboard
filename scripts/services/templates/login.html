@@ -7,54 +7,106 @@
 <link rel="stylesheet" href="/assets/app.css">
 <style>
   body.login-page{min-height:100vh;display:flex;align-items:center;justify-content:center;margin:0;background:var(--bg, #f4f6f8);font-family:system-ui,-apple-system,sans-serif;}
-  .login-card{width:min(380px,92vw);background:var(--panel,#fff);border:1px solid var(--border,#e5e7eb);border-radius:14px;padding:28px 24px 22px;box-shadow:0 10px 30px rgba(15,23,42,.06);}
+  .login-card{width:min(400px,92vw);background:var(--panel,#fff);border:1px solid var(--border,#e5e7eb);border-radius:14px;padding:28px 24px 22px;box-shadow:0 10px 30px rgba(15,23,42,.06);}
   .login-card h1{margin:0 0 6px;font-size:1.25rem;}
-  .login-card p.hint{margin:0 0 18px;color:var(--muted,#64748b);font-size:.9rem;line-height:1.45;}
+  .login-card p.hint{margin:0 0 14px;color:var(--muted,#64748b);font-size:.9rem;line-height:1.45;}
+  .login-tabs{display:flex;gap:8px;margin:0 0 14px;}
+  .login-tabs button{flex:1;padding:8px 10px;border-radius:10px;border:1px solid var(--border,#d1d5db);background:transparent;cursor:pointer;font-size:.95rem;}
+  .login-tabs button.is-active{background:#2563eb;border-color:#2563eb;color:#fff;}
   .login-card label{display:block;font-size:.85rem;margin:12px 0 6px;color:var(--muted,#64748b);}
   .login-card input{width:100%;box-sizing:border-box;padding:10px 12px;border-radius:10px;border:1px solid var(--border,#d1d5db);font-size:1rem;background:var(--bg,#fff);}
-  .login-card button{margin-top:18px;width:100%;padding:11px 14px;border:0;border-radius:10px;background:#2563eb;color:#fff;font-size:1rem;cursor:pointer;}
-  .login-card button:disabled{opacity:.6;cursor:wait;}
+  .login-card .submit{margin-top:18px;width:100%;padding:11px 14px;border:0;border-radius:10px;background:#2563eb;color:#fff;font-size:1rem;cursor:pointer;}
+  .login-card .submit:disabled{opacity:.6;cursor:wait;}
   .login-error{display:none;margin-top:12px;padding:10px 12px;border-radius:10px;background:#fef2f2;color:#b91c1c;font-size:.9rem;}
   .login-error.show{display:block;}
+  .reg-only{display:none;}
+  body.mode-register .reg-only{display:block;}
+  body.mode-register .login-only{display:none;}
 </style>
 </head>
-<body class="login-page">
-  <form class="login-card" id="loginForm" autocomplete="on">
-    <h1>登录工作台</h1>
-    <p class="hint">本地多用户隔离。账号由管理员用 CLI 创建；无公开注册。</p>
+<body class="login-page mode-login">
+  <form class="login-card" id="authForm" autocomplete="on">
+    <h1 id="title">登录工作台</h1>
+    <p class="hint login-only">本地多用户隔离。没有账号可先注册。</p>
+    <p class="hint reg-only">自助注册为普通成员；用户名仅字母数字与 ._- ，密码至少 6 位。</p>
+    <div class="login-tabs" role="tablist">
+      <button type="button" id="tabLogin" class="is-active" role="tab">登录</button>
+      <button type="button" id="tabRegister" role="tab">注册</button>
+    </div>
     <label for="username">用户名</label>
     <input id="username" name="username" autocomplete="username" required autofocus>
+    <label for="displayName" class="reg-only">显示名（可选）</label>
+    <input id="displayName" name="display_name" class="reg-only" autocomplete="nickname" placeholder="默认与用户名相同">
     <label for="password">密码</label>
     <input id="password" name="password" type="password" autocomplete="current-password" required>
-    <button type="submit" id="submitBtn">登录</button>
+    <label for="password2" class="reg-only">确认密码</label>
+    <input id="password2" name="password2" type="password" class="reg-only" autocomplete="new-password">
+    <button type="submit" class="submit" id="submitBtn">登录</button>
     <div class="login-error" id="errorBox" role="alert"></div>
   </form>
 <script>
 (function(){
-  var form=document.getElementById('loginForm');
+  var form=document.getElementById('authForm');
   var err=document.getElementById('errorBox');
   var btn=document.getElementById('submitBtn');
+  var title=document.getElementById('title');
+  var tabLogin=document.getElementById('tabLogin');
+  var tabRegister=document.getElementById('tabRegister');
   var params=new URLSearchParams(location.search);
   var next=params.get('next')||'/index.html';
+  var mode=params.get('mode')==='register'?'register':'login';
+
+  function setMode(nextMode){
+    mode=nextMode;
+    document.body.classList.toggle('mode-register', mode==='register');
+    document.body.classList.toggle('mode-login', mode==='login');
+    tabLogin.classList.toggle('is-active', mode==='login');
+    tabRegister.classList.toggle('is-active', mode==='register');
+    title.textContent=mode==='register'?'注册账号':'登录工作台';
+    btn.textContent=mode==='register'?'注册并登录':'登录';
+    document.getElementById('password').autocomplete=mode==='register'?'new-password':'current-password';
+    document.getElementById('password2').required=mode==='register';
+    err.classList.remove('show');
+    var u=new URL(location.href);
+    if(mode==='register') u.searchParams.set('mode','register'); else u.searchParams.delete('mode');
+    history.replaceState(null,'',u);
+  }
+  tabLogin.onclick=function(){setMode('login');};
+  tabRegister.onclick=function(){setMode('register');};
+  setMode(mode);
+
   form.addEventListener('submit', async function(e){
     e.preventDefault();
     err.classList.remove('show');
+    var username=document.getElementById('username').value.trim();
+    var password=document.getElementById('password').value;
+    if(mode==='register'){
+      var password2=document.getElementById('password2').value;
+      if(password!==password2){
+        err.textContent='两次密码不一致';
+        err.classList.add('show');
+        return;
+      }
+    }
     btn.disabled=true;
     try{
-      var r=await fetch('/api/login',{
+      var url=mode==='register'?'/api/register':'/api/login';
+      var payload={username:username,password:password};
+      if(mode==='register'){
+        var dn=document.getElementById('displayName').value.trim();
+        if(dn) payload.display_name=dn;
+      }
+      var r=await fetch(url,{
         method:'POST',
         headers:{'Content-Type':'application/json'},
         credentials:'same-origin',
-        body:JSON.stringify({
-          username:document.getElementById('username').value.trim(),
-          password:document.getElementById('password').value
-        })
+        body:JSON.stringify(payload)
       });
       var body=await r.json().catch(function(){return {};});
       if(!r.ok) throw new Error(body.error||('HTTP '+r.status));
       location.replace(next.startsWith('/')?next:'/index.html');
     }catch(ex){
-      err.textContent=ex.message||'登录失败';
+      err.textContent=ex.message||(mode==='register'?'注册失败':'登录失败');
       err.classList.add('show');
       btn.disabled=false;
     }

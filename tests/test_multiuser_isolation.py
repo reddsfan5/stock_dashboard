@@ -73,3 +73,15 @@ def test_migrate_backfill(tmp_path: Path, monkeypatch):
     users = UserRepository(tmp_path / "users.sqlite3")
     admin = users.create_user(username="xiaodong", password="secret12", role="admin")
     assert users.get_first_admin_id() == admin["id"]
+
+
+def test_self_register_member_role(tmp_path: Path):
+    repo = UserRepository(tmp_path / "users.sqlite3")
+    user = repo.create_user(username="newbie", password="secret12", display_name="新人")
+    assert user["role"] == "member"
+    assert user["username"] == "newbie"
+    try:
+        repo.create_user(username="newbie", password="secret12")
+        assert False, "duplicate should fail"
+    except ValueError:
+        pass

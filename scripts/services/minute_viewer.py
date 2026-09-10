@@ -42,6 +42,12 @@ from data.users import (
     session_cookie_header,
 )
 
+
+def _registration_enabled() -> bool:
+    """STOCK_ALLOW_REGISTER=0/false/off 可关闭网页自助注册；默认开启。"""
+    raw = str(os.environ.get("STOCK_ALLOW_REGISTER", "1")).strip().lower()
+    return raw not in {"0", "false", "no", "off"}
+
 OUT_HTML = os.path.join(PROJECT_DIR, "output", "minute_view.html")
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 DEFAULT_CODE = "sh600519"
@@ -497,6 +503,7 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
     AUTH_PUBLIC_EXACT = {
         "/login.html",
         "/api/login",
+        "/api/register",
         "/api/health",
         "/favicon.ico",
     }
@@ -756,6 +763,26 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
             except LookupError as exc:
                 return self._send_json({"error": str(exc)}, status=401)
             except (TypeError, ValueError, json.JSONDecodeError) as exc:
+                return self._send_json({"error": str(exc)}, status=400)
+        if parsed.path == "/api/register":
+            try:
+                if not _registration_enabled():
+                    return self._send_json({"error": "当前已关闭网页注册"}, status=403)
+                payload = self._read_json()
+                user = self._users().create_user(
+                    username=payload.get("username", ""),
+                    password=payload.get("password", ""),
+                    display_name=payload.get("display_name") or "",
+                    role="member",
+                )
+                session = self._users().create_session(user["id"])
+                return self._send_json(
+                    {"ok": True, "user": user, "created": True},
+                    extra_headers=[("Set-Cookie", session_cookie_header(session["token"]))],
+                )
+            except ValueError as exc:
+                return self._send_json({"error": str(exc)}, status=400)
+            except (TypeError, json.JSONDecodeError) as exc:
                 return self._send_json({"error": str(exc)}, status=400)
         if parsed.path == "/api/logout":
             token = self._session_token()
