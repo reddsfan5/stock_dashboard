@@ -9,7 +9,7 @@ REPLAY_CSS = r"""
 .intraday-replay button,.intraday-replay select{height:32px;border:1px solid var(--border,var(--line,#d7dde7));border-radius:7px;background:#fff;color:var(--text,var(--ink,#202124));padding:0 10px;cursor:pointer}
 .intraday-replay button:disabled{opacity:.42;cursor:not-allowed}.intraday-replay .replay-primary{background:var(--blue,#3478f6);border-color:var(--blue,#3478f6);color:#fff;font-weight:700;min-width:104px}
 .intraday-replay .replay-clock{font-variant-numeric:tabular-nums;font-weight:750;color:var(--blue,#3478f6);min-width:42px;text-align:center}.intraday-replay .replay-progress{color:var(--muted,#758096);font-size:11px;margin-left:auto}
-@media(max-width:700px){.intraday-replay{padding:8px 10px;gap:6px}.intraday-replay button,.intraday-replay select{height:30px;padding:0 8px;font-size:11px}.intraday-replay .replay-primary{min-width:94px}.intraday-replay .replay-progress{width:100%;margin-left:0}}
+@media(max-width:700px){.intraday-replay{padding:5px 8px;gap:4px}.intraday-replay button,.intraday-replay select{height:28px;padding:0 7px;font-size:11px}.intraday-replay .replay-primary{min-width:78px}.intraday-replay .replay-progress{margin-left:0;font-size:10px}.intraday-replay .replay-clock{min-width:36px;font-size:12px}}
 """
 
 REPLAY_JS = r"""
