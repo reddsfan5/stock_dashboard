@@ -16,6 +16,8 @@ from typing import Optional
 
 import pandas as pd
 
+from data.users import ensure_user_id_column, require_user_id
+
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_DB_PATH = PROJECT_DIR / "state" / "watchlist.sqlite3"
 
@@ -214,6 +216,7 @@ class WatchlistRepository:
                 """
                 CREATE TABLE IF NOT EXISTS watch_item (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL DEFAULT 0,
                     code TEXT NOT NULL,
                     name TEXT NOT NULL DEFAULT '',
                     status TEXT NOT NULL DEFAULT 'watching',
@@ -230,9 +233,12 @@ class WatchlistRepository:
                     ON watch_item(code, status, deleted_at);
                 CREATE INDEX IF NOT EXISTS idx_watch_screen_date
                     ON watch_item(screen_date);
+                CREATE INDEX IF NOT EXISTS idx_watch_item_user_id
+                    ON watch_item(user_id);
 
                 CREATE TABLE IF NOT EXISTS track_result (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL DEFAULT 0,
                     item_id INTEGER REFERENCES watch_item(id),
                     code TEXT NOT NULL,
                     screen_date TEXT NOT NULL,
@@ -244,16 +250,28 @@ class WatchlistRepository:
                     source_module TEXT NOT NULL DEFAULT '',
                     meta_json TEXT NOT NULL DEFAULT '{}',
                     created_at TEXT NOT NULL,
-                    UNIQUE(code, screen_date, track_date)
+                    UNIQUE(user_id, code, screen_date, track_date)
                 );
                 CREATE INDEX IF NOT EXISTS idx_track_date
                     ON track_result(track_date, screen_date);
+                CREATE INDEX IF NOT EXISTS idx_track_result_user_id
+                    ON track_result(user_id);
                 """
             )
+            admin_id = 1
+            users_db = PROJECT_DIR / "state" / "users.sqlite3"
+            if users_db.exists():
+                from data.users import UserRepository
+                found = UserRepository().get_first_admin_id()
+                if found:
+                    admin_id = found
+            ensure_user_id_column(connection, "watch_item", admin_id)
+            ensure_user_id_column(connection, "track_result", admin_id)
 
     def add(
         self,
         *,
+        user_id,
         code: str,
         name: str = "",
         status: str = "watching",
@@ -263,6 +281,7 @@ class WatchlistRepository:
         note: str = "",
         meta: Optional[dict] = None,
     ) -> dict:
+        user_id = require_user_id(user_id)
         code = normalize_code(code)
         name = _text(name, 80, "名称")
         status = str(status or "watching").strip()
@@ -279,10 +298,10 @@ class WatchlistRepository:
         with self._connect() as connection:
             existing = connection.execute(
                 """SELECT id FROM watch_item
-                   WHERE code=? AND deleted_at IS NULL
+                   WHERE user_id=? AND code=? AND deleted_at IS NULL
                      AND status IN ('watching','planned')
                    ORDER BY id DESC LIMIT 1""",
-                (code,),
+                (user_id, code),
             ).fetchone()
             if existing and status in {"watching", "planned"}:
                 connection.execute(
@@ -306,22 +325,23 @@ class WatchlistRepository:
             else:
                 cursor = connection.execute(
                     """INSERT INTO watch_item
-                       (code,name,status,source_module,screen_date,thesis,note,meta_json,created_at,updated_at)
-                       VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                       (user_id,code,name,status,source_module,screen_date,thesis,note,meta_json,created_at,updated_at)
+                       VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
                     (
-                        code, name, status, source_module, screen_date, thesis, note,
+                        user_id, code, name, status, source_module, screen_date, thesis, note,
                         json.dumps(meta, ensure_ascii=False, separators=(",", ":")),
                         stamp, stamp,
                     ),
                 )
                 item_id = cursor.lastrowid
-        return self.get(item_id)
+        return self.get(item_id, user_id=user_id)
 
-    def get(self, item_id: int) -> dict:
+    def get(self, item_id: int, *, user_id) -> dict:
+        user_id = require_user_id(user_id)
         with self._connect() as connection:
             row = connection.execute(
-                "SELECT * FROM watch_item WHERE id=? AND deleted_at IS NULL",
-                (int(item_id),),
+                "SELECT * FROM watch_item WHERE id=? AND user_id=? AND deleted_at IS NULL",
+                (int(item_id), user_id),
             ).fetchone()
         if row is None:
             raise LookupError("观察池条目不存在")
@@ -330,12 +350,14 @@ class WatchlistRepository:
     def list_items(
         self,
         *,
+        user_id,
         status: str = None,
         code: str = None,
         limit: int = 200,
     ) -> list:
-        clauses = ["deleted_at IS NULL"]
-        params: list = []
+        user_id = require_user_id(user_id)
+        clauses = ["deleted_at IS NULL", "user_id=?"]
+        params: list = [user_id]
         if status:
             if status not in STATUSES:
                 raise ValueError("未知状态")
@@ -357,49 +379,54 @@ class WatchlistRepository:
             ).fetchall()
         return [_decode_row(row) for row in rows]
 
-    def set_status(self, item_id: int, status: str, *, note: str = None) -> dict:
+    def set_status(self, item_id: int, status: str, *, user_id, note: str = None) -> dict:
+        user_id = require_user_id(user_id)
         status = str(status or "").strip()
         if status not in STATUSES:
             raise ValueError(f"状态必须是 {', '.join(STATUSES)}")
         stamp = _now()
         with self._connect() as connection:
             row = connection.execute(
-                "SELECT id FROM watch_item WHERE id=? AND deleted_at IS NULL",
-                (int(item_id),),
+                "SELECT id FROM watch_item WHERE id=? AND user_id=? AND deleted_at IS NULL",
+                (int(item_id), user_id),
             ).fetchone()
             if row is None:
                 raise LookupError("观察池条目不存在")
             if note is not None:
                 connection.execute(
-                    "UPDATE watch_item SET status=?, note=?, updated_at=? WHERE id=?",
-                    (status, _text(note, 2000, "备注"), stamp, int(item_id)),
+                    "UPDATE watch_item SET status=?, note=?, updated_at=? WHERE id=? AND user_id=?",
+                    (status, _text(note, 2000, "备注"), stamp, int(item_id), user_id),
                 )
             else:
                 connection.execute(
-                    "UPDATE watch_item SET status=?, updated_at=? WHERE id=?",
-                    (status, stamp, int(item_id)),
+                    "UPDATE watch_item SET status=?, updated_at=? WHERE id=? AND user_id=?",
+                    (status, stamp, int(item_id), user_id),
                 )
-        return self.get(item_id)
+        return self.get(item_id, user_id=user_id)
 
-    def soft_delete(self, item_id: int) -> dict:
+    def soft_delete(self, item_id: int, *, user_id) -> dict:
+        user_id = require_user_id(user_id)
         stamp = _now()
         with self._connect() as connection:
             row = connection.execute(
-                "SELECT * FROM watch_item WHERE id=?", (int(item_id),)
+                "SELECT * FROM watch_item WHERE id=? AND user_id=?",
+                (int(item_id), user_id),
             ).fetchone()
             if row is None:
                 raise LookupError("观察池条目不存在")
             if row["deleted_at"] is None:
                 connection.execute(
-                    "UPDATE watch_item SET deleted_at=?, updated_at=?, status='dropped' WHERE id=?",
-                    (stamp, stamp, int(item_id)),
+                    "UPDATE watch_item SET deleted_at=?, updated_at=?, status='dropped' WHERE id=? AND user_id=?",
+                    (stamp, stamp, int(item_id), user_id),
                 )
             row = connection.execute(
-                "SELECT * FROM watch_item WHERE id=?", (int(item_id),)
+                "SELECT * FROM watch_item WHERE id=? AND user_id=?",
+                (int(item_id), user_id),
             ).fetchone()
         return _decode_row(row)
 
-    def save_track_result(self, payload: dict, *, item_id: int = None) -> dict:
+    def save_track_result(self, payload: dict, *, user_id, item_id: int = None) -> dict:
+        user_id = require_user_id(user_id)
         code = normalize_code(payload["code"])
         screen_date = _iso_date(payload["screen_date"], "筛出日")
         track_date = _iso_date(payload.get("track_date"), "跟踪日")
@@ -410,10 +437,10 @@ class WatchlistRepository:
         with self._connect() as connection:
             connection.execute(
                 """INSERT INTO track_result
-                   (item_id,code,screen_date,track_date,screen_close,track_close,
+                   (user_id,item_id,code,screen_date,track_date,screen_close,track_close,
                     return_pct,pattern_failed,source_module,meta_json,created_at)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?)
-                   ON CONFLICT(code,screen_date,track_date) DO UPDATE SET
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+                   ON CONFLICT(user_id,code,screen_date,track_date) DO UPDATE SET
                      item_id=excluded.item_id,
                      screen_close=excluded.screen_close,
                      track_close=excluded.track_close,
@@ -422,6 +449,7 @@ class WatchlistRepository:
                      source_module=excluded.source_module,
                      meta_json=excluded.meta_json""",
                 (
+                    user_id,
                     item_id,
                     code,
                     screen_date,
@@ -437,8 +465,8 @@ class WatchlistRepository:
             )
             row = connection.execute(
                 """SELECT * FROM track_result
-                   WHERE code=? AND screen_date=? AND track_date=?""",
-                (code, screen_date, track_date),
+                   WHERE user_id=? AND code=? AND screen_date=? AND track_date=?""",
+                (user_id, code, screen_date, track_date),
             ).fetchone()
         result = dict(row)
         if "meta_json" in result:
@@ -453,13 +481,15 @@ class WatchlistRepository:
     def list_tracks(
         self,
         *,
+        user_id,
         track_date: str = None,
         screen_date: str = None,
         code: str = None,
         limit: int = 200,
     ) -> list:
-        clauses = ["1=1"]
-        params: list = []
+        user_id = require_user_id(user_id)
+        clauses = ["user_id=?"]
+        params: list = [user_id]
         if track_date:
             clauses.append("track_date=?")
             params.append(_iso_date(track_date, "跟踪日"))
@@ -497,6 +527,7 @@ class WatchlistRepository:
         self,
         kline_loader,
         *,
+        user_id,
         as_of: str = None,
         fail_threshold_pct: float = -3.0,
         active_only: bool = True,
@@ -505,8 +536,9 @@ class WatchlistRepository:
 
         kline_loader(code) -> DataFrame with 日期/收盘
         """
+        user_id = require_user_id(user_id)
         as_of = _iso_date(as_of, "截止日期", allow_empty=True)
-        items = self.list_items(limit=2000)
+        items = self.list_items(user_id=user_id, limit=2000)
         if active_only:
             items = [item for item in items if item["status"] in {"watching", "planned", "bought"}]
         tracked = []
@@ -535,6 +567,7 @@ class WatchlistRepository:
                 continue
             saved = self.save_track_result(
                 {**result, "source_module": item.get("source_module") or ""},
+                user_id=user_id,
                 item_id=item["id"],
             )
             tracked.append(saved)

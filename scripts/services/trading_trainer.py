@@ -155,7 +155,7 @@ class TradingTrainerService:
         ]
         return usable.index.sort_values().tolist()
 
-    def create(self, payload: dict) -> dict:
+    def create(self, payload: dict, *, user_id) -> dict:
         meta = self.dates(payload.get("code", ""))
         requested_date = str(payload.get("start_date") or "random")
         if requested_date == "random":
@@ -193,6 +193,7 @@ class TradingTrainerService:
         )
         session_id = secrets.token_urlsafe(24)
         run = self.training_store.create_run(
+            user_id=user_id,
             session_token=session_id,
             code=meta["code"],
             name=meta["name"],
@@ -223,13 +224,14 @@ class TradingTrainerService:
             self.sessions[session_id] = {
                 "session": session,
                 "run_id": run["id"],
+                "user_id": int(user_id),
                 "last_access": time.time(),
             }
         return self._enriched_state(session_id, session.state())
 
-    def state(self, session_id: str) -> dict:
+    def state(self, session_id: str, *, user_id=None) -> dict:
         with self.lock:
-            session = self._get(session_id)
+            session = self._get(session_id, user_id=user_id)
             return self._enriched_state(session_id, session.state())
 
     def advance(self, session_id: str, steps: int) -> dict:
@@ -337,15 +339,20 @@ class TradingTrainerService:
                 session_id, session.cancel_conditional_order(condition_id)
             )
 
-    def _get_item(self, session_id: str) -> Dict:
+    def _get_item(self, session_id: str, *, user_id=None) -> Dict:
         item = self.sessions.get(str(session_id or ""))
         if item is None:
+            raise LookupError("训练会话不存在或服务已经重启，请重新开始")
+        if user_id is not None and int(item.get("user_id") or 0) != int(user_id):
             raise LookupError("训练会话不存在或服务已经重启，请重新开始")
         item["last_access"] = time.time()
         return item
 
-    def _get(self, session_id: str) -> TradingTrainerSession:
-        return self._get_item(session_id)["session"]
+    def _get(self, session_id: str, *, user_id=None) -> TradingTrainerSession:
+        return self._get_item(session_id, user_id=user_id)["session"]
+
+    def assert_owner(self, session_id: str, user_id) -> None:
+        self._get_item(session_id, user_id=user_id)
 
     def set_day_plan(self, session_id: str, payload: dict) -> dict:
         with self.lock:

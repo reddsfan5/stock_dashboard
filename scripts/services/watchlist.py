@@ -28,10 +28,11 @@ class WatchlistService:
     def _name(self, code: str) -> str:
         return self.name_map.get(code) or self.name_map.get(normalize_code(code)) or ""
 
-    def add(self, payload: dict) -> dict:
+    def add(self, payload: dict, *, user_id) -> dict:
         code = normalize_code(payload.get("code", ""))
         name = payload.get("name") or self._name(code)
         return self.repo.add(
+            user_id=user_id,
             code=code,
             name=name,
             status=payload.get("status") or "watching",
@@ -43,24 +44,31 @@ class WatchlistService:
         )
 
     def list_items(self, **kwargs) -> dict:
+        if "user_id" not in kwargs:
+            raise ValueError("user_id 必填")
         items = self.repo.list_items(**kwargs)
         return {"items": items, "count": len(items)}
 
-    def set_status(self, payload: dict) -> dict:
+    def set_status(self, payload: dict, *, user_id) -> dict:
         return self.repo.set_status(
             int(payload.get("id") or payload.get("item_id")),
             payload.get("status", ""),
+            user_id=user_id,
             note=payload.get("note"),
         )
 
-    def delete(self, payload: dict) -> dict:
-        return self.repo.soft_delete(int(payload.get("id") or payload.get("item_id")))
+    def delete(self, payload: dict, *, user_id) -> dict:
+        return self.repo.soft_delete(
+            int(payload.get("id") or payload.get("item_id")), user_id=user_id
+        )
 
     def tracks(self, **kwargs) -> dict:
+        if "user_id" not in kwargs:
+            raise ValueError("user_id 必填")
         rows = self.repo.list_tracks(**kwargs)
         return {"items": rows, "count": len(rows)}
 
-    def refresh_tracking(self, *, as_of: str = None, fail_threshold_pct: float = -3.0) -> dict:
+    def refresh_tracking(self, *, user_id, as_of: str = None, fail_threshold_pct: float = -3.0) -> dict:
         from data.kline import StockData
 
         data = StockData()
@@ -69,7 +77,7 @@ class WatchlistService:
             return data.get_kline(code, days=30)
 
         return self.repo.refresh_tracking(
-            loader, as_of=as_of, fail_threshold_pct=fail_threshold_pct
+            loader, user_id=user_id, as_of=as_of, fail_threshold_pct=fail_threshold_pct
         )
 
     def sector_strength(self, market_date: str = None, top_n: int = 15) -> dict:

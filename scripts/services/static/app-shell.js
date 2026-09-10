@@ -125,17 +125,49 @@
     return el;
   }
 
+  var currentUser = null;
+
   function toolButtonsHtml() {
     var theme = document.documentElement.dataset.theme || 'light';
     var density = document.documentElement.dataset.density || 'comfortable';
     var themeLabel = theme === 'dark' ? '浅色' : '深色';
     var densityLabel = density === 'compact' ? '舒适' : '紧凑';
+    var userHtml = '';
+    if (currentUser && currentUser.username) {
+      var label = currentUser.display_name || currentUser.username;
+      userHtml =
+        '<span class="app-shell__user" title="' + label + '">' + label + '</span>' +
+        '<button type="button" class="app-shell__tool" data-shell-action="logout" title="退出登录">退出</button>';
+    }
     return (
       '<div class="app-shell__tools" role="group" aria-label="显示设置">' +
+        userHtml +
         '<button type="button" class="app-shell__tool" data-shell-action="theme" title="切换浅色/深色">' + themeLabel + '</button>' +
         '<button type="button" class="app-shell__tool" data-shell-action="density" title="切换舒适/紧凑密度">' + densityLabel + '</button>' +
       '</div>'
     );
+  }
+
+  function loadCurrentUser(host) {
+    fetch('/api/me', { credentials: 'same-origin', cache: 'no-store' })
+      .then(function (r) {
+        if (r.status === 401) {
+          if (location.pathname.indexOf('login.html') < 0) {
+            location.replace('/login.html?next=' + encodeURIComponent(location.pathname + location.search));
+          }
+          return null;
+        }
+        return r.ok ? r.json() : null;
+      })
+      .then(function (body) {
+        if (!body || !body.user) return;
+        currentUser = body.user;
+        if (host) {
+          var tools = host.querySelector('.app-shell__tools');
+          if (tools) tools.outerHTML = toolButtonsHtml();
+        }
+      })
+      .catch(function () { /* ignore */ });
   }
 
   function syncToolLabels(host) {
@@ -155,6 +187,11 @@
       var btn = e.target.closest('[data-shell-action]');
       if (!btn) return;
       var action = btn.getAttribute('data-shell-action');
+      if (action === 'logout') {
+        fetch('/api/logout', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+          .finally(function () { location.replace('/login.html'); });
+        return;
+      }
       if (action === 'theme') {
         var cur = document.documentElement.dataset.theme || 'light';
         applyTheme(cur === 'dark' ? 'light' : 'dark');
@@ -457,6 +494,7 @@
     ensureToastHost();
     observeReveal(document);
     bindClearOnFocusAll(document);
+    loadCurrentUser(host);
   }
 
   function autoMount() {

@@ -161,24 +161,29 @@ class StockJournalService:
         return self.market.payload(code, days)
 
     def list_cases(self, **filters):
+        if "user_id" not in filters:
+            raise ValueError("user_id 必填")
         return self.repository.list_cases(**filters)
 
-    def get_case(self, case_id):
-        return self.repository.get_case(case_id)
+    def get_case(self, case_id, *, user_id):
+        return self.repository.get_case(case_id, user_id=user_id)
 
     def list_entries(self, **filters):
+        if "user_id" not in filters:
+            raise ValueError("user_id 必填")
         return self.repository.list_entries(**filters)
 
-    def delete_entry(self, payload):
+    def delete_entry(self, payload, *, user_id):
         return self.repository.soft_delete_entry(
-            payload.get("entry_id"), payload.get("reason", "")
+            payload.get("entry_id"), payload.get("reason", ""), user_id=user_id
         )
 
-    def restore_entry(self, payload):
-        return self.repository.restore_entry(payload.get("entry_id"))
+    def restore_entry(self, payload, *, user_id):
+        return self.repository.restore_entry(payload.get("entry_id"), user_id=user_id)
 
-    def create_case(self, payload):
+    def create_case(self, payload, *, user_id):
         return self.repository.create_case(
+            user_id=user_id,
             code=normalize_code(payload.get("code", "")),
             title=payload.get("title", ""),
             thesis=payload.get("thesis", ""),
@@ -186,7 +191,7 @@ class StockJournalService:
             source=payload.get("source", "manual"),
         )
 
-    def add_entry(self, payload):
+    def add_entry(self, payload, *, user_id):
         allowed = {
             "price", "trigger_condition", "invalidation_condition", "target_price",
             "stop_price", "planned_position_pct", "planned_holding_days",
@@ -194,6 +199,7 @@ class StockJournalService:
         }
         extra = {key: payload.get(key) for key in allowed if key in payload}
         entry = self.repository.add_entry(
+            user_id=user_id,
             case_id=payload.get("case_id"),
             event_type=payload.get("event_type"),
             market_date=payload.get("market_date"),
@@ -202,11 +208,11 @@ class StockJournalService:
         )
         return {
             "entry": entry,
-            "case": self.repository.get_case(entry["case_id"]),
+            "case": self.repository.get_case(entry["case_id"], user_id=user_id),
         }
 
-    def due_reviews(self, as_of=None, limit=100):
-        return self.repository.due_reviews(as_of=as_of, limit=limit)
+    def due_reviews(self, as_of=None, limit=100, *, user_id):
+        return self.repository.due_reviews(user_id=user_id, as_of=as_of, limit=limit)
 
     def backup(self):
         path = self.repository.backup()

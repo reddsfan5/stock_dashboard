@@ -15,6 +15,8 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Iterable, Optional
 
+from data.users import ensure_user_id_column, require_user_id
+
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_DB_PATH = PROJECT_DIR / "state" / "stock_journal.sqlite3"
@@ -141,6 +143,7 @@ class JournalRepository:
                 """
                 CREATE TABLE IF NOT EXISTS journal_case (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL DEFAULT 0,
                     code TEXT NOT NULL,
                     title TEXT NOT NULL,
                     thesis TEXT NOT NULL DEFAULT '',
@@ -155,9 +158,12 @@ class JournalRepository:
                     ON journal_case(code, status, updated_at DESC);
                 CREATE INDEX IF NOT EXISTS idx_journal_case_updated
                     ON journal_case(updated_at DESC);
+                CREATE INDEX IF NOT EXISTS idx_journal_case_user_id
+                    ON journal_case(user_id);
 
                 CREATE TABLE IF NOT EXISTS journal_entry (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL DEFAULT 0,
                     case_id INTEGER NOT NULL REFERENCES journal_case(id),
                     market_date TEXT NOT NULL,
                     recorded_at TEXT NOT NULL,
@@ -182,6 +188,8 @@ class JournalRepository:
                     ON journal_entry(case_id, market_date, id);
                 CREATE INDEX IF NOT EXISTS idx_journal_entry_review
                     ON journal_entry(next_review_date, event_type);
+                CREATE INDEX IF NOT EXISTS idx_journal_entry_user_id
+                    ON journal_entry(user_id);
                 """
             )
             # 旧版个人数据库原地升级，不需要重建日记。
@@ -194,6 +202,15 @@ class JournalRepository:
                 connection.execute(
                     "ALTER TABLE journal_entry ADD COLUMN deleted_reason TEXT NOT NULL DEFAULT ''"
                 )
+            admin_id = 1
+            users_db = PROJECT_DIR / "state" / "users.sqlite3"
+            if users_db.exists():
+                from data.users import UserRepository
+                found = UserRepository().get_first_admin_id()
+                if found:
+                    admin_id = found
+            ensure_user_id_column(connection, "journal_case", admin_id)
+            ensure_user_id_column(connection, "journal_entry", admin_id)
 
     @staticmethod
     def validate_code(code: str) -> str:
@@ -202,7 +219,8 @@ class JournalRepository:
             raise ValueError("证券代码格式必须类似 sh600519 或 sz000001")
         return value
 
-    def create_case(self, *, code, title, thesis="", tags=None, source="manual") -> dict:
+    def create_case(self, *, user_id, code, title, thesis="", tags=None, source="manual") -> dict:
+        user_id = require_user_id(user_id)
         code = self.validate_code(code)
         title = _text(title, 120, "案例标题", required=True)
         thesis = _text(thesis, 2000, "核心逻辑")
@@ -212,15 +230,16 @@ class JournalRepository:
         with self._connect() as connection:
             cursor = connection.execute(
                 """INSERT INTO journal_case
-                   (code,title,thesis,status,tags_json,source,opened_at,updated_at)
-                   VALUES (?,?,?,?,?,?,?,?)""",
-                (code, title, thesis, "watching", json.dumps(tag_values, ensure_ascii=False),
+                   (user_id,code,title,thesis,status,tags_json,source,opened_at,updated_at)
+                   VALUES (?,?,?,?,?,?,?,?,?)""",
+                (user_id, code, title, thesis, "watching", json.dumps(tag_values, ensure_ascii=False),
                  source, timestamp, timestamp),
             )
             case_id = cursor.lastrowid
-        return self.get_case(case_id, include_entries=False)
+        return self.get_case(case_id, user_id=user_id, include_entries=False)
 
-    def add_entry(self, *, case_id, event_type, market_date, reason, **values) -> dict:
+    def add_entry(self, *, user_id, case_id, event_type, market_date, reason, **values) -> dict:
+        user_id = require_user_id(user_id)
         try:
             case_id = int(case_id)
         except (TypeError, ValueError):
@@ -268,7 +287,8 @@ class JournalRepository:
         timestamp = _now()
         with self._connect() as connection:
             case = connection.execute(
-                "SELECT id,status FROM journal_case WHERE id=?", (case_id,)
+                "SELECT id,status FROM journal_case WHERE id=? AND user_id=?",
+                (case_id, user_id),
             ).fetchone()
             if case is None:
                 raise LookupError("研究案例不存在")
@@ -281,13 +301,13 @@ class JournalRepository:
                     raise ValueError("被补充记录不属于当前案例")
             cursor = connection.execute(
                 """INSERT INTO journal_entry
-                   (case_id,market_date,recorded_at,event_type,price,reason,
+                   (user_id,case_id,market_date,recorded_at,event_type,price,reason,
                     trigger_condition,invalidation_condition,target_price,stop_price,
                     planned_position_pct,planned_holding_days,next_review_date,
                     tags_json,source,context_json,supersedes_entry_id)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
-                    case_id, market_date, timestamp, event_type, price, reason,
+                    user_id, case_id, market_date, timestamp, event_type, price, reason,
                     trigger, invalidation, target, stop, position, holding, review_date,
                     json.dumps(tag_values, ensure_ascii=False), source, context_text, supersedes,
                 ),
@@ -295,27 +315,31 @@ class JournalRepository:
             new_status = EVENT_STATUS.get(event_type, case["status"])
             closed_at = timestamp if new_status in {"closed", "invalidated"} else None
             connection.execute(
-                "UPDATE journal_case SET status=?,updated_at=?,closed_at=? WHERE id=?",
-                (new_status, timestamp, closed_at, case_id),
+                "UPDATE journal_case SET status=?,updated_at=?,closed_at=? WHERE id=? AND user_id=?",
+                (new_status, timestamp, closed_at, case_id, user_id),
             )
             entry_id = cursor.lastrowid
-        return self.get_entry(entry_id)
+        return self.get_entry(entry_id, user_id=user_id)
 
-    def get_entry(self, entry_id: int) -> dict:
+    def get_entry(self, entry_id: int, *, user_id) -> dict:
+        user_id = require_user_id(user_id)
         with self._connect() as connection:
             row = connection.execute(
-                "SELECT * FROM journal_entry WHERE id=?", (int(entry_id),)
+                "SELECT * FROM journal_entry WHERE id=? AND user_id=?",
+                (int(entry_id), user_id),
             ).fetchone()
         if row is None:
             raise LookupError("日记记录不存在")
         return _decode_row(row)
 
     def get_case(
-        self, case_id: int, *, include_entries: bool = True, include_deleted: bool = False
+        self, case_id: int, *, user_id, include_entries: bool = True, include_deleted: bool = False
     ) -> dict:
+        user_id = require_user_id(user_id)
         with self._connect() as connection:
             row = connection.execute(
-                "SELECT * FROM journal_case WHERE id=?", (int(case_id),)
+                "SELECT * FROM journal_case WHERE id=? AND user_id=?",
+                (int(case_id), user_id),
             ).fetchone()
             if row is None:
                 raise LookupError("研究案例不存在")
@@ -330,9 +354,10 @@ class JournalRepository:
                 result["entries"] = [_decode_row(entry) for entry in entries]
         return result
 
-    def list_cases(self, *, code=None, status=None, query=None, limit=200) -> list[dict]:
-        clauses = []
-        params = []
+    def list_cases(self, *, user_id, code=None, status=None, query=None, limit=200) -> list[dict]:
+        user_id = require_user_id(user_id)
+        clauses = ["c.user_id=?"]
+        params = [user_id]
         if code:
             clauses.append("c.code=?")
             params.append(self.validate_code(code))
@@ -382,10 +407,11 @@ class JournalRepository:
         return [_decode_row(row) for row in rows]
 
     def list_entries(
-        self, *, code=None, case_id=None, include_deleted=False, limit=2000
+        self, *, user_id, code=None, case_id=None, include_deleted=False, limit=2000
     ) -> list[dict]:
-        clauses = []
-        params = []
+        user_id = require_user_id(user_id)
+        clauses = ["c.user_id=?"]
+        params = [user_id]
         if code:
             clauses.append("c.code=?")
             params.append(self.validate_code(code))
@@ -431,8 +457,9 @@ class JournalRepository:
             (status, timestamp, closed_at, case_id),
         )
 
-    def soft_delete_entry(self, entry_id, reason="") -> dict:
+    def soft_delete_entry(self, entry_id, reason="", *, user_id) -> dict:
         """移入回收站；保留原文、行情快照和操作时间。"""
+        user_id = require_user_id(user_id)
         try:
             entry_id = int(entry_id)
         except (TypeError, ValueError):
@@ -441,20 +468,22 @@ class JournalRepository:
         timestamp = _now()
         with self._connect() as connection:
             row = connection.execute(
-                "SELECT id,case_id,deleted_at FROM journal_entry WHERE id=?", (entry_id,)
+                "SELECT id,case_id,deleted_at FROM journal_entry WHERE id=? AND user_id=?",
+                (entry_id, user_id),
             ).fetchone()
             if row is None:
                 raise LookupError("日记记录不存在")
             if row["deleted_at"] is None:
                 connection.execute(
-                    "UPDATE journal_entry SET deleted_at=?,deleted_reason=? WHERE id=?",
-                    (timestamp, reason, entry_id),
+                    "UPDATE journal_entry SET deleted_at=?,deleted_reason=? WHERE id=? AND user_id=?",
+                    (timestamp, reason, entry_id, user_id),
                 )
                 self._refresh_case_status(connection, row["case_id"], timestamp)
-        return self.get_entry(entry_id)
+        return self.get_entry(entry_id, user_id=user_id)
 
-    def restore_entry(self, entry_id) -> dict:
+    def restore_entry(self, entry_id, *, user_id) -> dict:
         """从回收站恢复记录，并重算案例状态。"""
+        user_id = require_user_id(user_id)
         try:
             entry_id = int(entry_id)
         except (TypeError, ValueError):
@@ -462,31 +491,33 @@ class JournalRepository:
         timestamp = _now()
         with self._connect() as connection:
             row = connection.execute(
-                "SELECT id,case_id,deleted_at FROM journal_entry WHERE id=?", (entry_id,)
+                "SELECT id,case_id,deleted_at FROM journal_entry WHERE id=? AND user_id=?",
+                (entry_id, user_id),
             ).fetchone()
             if row is None:
                 raise LookupError("日记记录不存在")
             if row["deleted_at"] is not None:
                 connection.execute(
-                    "UPDATE journal_entry SET deleted_at=NULL,deleted_reason='' WHERE id=?",
-                    (entry_id,),
+                    "UPDATE journal_entry SET deleted_at=NULL,deleted_reason='' WHERE id=? AND user_id=?",
+                    (entry_id, user_id),
                 )
                 self._refresh_case_status(connection, row["case_id"], timestamp)
-        return self.get_entry(entry_id)
+        return self.get_entry(entry_id, user_id=user_id)
 
-    def due_reviews(self, *, as_of=None, limit=100) -> list[dict]:
+    def due_reviews(self, *, user_id, as_of=None, limit=100) -> list[dict]:
+        user_id = require_user_id(user_id)
         as_of = _iso_date(as_of or date.today().isoformat(), "复查截止日期")
         with self._connect() as connection:
             rows = connection.execute(
                 """SELECT e.*,c.code,c.title,c.status
                    FROM journal_entry e JOIN journal_case c ON c.id=e.case_id
-                   WHERE e.next_review_date IS NOT NULL AND e.next_review_date<=?
+                   WHERE c.user_id=? AND e.next_review_date IS NOT NULL AND e.next_review_date<=?
                      AND e.deleted_at IS NULL
                      AND c.status NOT IN ('closed','invalidated')
                      AND e.id=(SELECT MAX(e2.id) FROM journal_entry e2
                               WHERE e2.case_id=e.case_id AND e2.deleted_at IS NULL)
                    ORDER BY e.next_review_date,e.id LIMIT ?""",
-                (as_of, max(1, min(int(limit), 500))),
+                (user_id, as_of, max(1, min(int(limit), 500))),
             ).fetchall()
         return [_decode_row(row) for row in rows]
 

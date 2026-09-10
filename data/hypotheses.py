@@ -13,6 +13,8 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Optional
 
+from data.users import ensure_user_id_column, require_user_id
+
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_DB_PATH = PROJECT_DIR / "state" / "hypotheses.sqlite3"
 
@@ -97,6 +99,7 @@ class HypothesisRepository:
                 """
                 CREATE TABLE IF NOT EXISTS hypothesis (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL DEFAULT 0,
                     code TEXT NOT NULL,
                     title TEXT NOT NULL DEFAULT '',
                     status TEXT NOT NULL DEFAULT 'hypothesis',
@@ -110,12 +113,23 @@ class HypothesisRepository:
                 );
                 CREATE INDEX IF NOT EXISTS idx_hypothesis_code
                     ON hypothesis(code, status, deleted_at, updated_at DESC);
+                CREATE INDEX IF NOT EXISTS idx_hypothesis_user_id
+                    ON hypothesis(user_id);
                 """
             )
+            admin_id = 1
+            users_db = PROJECT_DIR / "state" / "users.sqlite3"
+            if users_db.exists():
+                from data.users import UserRepository
+                found = UserRepository().get_first_admin_id()
+                if found:
+                    admin_id = found
+            ensure_user_id_column(connection, "hypothesis", admin_id)
 
     def create(
         self,
         *,
+        user_id,
         code: str,
         title: str = "",
         status: str = "hypothesis",
@@ -124,6 +138,7 @@ class HypothesisRepository:
         source: str = "",
         meta: Optional[dict] = None,
     ) -> dict:
+        user_id = require_user_id(user_id)
         code = normalize_code(code)
         status = str(status or "hypothesis").strip()
         if status not in STATUSES:
@@ -139,9 +154,10 @@ class HypothesisRepository:
         with self._connect() as connection:
             cursor = connection.execute(
                 """INSERT INTO hypothesis
-                   (code,title,status,thesis,note,source,meta_json,created_at,updated_at)
-                   VALUES (?,?,?,?,?,?,?,?,?)""",
+                   (user_id,code,title,status,thesis,note,source,meta_json,created_at,updated_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?)""",
                 (
+                    user_id,
                     code,
                     title,
                     status,
@@ -154,19 +170,21 @@ class HypothesisRepository:
                 ),
             )
             hid = cursor.lastrowid
-        return self.get(hid)
+        return self.get(hid, user_id=user_id)
 
-    def get(self, hypothesis_id: int) -> dict:
+    def get(self, hypothesis_id: int, *, user_id) -> dict:
+        user_id = require_user_id(user_id)
         with self._connect() as connection:
             row = connection.execute(
-                "SELECT * FROM hypothesis WHERE id=? AND deleted_at IS NULL",
-                (int(hypothesis_id),),
+                "SELECT * FROM hypothesis WHERE id=? AND user_id=? AND deleted_at IS NULL",
+                (int(hypothesis_id), user_id),
             ).fetchone()
         if row is None:
             raise LookupError("假设不存在")
         return _decode_row(row)
 
-    def list_for_code(self, code: str, *, limit: int = 50) -> list:
+    def list_for_code(self, code: str, *, user_id, limit: int = 50) -> list:
+        user_id = require_user_id(user_id)
         code = normalize_code(code)
         try:
             limit = max(1, min(int(limit), 200))
@@ -175,9 +193,9 @@ class HypothesisRepository:
         with self._connect() as connection:
             rows = connection.execute(
                 """SELECT * FROM hypothesis
-                   WHERE code=? AND deleted_at IS NULL
+                   WHERE user_id=? AND code=? AND deleted_at IS NULL
                    ORDER BY updated_at DESC, id DESC LIMIT ?""",
-                (code, limit),
+                (user_id, code, limit),
             ).fetchall()
         return [_decode_row(row) for row in rows]
 
@@ -186,18 +204,20 @@ class HypothesisRepository:
         hypothesis_id: int,
         status: str,
         *,
+        user_id,
         note: str = None,
         thesis: str = None,
         title: str = None,
     ) -> dict:
+        user_id = require_user_id(user_id)
         status = str(status or "").strip()
         if status not in STATUSES:
             raise ValueError(f"状态必须是 {', '.join(STATUSES)}")
         stamp = _now()
         with self._connect() as connection:
             row = connection.execute(
-                "SELECT id FROM hypothesis WHERE id=? AND deleted_at IS NULL",
-                (int(hypothesis_id),),
+                "SELECT id FROM hypothesis WHERE id=? AND user_id=? AND deleted_at IS NULL",
+                (int(hypothesis_id), user_id),
             ).fetchone()
             if row is None:
                 raise LookupError("假设不存在")
@@ -212,24 +232,25 @@ class HypothesisRepository:
             if title is not None:
                 fields.append("title=?")
                 params.append(_text(title, 120, "标题", required=True))
-            params.append(int(hypothesis_id))
+            params.extend([int(hypothesis_id), user_id])
             connection.execute(
-                f"UPDATE hypothesis SET {', '.join(fields)} WHERE id=?",
+                f"UPDATE hypothesis SET {', '.join(fields)} WHERE id=? AND user_id=?",
                 params,
             )
-        return self.get(hypothesis_id)
+        return self.get(hypothesis_id, user_id=user_id)
 
-    def soft_delete(self, hypothesis_id: int) -> dict:
+    def soft_delete(self, hypothesis_id: int, *, user_id) -> dict:
+        user_id = require_user_id(user_id)
         stamp = _now()
         with self._connect() as connection:
             row = connection.execute(
-                "SELECT id FROM hypothesis WHERE id=? AND deleted_at IS NULL",
-                (int(hypothesis_id),),
+                "SELECT id FROM hypothesis WHERE id=? AND user_id=? AND deleted_at IS NULL",
+                (int(hypothesis_id), user_id),
             ).fetchone()
             if row is None:
                 raise LookupError("假设不存在")
             connection.execute(
-                "UPDATE hypothesis SET deleted_at=?, updated_at=? WHERE id=?",
-                (stamp, stamp, int(hypothesis_id)),
+                "UPDATE hypothesis SET deleted_at=?, updated_at=? WHERE id=? AND user_id=?",
+                (stamp, stamp, int(hypothesis_id), user_id),
             )
         return {"id": int(hypothesis_id), "deleted_at": stamp}

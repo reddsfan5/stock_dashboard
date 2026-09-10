@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+from data.users import ensure_user_id_column, require_user_id
 import json
 import re
 import sqlite3
@@ -284,6 +285,7 @@ class MarketNewsRepository:
 
                 CREATE TABLE IF NOT EXISTS market_news_impact (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL DEFAULT 0,
                     news_id TEXT NOT NULL REFERENCES market_news(id),
                     market_date TEXT NOT NULL,
                     decision_time TEXT,
@@ -296,8 +298,18 @@ class MarketNewsRepository:
                 );
                 CREATE INDEX IF NOT EXISTS idx_market_news_impact_date
                     ON market_news_impact(market_date,decision_time,id);
+                CREATE INDEX IF NOT EXISTS idx_market_news_impact_user_id
+                    ON market_news_impact(user_id);
                 """
             )
+            admin_id = 1
+            users_db = PROJECT_DIR / "state" / "users.sqlite3"
+            if users_db.exists():
+                from data.users import UserRepository
+                found = UserRepository().get_first_admin_id()
+                if found:
+                    admin_id = found
+            ensure_user_id_column(connection, "market_news_impact", admin_id)
 
     def day(
         self, market_date, *, as_of=None, refresh=False,
@@ -470,10 +482,11 @@ class MarketNewsRepository:
         item.pop("cached_at", None)
         return item
 
-    def impacts(self, *, market_date, code=None, include_deleted=False) -> list[dict]:
+    def impacts(self, *, user_id, market_date, code=None, include_deleted=False) -> list[dict]:
+        user_id = require_user_id(user_id)
         market_date = _iso_date(market_date)
-        clauses = ["i.market_date=?"]
-        params = [market_date]
+        clauses = ["i.user_id=?", "i.market_date=?"]
+        params = [user_id, market_date]
         if code:
             normalized = self._code(code)
             clauses.append("(i.code=? OR i.code='')")
@@ -491,9 +504,10 @@ class MarketNewsRepository:
         return [dict(row) for row in rows]
 
     def add_impact(
-        self, *, news_id, market_date, action, stance, note,
+        self, *, user_id, news_id, market_date, action, stance, note,
         decision_time=None, code="",
     ) -> dict:
+        user_id = require_user_id(user_id)
         news_id = _bounded_text(news_id, 80, "资讯编号", required=True)
         market_date = _iso_date(market_date)
         action = str(action or "").strip()
@@ -518,31 +532,41 @@ class MarketNewsRepository:
                 raise ValueError("决策时刻不能早于资讯发布时间")
             cursor = connection.execute(
                 """INSERT INTO market_news_impact
-                   (news_id,market_date,decision_time,code,action,stance,note,created_at)
-                   VALUES (?,?,?,?,?,?,?,?)""",
-                (news_id, market_date, decision_time, code, action, stance, note, timestamp),
+                   (user_id,news_id,market_date,decision_time,code,action,stance,note,created_at)
+                   VALUES (?,?,?,?,?,?,?,?,?)""",
+                (user_id, news_id, market_date, decision_time, code, action, stance, note, timestamp),
             )
             impact_id = cursor.lastrowid
-        return self.get_impact(impact_id)
+        return self.get_impact(impact_id, user_id=user_id)
 
-    def get_impact(self, impact_id) -> dict:
+    def get_impact(self, impact_id, *, user_id=None) -> dict:
         try:
             impact_id = int(impact_id)
         except (TypeError, ValueError) as exc:
             raise ValueError("影响记录编号必须是整数") from exc
+        if user_id is not None:
+            user_id = require_user_id(user_id)
         with self._connect() as connection:
-            row = connection.execute(
-                """SELECT i.*,n.title AS news_title,n.published_at,n.url
-                   FROM market_news_impact i JOIN market_news n ON n.id=i.news_id
-                   WHERE i.id=?""",
-                (impact_id,),
-            ).fetchone()
+            if user_id is None:
+                row = connection.execute(
+                    """SELECT i.*,n.title AS news_title,n.published_at,n.url
+                       FROM market_news_impact i JOIN market_news n ON n.id=i.news_id
+                       WHERE i.id=?""",
+                    (impact_id,),
+                ).fetchone()
+            else:
+                row = connection.execute(
+                    """SELECT i.*,n.title AS news_title,n.published_at,n.url
+                       FROM market_news_impact i JOIN market_news n ON n.id=i.news_id
+                       WHERE i.id=? AND i.user_id=?""",
+                    (impact_id, user_id),
+                ).fetchone()
         if row is None:
             raise LookupError("影响记录不存在")
         return dict(row)
 
-    def delete_impact(self, impact_id) -> dict:
-        impact = self.get_impact(impact_id)
+    def delete_impact(self, impact_id, *, user_id=None) -> dict:
+        impact = self.get_impact(impact_id, user_id=user_id)
         if impact["deleted_at"] is None:
             deleted_at = datetime.now().isoformat(timespec="seconds")
             with self._connect() as connection:

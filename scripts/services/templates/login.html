@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>登录 · 量化工作台</title>
+<link rel="stylesheet" href="/assets/app.css">
+<style>
+  body.login-page{min-height:100vh;display:flex;align-items:center;justify-content:center;margin:0;background:var(--bg, #f4f6f8);font-family:system-ui,-apple-system,sans-serif;}
+  .login-card{width:min(380px,92vw);background:var(--panel,#fff);border:1px solid var(--border,#e5e7eb);border-radius:14px;padding:28px 24px 22px;box-shadow:0 10px 30px rgba(15,23,42,.06);}
+  .login-card h1{margin:0 0 6px;font-size:1.25rem;}
+  .login-card p.hint{margin:0 0 18px;color:var(--muted,#64748b);font-size:.9rem;line-height:1.45;}
+  .login-card label{display:block;font-size:.85rem;margin:12px 0 6px;color:var(--muted,#64748b);}
+  .login-card input{width:100%;box-sizing:border-box;padding:10px 12px;border-radius:10px;border:1px solid var(--border,#d1d5db);font-size:1rem;background:var(--bg,#fff);}
+  .login-card button{margin-top:18px;width:100%;padding:11px 14px;border:0;border-radius:10px;background:#2563eb;color:#fff;font-size:1rem;cursor:pointer;}
+  .login-card button:disabled{opacity:.6;cursor:wait;}
+  .login-error{display:none;margin-top:12px;padding:10px 12px;border-radius:10px;background:#fef2f2;color:#b91c1c;font-size:.9rem;}
+  .login-error.show{display:block;}
+</style>
+</head>
+<body class="login-page">
+  <form class="login-card" id="loginForm" autocomplete="on">
+    <h1>登录工作台</h1>
+    <p class="hint">本地多用户隔离。账号由管理员用 CLI 创建；无公开注册。</p>
+    <label for="username">用户名</label>
+    <input id="username" name="username" autocomplete="username" required autofocus>
+    <label for="password">密码</label>
+    <input id="password" name="password" type="password" autocomplete="current-password" required>
+    <button type="submit" id="submitBtn">登录</button>
+    <div class="login-error" id="errorBox" role="alert"></div>
+  </form>
+<script>
+(function(){
+  var form=document.getElementById('loginForm');
+  var err=document.getElementById('errorBox');
+  var btn=document.getElementById('submitBtn');
+  var params=new URLSearchParams(location.search);
+  var next=params.get('next')||'/index.html';
+  form.addEventListener('submit', async function(e){
+    e.preventDefault();
+    err.classList.remove('show');
+    btn.disabled=true;
+    try{
+      var r=await fetch('/api/login',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        credentials:'same-origin',
+        body:JSON.stringify({
+          username:document.getElementById('username').value.trim(),
+          password:document.getElementById('password').value
+        })
+      });
+      var body=await r.json().catch(function(){return {};});
+      if(!r.ok) throw new Error(body.error||('HTTP '+r.status));
+      location.replace(next.startsWith('/')?next:'/index.html');
+    }catch(ex){
+      err.textContent=ex.message||'登录失败';
+      err.classList.add('show');
+      btn.disabled=false;
+    }
+  });
+})();
+</script>
+</body>
+</html>

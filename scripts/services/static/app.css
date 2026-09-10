@@ -480,3 +480,5 @@ to { transform: translateX(-50%); }
 
 /* —— Market news page extras (shared hooks) —— */
 .mn-page a.btn:hover { text-decoration: none; }
+
+.app-shell__user{font-size:.85rem;opacity:.85;margin-right:.35rem;max-width:7rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}

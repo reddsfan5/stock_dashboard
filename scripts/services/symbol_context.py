@@ -173,7 +173,7 @@ class SymbolContextService:
     def _name(self, code: str) -> str:
         return self.name_map.get(code) or self.name_map.get(normalize_code(code)) or ""
 
-    def context(self, code: str) -> dict:
+    def context(self, code: str, *, user_id) -> dict:
         code = normalize_code(code)
         name = self._name(code)
         if not name:
@@ -187,26 +187,26 @@ class SymbolContextService:
             except Exception:  # noqa: BLE001
                 name = ""
 
-        watch_items = self.watchlist.list_items(code=code, limit=20)
+        watch_items = self.watchlist.list_items(user_id=user_id, code=code, limit=20)
         tracks = []
         try:
-            tracks = self.watchlist.list_tracks(code=code, limit=20)
+            tracks = self.watchlist.list_tracks(user_id=user_id, code=code, limit=20)
         except Exception:  # noqa: BLE001
             tracks = []
 
         training_runs = []
         try:
-            training_runs = self.training.list_runs_for_code(code, limit=10)
+            training_runs = self.training.list_runs_for_code(code, user_id=user_id, limit=10)
         except Exception:  # noqa: BLE001
             training_runs = []
 
         cases = []
         try:
-            cases = self.journal.list_cases(code=code, limit=20)
+            cases = self.journal.list_cases(user_id=user_id, code=code, limit=20)
         except Exception:  # noqa: BLE001
             cases = []
 
-        hypotheses = self.hypotheses.list_for_code(code, limit=20)
+        hypotheses = self.hypotheses.list_for_code(code, user_id=user_id, limit=20)
         screen_hits = load_screen_hits(code)
         screen_to_trade = load_screen_to_trade_note(code)
 
@@ -239,9 +239,10 @@ class SymbolContextService:
             },
         }
 
-    def create_hypothesis(self, payload: dict) -> dict:
+    def create_hypothesis(self, payload: dict, *, user_id) -> dict:
         code = normalize_code(payload.get("code", ""))
         return self.hypotheses.create(
+            user_id=user_id,
             code=code,
             title=payload.get("title") or "",
             status=payload.get("status") or "hypothesis",
@@ -251,10 +252,11 @@ class SymbolContextService:
             meta=payload.get("meta") or {},
         )
 
-    def update_hypothesis(self, payload: dict) -> dict:
+    def update_hypothesis(self, payload: dict, *, user_id) -> dict:
         return self.hypotheses.set_status(
             int(payload.get("id") or payload.get("hypothesis_id")),
             payload.get("status", ""),
+            user_id=user_id,
             note=payload.get("note"),
             thesis=payload.get("thesis"),
             title=payload.get("title"),

@@ -786,10 +786,12 @@ class DailyUpdatePipeline:
 
 
     def _watchlist_track_stage(self):
-        """非关键：刷新观察池次日跟踪结果。"""
+        """非关键：按用户刷新观察池次日跟踪结果。"""
         from data.watchlist import WatchlistRepository
         from data.kline import StockData
+        from data.users import UserRepository, bootstrap_admin
 
+        bootstrap_admin()
         target = self.target_date or pd.Timestamp.today().normalize()
         as_of = pd.Timestamp(target).strftime("%Y-%m-%d")
         repo = WatchlistRepository()
@@ -798,13 +800,23 @@ class DailyUpdatePipeline:
         def loader(code: str):
             return data.get_kline(code, days=40)
 
-        result = repo.refresh_tracking(loader, as_of=as_of)
+        users = UserRepository().list_users(enabled_only=True)
+        tracked = skipped = 0
+        per_user = []
+        for user in users:
+            result = repo.refresh_tracking(loader, user_id=user["id"], as_of=as_of)
+            tracked += int(result.get("tracked", 0))
+            skipped += int(result.get("skipped", 0))
+            per_user.append({"user_id": user["id"], "username": user["username"], **{
+                k: result.get(k) for k in ("tracked", "skipped", "message")
+            }})
         details = {
             "as_of": as_of,
-            "tracked": result.get("tracked", 0),
-            "skipped": result.get("skipped", 0),
+            "tracked": tracked,
+            "skipped": skipped,
+            "users": per_user,
         }
-        return True, result.get("message", "观察池跟踪完成"), details
+        return True, f"观察池跟踪完成：{tracked} 条（{len(users)} 用户）", details
 
     def _stock_facts_stage(self):
         """非关键：交易日历、涨跌停事实、ST 状态。失败不阻断主链路。"""

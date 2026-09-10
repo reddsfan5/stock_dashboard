@@ -32,6 +32,15 @@ from data.minute import CACHE_FILE as MINUTE_CACHE_FILE
 from data.minute import MinuteData
 from features.intraday import add_intraday_volume_ratio
 from scripts.services.intraday_replay import inject_intraday_replay
+from data.users import (
+    SESSION_COOKIE,
+    UserRepository,
+    bootstrap_admin,
+    clear_session_cookie_header,
+    migrate_personal_data_to_admin,
+    parse_cookie_header,
+    session_cookie_header,
+)
 
 OUT_HTML = os.path.join(PROJECT_DIR, "output", "minute_view.html")
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
@@ -484,9 +493,96 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(payload)
 
+
+    AUTH_PUBLIC_EXACT = {
+        "/login.html",
+        "/api/login",
+        "/api/health",
+        "/favicon.ico",
+    }
+    AUTH_PUBLIC_PREFIX = ("/assets/",)
+
+    def _users(self):
+        repo = getattr(self, "_user_repo", None)
+        if repo is None:
+            repo = UserRepository()
+            self._user_repo = repo
+        return repo
+
+    def _session_token(self):
+        cookies = parse_cookie_header(self.headers.get("Cookie", ""))
+        return cookies.get(SESSION_COOKIE, "")
+
+    def _current_user(self):
+        cached = getattr(self, "_cached_user", None)
+        if cached is not None or getattr(self, "_user_resolved", False):
+            return cached
+        token = self._session_token()
+        user = self._users().resolve_session(token) if token else None
+        self._cached_user = user
+        self._user_resolved = True
+        return user
+
+    def _is_public_path(self, path: str) -> bool:
+        if path in self.AUTH_PUBLIC_EXACT:
+            return True
+        return any(path.startswith(prefix) for prefix in self.AUTH_PUBLIC_PREFIX)
+
+    def _redirect_login(self, next_path: str):
+        target = "/login.html"
+        if next_path and next_path not in ("/login.html",):
+            from urllib.parse import quote
+            target = f"/login.html?next={quote(next_path, safe='/?&=')}"
+        body = (
+            "<!doctype html><meta charset=utf-8>"
+            f"<script>location.replace({json.dumps(target)})</script>"
+            f"<a href={json.dumps(target)}>去登录</a>"
+        ).encode("utf-8")
+        self.send_response(302)
+        self.send_header("Location", target)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _require_user(self, parsed):
+        if self._is_public_path(parsed.path):
+            return True
+        user = self._current_user()
+        if user:
+            return True
+        if parsed.path.startswith("/api/"):
+            self._send_json({"error": "未登录", "login": "/login.html"}, status=401)
+            return False
+        self._redirect_login(parsed.path + (("?" + parsed.query) if parsed.query else ""))
+        return False
+
+    def _uid(self):
+        user = self._current_user()
+        if not user:
+            raise LookupError("未登录")
+        return int(user["id"])
+
     def do_GET(self):
         parsed = urlparse(self.path)
         params = parse_qs(parsed.query)
+        if not self._require_user(parsed):
+            return
+        if parsed.path == "/api/me":
+            user = self._current_user()
+            return self._send_json({"user": user})
+        if parsed.path == "/login.html":
+            login_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates", "login.html")
+            try:
+                body = open(login_path, "rb").read()
+            except OSError:
+                return self.send_error(404, "login page missing")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
         if params.get('training_session') and parsed.path == '/minute_view.html':
             from scripts.services.training_context import context_state, minute_payload
             try:
@@ -530,7 +626,7 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
                 "service": "stock-interactive-web",
                 "version": 1,
                 "listen_host": self.server.server_address[0],
-                "features": ["minute", "grid", "trainer", "journal", "news", "market_context", "training_loop", "watchlist", "symbol_context", "hypotheses"],
+                "features": ["minute", "grid", "trainer", "journal", "news", "market_context", "training_loop", "watchlist", "symbol_context", "hypotheses", "auth"],
                 "pid": os.getpid(),
             })
         if parsed.path == "/api/minute/search":
@@ -584,8 +680,10 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
         if parsed.path == "/api/trainer/state":
             params = parse_qs(parsed.query)
             try:
+                sid = params.get("session_id", [""])[0]
+                self.trainer.assert_owner(sid, self._uid())
                 return self._send_json(
-                    self.trainer.state(params.get("session_id", [""])[0])
+                    self.trainer.state(sid, user_id=self._uid())
                 )
             except LookupError as exc:
                 return self._send_json({"error": str(exc)}, status=404)
@@ -598,8 +696,10 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
         if parsed.path == "/api/trainer/review":
             params = parse_qs(parsed.query)
             try:
+                sid = params.get("session_id", [""])[0]
+                self.trainer.assert_owner(sid, self._uid())
                 return self._send_json(self.trainer.review(
-                    params.get("session_id", [""])[0],
+                    sid,
                     market_date=params.get("date", [None])[0],
                 ))
             except LookupError as exc:
@@ -611,7 +711,9 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
         if parsed.path == "/api/trainer/plan":
             params = parse_qs(parsed.query)
             try:
-                state = self.trainer.state(params.get("session_id", [""])[0])
+                sid = params.get("session_id", [""])[0]
+                self.trainer.assert_owner(sid, self._uid())
+                state = self.trainer.state(sid, user_id=self._uid())
                 return self._send_json({
                     "session_id": state.get("session_id"),
                     "run_id": state.get("run_id"),
@@ -640,6 +742,31 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
+        if parsed.path == "/api/login":
+            try:
+                payload = self._read_json()
+                user = self._users().authenticate(
+                    payload.get("username", ""), payload.get("password", "")
+                )
+                session = self._users().create_session(user["id"])
+                return self._send_json(
+                    {"ok": True, "user": user},
+                    extra_headers=[("Set-Cookie", session_cookie_header(session["token"]))],
+                )
+            except LookupError as exc:
+                return self._send_json({"error": str(exc)}, status=401)
+            except (TypeError, ValueError, json.JSONDecodeError) as exc:
+                return self._send_json({"error": str(exc)}, status=400)
+        if parsed.path == "/api/logout":
+            token = self._session_token()
+            if token:
+                self._users().revoke_session(token)
+            return self._send_json(
+                {"ok": True},
+                extra_headers=[("Set-Cookie", clear_session_cookie_header())],
+            )
+        if not self._require_user(parsed):
+            return
         if parsed.path == '/api/classification/sync':
             from scripts.services.classification_sync import enqueue
             try:
@@ -661,8 +788,14 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
             return self._send_json({"error": "接口不存在"}, status=404)
         try:
             payload = self._read_json()
+            if (
+                parsed.path != "/api/trainer/session"
+                and parsed.path.startswith("/api/trainer/")
+                and payload.get("session_id")
+            ):
+                self.trainer.assert_owner(str(payload.get("session_id")), self._uid())
             if parsed.path == "/api/trainer/session":
-                result = self.trainer.create(payload)
+                result = self.trainer.create(payload, user_id=self._uid())
             elif parsed.path == "/api/trainer/advance":
                 result = self.trainer.advance(
                     payload.get("session_id", ""), int(payload.get("steps", 1))
@@ -765,6 +898,7 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
                 )
             elif parsed.path == "/api/news/impacts":
                 result = self.news.impacts(
+                    user_id=self._uid(),
                     market_date=params.get("date", [""])[0],
                     code=params.get("code", [None])[0],
                     include_deleted=(
@@ -787,6 +921,7 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
             payload = self._read_json()
             if parsed.path == "/api/news/impact":
                 result = self.news.add_impact(
+                    user_id=self._uid(),
                     news_id=payload.get("news_id", ""),
                     market_date=payload.get("market_date", ""),
                     decision_time=payload.get("decision_time"),
@@ -796,7 +931,9 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
                     note=payload.get("note", ""),
                 )
             elif parsed.path == "/api/news/impact/delete":
-                result = self.news.delete_impact(payload.get("impact_id", ""))
+                result = self.news.delete_impact(
+                    payload.get("impact_id", ""), user_id=self._uid()
+                )
             else:
                 return self._send_json({"error": "接口不存在"}, status=404)
             return self._send_json(result)
@@ -820,15 +957,19 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
                 )
             elif parsed.path == "/api/journal/cases":
                 result = self.journal.list_cases(
+                    user_id=self._uid(),
                     code=params.get("code", [None])[0],
                     status=params.get("status", [None])[0],
                     query=params.get("q", [None])[0],
                     limit=params.get("limit", [200])[0],
                 )
             elif parsed.path == "/api/journal/case":
-                result = self.journal.get_case(params.get("case_id", [""])[0])
+                result = self.journal.get_case(
+                    params.get("case_id", [""])[0], user_id=self._uid()
+                )
             elif parsed.path == "/api/journal/entries":
                 result = self.journal.list_entries(
+                    user_id=self._uid(),
                     code=params.get("code", [None])[0],
                     case_id=params.get("case_id", [None])[0],
                     include_deleted=(
@@ -839,6 +980,7 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
                 )
             elif parsed.path == "/api/journal/due":
                 result = self.journal.due_reviews(
+                    user_id=self._uid(),
                     as_of=params.get("as_of", [None])[0],
                     limit=params.get("limit", [100])[0],
                 )
@@ -864,19 +1006,19 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
                     payload['code'] = state['code']
                     payload['source'] = source
                 elif parsed.path == '/api/journal/entry':
-                    case = self.journal.get_case(payload.get('case_id'))
+                    case = self.journal.get_case(payload.get('case_id'), user_id=self._uid())
                     if case.get('source') != source or payload.get('market_date', '') > state['date']:
                         raise ValueError('日记必须属于本次训练，且行情日期不能晚于模拟日期')
                 else:
                     raise ValueError('训练模式仅支持追加案例和记录')
             if parsed.path == "/api/journal/case":
-                result = self.journal.create_case(payload)
+                result = self.journal.create_case(payload, user_id=self._uid())
             elif parsed.path == "/api/journal/entry":
-                result = self.journal.add_entry(payload)
+                result = self.journal.add_entry(payload, user_id=self._uid())
             elif parsed.path == "/api/journal/entry/delete":
-                result = self.journal.delete_entry(payload)
+                result = self.journal.delete_entry(payload, user_id=self._uid())
             elif parsed.path == "/api/journal/entry/restore":
-                result = self.journal.restore_entry(payload)
+                result = self.journal.restore_entry(payload, user_id=self._uid())
             elif parsed.path == "/api/journal/backup":
                 result = self.journal.backup()
             else:
@@ -897,10 +1039,12 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
                 status = params.get("status", [None])[0] or None
                 code = params.get("code", [None])[0] or None
                 result = self.watchlist.list_items(
+                    user_id=self._uid(),
                     status=status, code=code, limit=params.get("limit", [200])[0]
                 )
             elif parsed.path == "/api/watchlist/tracks":
                 result = self.watchlist.tracks(
+                    user_id=self._uid(),
                     track_date=params.get("track_date", [None])[0] or None,
                     screen_date=params.get("screen_date", [None])[0] or None,
                     limit=params.get("limit", [200])[0],
@@ -924,13 +1068,14 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
         try:
             payload = self._read_json()
             if parsed.path == "/api/watchlist/add":
-                result = self.watchlist.add(payload)
+                result = self.watchlist.add(payload, user_id=self._uid())
             elif parsed.path == "/api/watchlist/status":
-                result = self.watchlist.set_status(payload)
+                result = self.watchlist.set_status(payload, user_id=self._uid())
             elif parsed.path == "/api/watchlist/delete":
-                result = self.watchlist.delete(payload)
+                result = self.watchlist.delete(payload, user_id=self._uid())
             elif parsed.path == "/api/watchlist/refresh":
                 result = self.watchlist.refresh_tracking(
+                    user_id=self._uid(),
                     as_of=payload.get("as_of"),
                     fail_threshold_pct=float(payload.get("fail_threshold_pct", -3.0)),
                 )
@@ -953,11 +1098,13 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
             raise ValueError("请求体为空或过大")
         return json.loads(self.rfile.read(length).decode("utf-8"))
 
-    def _send_json(self, payload, status=200):
+    def _send_json(self, payload, status=200, extra_headers=None):
         body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
+        for key, value in (extra_headers or []):
+            self.send_header(key, value)
         self.end_headers()
         self.wfile.write(body)
 
@@ -970,7 +1117,9 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
         params = parse_qs(parsed.query)
         try:
             if parsed.path == "/api/symbol/context":
-                result = self.symbol_context.context(params.get("code", [""])[0])
+                result = self.symbol_context.context(
+                    params.get("code", [""])[0], user_id=self._uid()
+                )
             elif parsed.path == "/api/symbol/hypothesis":
                 code = params.get("code", [""])[0]
                 try:
@@ -978,7 +1127,7 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
                 except ValueError:
                     limit = 50
                 items = self.symbol_context.hypotheses.list_for_code(
-                    code, limit=limit
+                    code, user_id=self._uid(), limit=limit
                 )
                 result = {"items": items, "count": len(items)}
             else:
@@ -995,9 +1144,13 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
         try:
             payload = self._read_json()
             if parsed.path == "/api/symbol/hypothesis":
-                result = self.symbol_context.create_hypothesis(payload)
+                result = self.symbol_context.create_hypothesis(
+                    payload, user_id=self._uid()
+                )
             elif parsed.path == "/api/symbol/hypothesis/status":
-                result = self.symbol_context.update_hypothesis(payload)
+                result = self.symbol_context.update_hypothesis(
+                    payload, user_id=self._uid()
+                )
             else:
                 return self._send_json({"error": "接口不存在"}, status=404)
             return self._send_json(result)
@@ -1019,6 +1172,9 @@ def write_app(path: str, payload: dict):
 
 
 def serve(repository: MinuteRepository, trainer, journal, news, market_context, watchlist, symbol_context, html_path: str, host: str, port: int):
+    boot = bootstrap_admin()
+    migrated = migrate_personal_data_to_admin(boot["user"]["id"])
+    print(f"✓ 多用户：管理员 {boot['user']['username']}，已迁移表 {len(migrated.get('tables') or [])} 个")
     directory = os.path.dirname(os.path.abspath(html_path))
     handler = lambda *args, **kwargs: MinuteRequestHandler(*args, directory=directory, **kwargs)
     MinuteRequestHandler.repository = repository

@@ -15,6 +15,8 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Optional
 
+from data.users import ensure_user_id_column, require_user_id
+
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_DB_PATH = PROJECT_DIR / "state" / "training_sessions.sqlite3"
 
@@ -234,6 +236,7 @@ class TrainingSessionRepository:
                 """
                 CREATE TABLE IF NOT EXISTS training_run (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL DEFAULT 0,
                     session_token TEXT NOT NULL UNIQUE,
                     code TEXT NOT NULL,
                     name TEXT NOT NULL DEFAULT '',
@@ -248,6 +251,8 @@ class TrainingSessionRepository:
                 );
                 CREATE INDEX IF NOT EXISTS idx_training_run_code
                     ON training_run(code, created_at DESC);
+                CREATE INDEX IF NOT EXISTS idx_training_run_user_id
+                    ON training_run(user_id);
 
                 CREATE TABLE IF NOT EXISTS day_plan (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -300,6 +305,14 @@ class TrainingSessionRepository:
                     ON mindset_marker(run_id, market_date, as_of);
                 """
             )
+            admin_id = 1
+            users_db = PROJECT_DIR / "state" / "users.sqlite3"
+            if users_db.exists():
+                from data.users import UserRepository
+                found = UserRepository().get_first_admin_id()
+                if found:
+                    admin_id = found
+            ensure_user_id_column(connection, "training_run", admin_id)
 
     @staticmethod
     def validate_code(code: str) -> str:
@@ -311,6 +324,7 @@ class TrainingSessionRepository:
     def create_run(
         self,
         *,
+        user_id,
         session_token: str,
         code: str,
         name: str = "",
@@ -318,6 +332,7 @@ class TrainingSessionRepository:
         capital: float,
         meta: Optional[dict] = None,
     ) -> dict:
+        user_id = require_user_id(user_id)
         token = _text(session_token, 80, "会话令牌", required=True)
         code = self.validate_code(code)
         name = _text(name, 80, "名称")
@@ -330,35 +345,51 @@ class TrainingSessionRepository:
         with self._connect() as connection:
             cursor = connection.execute(
                 """INSERT INTO training_run
-                   (session_token,code,name,start_date,capital,status,meta_json,created_at,updated_at)
-                   VALUES (?,?,?,?,?,?,?,?,?)""",
+                   (user_id,session_token,code,name,start_date,capital,status,meta_json,created_at,updated_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?)""",
                 (
-                    token, code, name, start_date, capital, "active",
+                    user_id, token, code, name, start_date, capital, "active",
                     json.dumps(meta, ensure_ascii=False, separators=(",", ":")),
                     stamp, stamp,
                 ),
             )
             run_id = cursor.lastrowid
-        return self.get_run(run_id)
+        return self.get_run(run_id, user_id=user_id)
 
-    def get_run(self, run_id: int = None, *, session_token: str = None) -> dict:
+    def get_run(self, run_id: int = None, *, user_id=None, session_token: str = None) -> dict:
+        if user_id is not None:
+            user_id = require_user_id(user_id)
         with self._connect() as connection:
             if session_token:
-                row = connection.execute(
-                    "SELECT * FROM training_run WHERE session_token=? AND deleted_at IS NULL",
-                    (_text(session_token, 80, "会话令牌", required=True),),
-                ).fetchone()
+                token = _text(session_token, 80, "会话令牌", required=True)
+                if user_id is None:
+                    row = connection.execute(
+                        "SELECT * FROM training_run WHERE session_token=? AND deleted_at IS NULL",
+                        (token,),
+                    ).fetchone()
+                else:
+                    row = connection.execute(
+                        "SELECT * FROM training_run WHERE session_token=? AND user_id=? AND deleted_at IS NULL",
+                        (token, user_id),
+                    ).fetchone()
             else:
-                row = connection.execute(
-                    "SELECT * FROM training_run WHERE id=? AND deleted_at IS NULL",
-                    (int(run_id),),
-                ).fetchone()
+                if user_id is None:
+                    row = connection.execute(
+                        "SELECT * FROM training_run WHERE id=? AND deleted_at IS NULL",
+                        (int(run_id),),
+                    ).fetchone()
+                else:
+                    row = connection.execute(
+                        "SELECT * FROM training_run WHERE id=? AND user_id=? AND deleted_at IS NULL",
+                        (int(run_id), user_id),
+                    ).fetchone()
         if row is None:
             raise LookupError("训练记录不存在")
         return _decode_row(row)
 
-    def list_runs_for_code(self, code: str, *, limit: int = 20) -> list:
+    def list_runs_for_code(self, code: str, *, user_id, limit: int = 20) -> list:
         """按代码返回近期训练会话摘要（含决策数）。"""
+        user_id = require_user_id(user_id)
         code = self.validate_code(code)
         try:
             limit = max(1, min(int(limit), 100))
@@ -372,10 +403,10 @@ class TrainingSessionRepository:
                           (SELECT COUNT(*) FROM day_plan p
                            WHERE p.run_id=r.id AND p.deleted_at IS NULL) AS plan_count
                    FROM training_run r
-                   WHERE r.code=? AND r.deleted_at IS NULL
+                   WHERE r.user_id=? AND r.code=? AND r.deleted_at IS NULL
                    ORDER BY r.updated_at DESC, r.id DESC
                    LIMIT ?""",
-                (code, limit),
+                (user_id, code, limit),
             ).fetchall()
         out = []
         for row in rows:
