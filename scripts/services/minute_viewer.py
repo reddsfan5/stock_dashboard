@@ -544,6 +544,7 @@ function setMinuteFingerPrice(touch,p){{
       const pts=current&&current.points; if(!pts||!pts[idx])return;
       const p=pts[idx];
       setMinuteTipBar(p);
+      try{{chart.setOption({{axisPointer:{{show:false}}}},false)}}catch(e){{}}
       if(ctx&&ctx.touch){{
         setMinuteCross(ctx.touch);
         setMinuteFingerPrice(ctx.touch,p);
