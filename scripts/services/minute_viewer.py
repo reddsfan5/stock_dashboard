@@ -398,19 +398,6 @@ def build_html(initial_payload: dict) -> str:
 .identity{{min-width:220px}}.identity h1{{font-size:20px;margin:0 0 4px}}.identity .sub{{color:var(--muted);font-size:13px}}.last{{font-size:30px;font-weight:700;font-variant-numeric:tabular-nums}}.change{{font-size:15px;font-weight:600}}
 .stats{{display:grid;grid-template-columns:repeat(6,minmax(90px,1fr));gap:10px;flex:1}}.stat{{border-left:1px solid var(--border);padding-left:14px}}.stat .label{{display:block;color:var(--muted);font-size:11px;margin-bottom:3px}}.stat .value{{font-variant-numeric:tabular-nums;font-size:14px}}
 #chartWrap{{position:relative;width:100%;height:650px}}#chart{{height:100%;width:100%;touch-action:pan-y;overscroll-behavior:contain}}#chart.is-scrubbing{{touch-action:none}}
-.minute-tip-overlay{{position:absolute;top:0;left:0;right:0;z-index:6;pointer-events:none;margin:0;padding:5px 8px;font-size:11px;line-height:1.3;color:#f8fafc;background:rgba(15,23,42,.82);font-variant-numeric:tabular-nums;box-sizing:border-box;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-radius:0 0 6px 6px}}
-.minute-tip-overlay[hidden]{{display:none!important}}
-.minute-tip-overlay b{{font-weight:700}}
-.minute-finger-price{{position:absolute;z-index:7;pointer-events:none;right:2px;left:auto;transform:translateY(-50%);padding:3px 7px;border-radius:6px;font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;color:#fff!important;-webkit-text-fill-color:#fff;background:rgba(15,23,42,.92);box-shadow:0 2px 8px rgba(0,0,0,.35);white-space:nowrap;max-width:42%;border:1px solid rgba(255,255,255,.35)}}
-.minute-finger-price[hidden]{{display:none!important}}
-.minute-finger-price.up{{background:rgba(196,48,58,.96);border-color:rgba(255,255,255,.4)}}
-.minute-finger-price.down{{background:rgba(18,120,88,.96);border-color:rgba(255,255,255,.4)}}
-.minute-cross{{position:absolute;inset:0;z-index:5;pointer-events:none}}
-.minute-cross[hidden]{{display:none!important}}
-.minute-cross-v,.minute-cross-h{{position:absolute;background:rgba(55,65,81,.92);pointer-events:none}}
-.minute-cross-v{{top:0;bottom:0;width:1px;left:0;transform:translateX(-50%)}}
-.minute-cross-h{{left:0;right:0;height:1px;top:0;transform:translateY(-50%)}}
-.minute-cross-dot{{position:absolute;width:7px;height:7px;margin:-3px 0 0 -3px;border-radius:50%;background:#3478f6;border:1.5px solid #fff;box-shadow:0 0 0 1px rgba(15,23,42,.35);pointer-events:none}}
 .status{{padding:0 18px 14px;color:var(--muted);font-size:12px;display:flex;justify-content:space-between;gap:10px}}.notice{{display:none;margin-bottom:12px;padding:10px 14px;border-radius:8px;background:#fff6dc;color:#765a00;font-size:13px}}
 .loading{{position:fixed;inset:0;background:rgba(244,246,249,.55);display:none;align-items:center;justify-content:center;z-index:50}}.loading span{{background:#1f2937;color:#fff;padding:10px 18px;border-radius:8px}}.up{{color:var(--red)}}.down{{color:var(--green)}}
 __INTRADAY_REPLAY_CSS__
@@ -453,104 +440,26 @@ __INTRADAY_REPLAY_CSS__
 <div id="app-shell" data-active="minute"></div>
 <div class="loading" id="loading"><span>正在读取分钟缓存…</span></div>
 <main class="page"><div class="topbar"><div class="brand">分时行情查询</div><div class="search-wrap"><div class="search-box"><input id="searchInput" autocomplete="off" data-clear-on-focus="1" placeholder="输入股票名称或代码，如 贵州茅台 / 600519"><button id="searchBtn">查询</button></div><div class="results" id="results"></div></div><div class="toolbar"><a id="journalLink" href="/stock_journal.html">📓 记日记</a><button id="prevDay" title="前一交易日">‹</button><select id="dateSelect" aria-label="选择交易日"></select><button id="nextDay" title="后一交易日">›</button></div></div>
-<div class="notice" id="notice"></div><section class="card"><div class="quote"><div class="identity"><h1 id="symbolName">—</h1><div class="sub" id="symbolMeta">—</div></div><div><span class="last" id="lastPrice">—</span> <span class="change" id="changePct">—</span></div><div class="stats"><div class="stat"><span class="label">今开</span><span class="value" id="openPrice">—</span></div><div class="stat"><span class="label">最高</span><span class="value" id="highPrice">—</span></div><div class="stat"><span class="label">最低</span><span class="value" id="lowPrice">—</span></div><div class="stat"><span class="label">成交量</span><span class="value" id="totalVolume">—</span></div><div class="stat"><span class="label">成交额</span><span class="value" id="totalAmount">—</span></div><div class="stat"><span class="label">盘中量比(5日)</span><span class="value" id="intradayVolumeRatio">—</span></div></div></div><div class="intraday-replay" aria-label="动态分时回放"><button class="replay-primary" id="replayPlay">▶ 动态分时</button><button id="replayStep">推进1分钟</button><button id="replayReset">回到开盘</button><select id="replaySpeed" aria-label="动态分时速度"><option value="1">1×</option><option value="2">2×</option><option value="5" selected>5×</option><option value="10">10×</option></select><button id="replayAll">查看全日</button><span class="replay-clock" id="replayClock">全日</span><span class="replay-progress" id="replayProgress">—</span></div><div id="chartWrap"><div id="minuteTipBar" class="minute-tip-overlay" hidden></div><div id="minuteCross" class="minute-cross" hidden><div class="minute-cross-v" id="minuteCrossV"></div><div class="minute-cross-h" id="minuteCrossH"></div><div class="minute-cross-dot" id="minuteCrossDot"></div></div><div id="minuteFingerPrice" class="minute-finger-price" hidden></div><div id="chart"></div></div><div class="status"><span>动态分时固定全天时间轴，只向右揭示已播放行情；鼠标悬停查看分钟价格</span><span>数据源：本地 minute_kline_cache.parquet</span></div></section></main>
+<div class="notice" id="notice"></div><section class="card"><div class="quote"><div class="identity"><h1 id="symbolName">—</h1><div class="sub" id="symbolMeta">—</div></div><div><span class="last" id="lastPrice">—</span> <span class="change" id="changePct">—</span></div><div class="stats"><div class="stat"><span class="label">今开</span><span class="value" id="openPrice">—</span></div><div class="stat"><span class="label">最高</span><span class="value" id="highPrice">—</span></div><div class="stat"><span class="label">最低</span><span class="value" id="lowPrice">—</span></div><div class="stat"><span class="label">成交量</span><span class="value" id="totalVolume">—</span></div><div class="stat"><span class="label">成交额</span><span class="value" id="totalAmount">—</span></div><div class="stat"><span class="label">盘中量比(5日)</span><span class="value" id="intradayVolumeRatio">—</span></div></div></div><div class="intraday-replay" aria-label="动态分时回放"><button class="replay-primary" id="replayPlay">▶ 动态分时</button><button id="replayStep">推进1分钟</button><button id="replayReset">回到开盘</button><select id="replaySpeed" aria-label="动态分时速度"><option value="1">1×</option><option value="2">2×</option><option value="5" selected>5×</option><option value="10">10×</option></select><button id="replayAll">查看全日</button><span class="replay-clock" id="replayClock">全日</span><span class="replay-progress" id="replayProgress">—</span></div><div id="chartWrap"><div id="chart"></div></div><div class="status"><span>动态分时固定全天时间轴，只向右揭示已播放行情；鼠标悬停查看分钟价格</span><span>数据源：本地 minute_kline_cache.parquet</span></div></section></main>
 <script src="vendor/echarts.min.js"></script><script>window.echarts||document.write(`<script src='https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js'><\\/script>`);</script>
 <script>__INTRADAY_REPLAY_JS__</script>
 <script src="/assets/chart-touch.js"></script>
+<script src="/assets/minute-scrub.js"></script>
 <script>
 const INITIAL_DATA={initial_json};const API_AVAILABLE=location.protocol==='http:'||location.protocol==='https:';const chart=echarts.init(document.getElementById('chart'));let current=INITIAL_DATA,searchTimer=null;const $=id=>document.getElementById(id);
 let minuteTouchCtrl=null;
-function clearMinuteScrubHud(){{
-  const bar=$('minuteTipBar'),fp=$('minuteFingerPrice'),cross=$('minuteCross');
-  if(bar){{bar.hidden=true;bar.innerHTML='';}}
-  if(fp){{fp.hidden=true;fp.textContent='';fp.classList.remove('up','down');}}
-  if(cross)cross.hidden=true;
-}}
-function setMinuteTipBar(p){{
-  const bar=$('minuteTipBar'); if(!bar||!p)return;
-  const color=p.change_pct>=0?'#ff6b6b':'#41d49a';
-  bar.innerHTML=`<span style="opacity:.9">${{p.time}}</span>　<b style="color:${{color}}">${{price(p.close)}}</b>　<span style="color:${{color}}">${{signed(p.change_pct)}}</span>　<span style="opacity:.85">高 ${{price(p.high)}} 低 ${{price(p.low)}}</span>　<span style="opacity:.85">量 ${{compact(p.volume)}} 均 ${{price(p.vwap)}}</span>`;
-  bar.hidden=false;
-}}
-function yPriceFromTouch(touch){{
-  if(!chart||!touch)return null;
-  const el=$('chart'); if(!el)return null;
-  const rect=el.getBoundingClientRect();
-  const x=touch.clientX-rect.left, y=touch.clientY-rect.top;
-  try{{
-    const pt=chart.convertFromPixel({{gridIndex:0}},[x,y]);
-    if(pt&&typeof pt[1]==='number'&&Number.isFinite(pt[1]))return pt[1];
-  }}catch(e){{}}
-  try{{
-    const v=chart.convertFromPixel({{yAxisIndex:0}},[y]);
-    if(typeof v==='number'&&Number.isFinite(v))return v;
-    if(v&&typeof v[0]==='number'&&Number.isFinite(v[0]))return v[0];
-  }}catch(e){{}}
-  return null;
-}}
-function setMinuteCross(touch){{
-  const wrap=$('chartWrap'),cross=$('minuteCross'),v=$('minuteCrossV'),h=$('minuteCrossH'),dot=$('minuteCrossDot');
-  if(!wrap||!cross||!touch||!v||!h||!dot)return;
-  const rect=wrap.getBoundingClientRect();
-  let x=touch.clientX-rect.left, y=touch.clientY-rect.top;
-  const tipH=($('minuteTipBar')&&!$('minuteTipBar').hidden)?($('minuteTipBar').offsetHeight||0):0;
-  x=Math.max(0,Math.min(x,rect.width));
-  y=Math.max(tipH,Math.min(y,rect.height));
-  v.style.left=x+'px';
-  h.style.top=y+'px';
-  dot.style.left=x+'px';
-  dot.style.top=y+'px';
-  cross.hidden=false;
-}}
-function setMinuteFingerPrice(touch,p){{
-  const fp=$('minuteFingerPrice'),wrap=$('chartWrap'),el=$('chart');
-  if(!fp||!wrap||!el||!touch)return;
-  const wrapRect=wrap.getBoundingClientRect();
-  const chartRect=el.getBoundingClientRect();
-  // Pin to the right price-axis edge; only Y tracks the crosshair.
-  let y=touch.clientY-wrapRect.top;
-  const tipH=($('minuteTipBar')&&!$('minuteTipBar').hidden)?($('minuteTipBar').offsetHeight||0):0;
-  y=Math.max(tipH+14,Math.min(y,wrapRect.height-14));
-  fp.style.left='auto';
-  fp.style.right=Math.max(2, wrapRect.right-chartRect.right+2)+'px';
-  fp.style.top=y+'px';
-  const yv=yPriceFromTouch(touch);
-  const show=yv==null? (p?price(p.close):'—') : price(yv);
-  fp.textContent=show;
-  const base=current&&current.prev_close!=null?+current.prev_close:null;
-  const ref=yv!=null?yv:(p?+p.close:null);
-  const up=base!=null&&ref!=null?ref>=base:(p?+p.change_pct>=0:true);
-  fp.classList.toggle('up',up);
-  fp.classList.toggle('down',!up);
-  fp.hidden=false;
-}}
 (function bindMinuteTouch(){{
   const el=$('chart');
-  if(!el||!window.ChartTouch)return;
-  if(minuteTouchCtrl){{try{{minuteTouchCtrl.destroy();}}catch(e){{}}minuteTouchCtrl=null;}}
-  ChartTouch.ensureHostCss();
-  minuteTouchCtrl=ChartTouch.bindLongPressScrub({{
-    el:el,
+  if(!el||!window.MinuteScrub)return;
+  minuteTouchCtrl=MinuteScrub.bind({{
+    chartEl:el,
     getChart:function(){{return chart;}},
     getCount:function(){{return (current&&current.points)?current.points.length:0;}},
-    seriesIndex:0,
-    delay:320,
-    axisPointerType:'line',
-    showEchartsTipContent:false,
-    onEnter:function(){{
-      try{{chart.setOption({{axisPointer:{{show:false}}}},false)}}catch(e){{}}
+    getPoint:function(idx){{
+      const pts=current&&current.points; return pts&&pts[idx]?pts[idx]:null;
     }},
-    onIndex:function(idx,ctx){{
-      const pts=current&&current.points; if(!pts||!pts[idx])return;
-      const p=pts[idx];
-      setMinuteTipBar(p);
-      try{{chart.setOption({{axisPointer:{{show:false}}}},false)}}catch(e){{}}
-      if(ctx&&ctx.touch){{
-        setMinuteCross(ctx.touch);
-        setMinuteFingerPrice(ctx.touch,p);
-      }}
-    }},
-    onExit:function(){{clearMinuteScrubHud();}}
+    getPrevClose:function(){{return current?current.prev_close:null;}},
+    delay:320
   }});
 }})();
 const minuteReplay=createIntradayReplay({{onFrame:renderReplayFrame,initialSpeed:5}});

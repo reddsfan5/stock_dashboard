@@ -115,7 +115,7 @@
     <div class="main">
       <section class="panel charts">
         <div class="chart-block"><div class="chart-title">日 K <small>仅显示到当前模拟分钟</small></div><div class="chart" id="dailyChart"></div></div>
-        <div class="chart-block"><div class="chart-title">当日分时 <small>曲线随播放向右出现 · 可标记心态</small></div><div class="chart" id="minuteChart"></div>
+        <div class="chart-block"><div class="chart-title">当日分时 <small>曲线随播放向右出现 · 可标记心态</small></div><div class="minute-scrub-wrap" style="height:100%"><div class="chart minute-scrub-chart" id="minuteChart"></div></div>
           <div class="mindset-row"><span>心态标记</span>
             <button type="button" data-mindset="犹豫">犹豫</button>
             <button type="button" data-mindset="FOMO">FOMO</button>
@@ -268,6 +268,7 @@
 
 <script src="/assets/app-shell.js"></script>
 <script src="/assets/chart-touch.js"></script>
+<script src="/assets/minute-scrub.js"></script>
 <script src="vendor/echarts.min.js"></script><script>window.echarts||document.write(`<script src='https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js'><\/script>`);</script>
 <script>
 const $=id=>document.getElementById(id);
@@ -282,7 +283,27 @@ function formatSymbolLabel(name, code){
 let newsRequesting=false,newsPending=null,newsLastKey='',newsDate='',newsInitialized=false,newsSeen=new Set();
 const dailyChart=echarts.init($('dailyChart')),minuteChart=echarts.init($('minuteChart'));let dailyTouchCtrl=null,minuteTouchCtrl=null;
 function bindTrainerDailyTouch(){if(!window.ChartTouch)return;if(dailyTouchCtrl){dailyTouchCtrl.refreshHosts();return}dailyTouchCtrl=ChartTouch.bindLongPressScrub({el:$('dailyChart'),getChart:()=>dailyChart,getCount:()=>state&&state.daily_bars?state.daily_bars.length:0,seriesIndex:0,delay:330,axisPointerType:'cross',showEchartsTipContent:true})}
-function bindTrainerMinuteTouch(){if(!window.ChartTouch)return;if(minuteTouchCtrl){minuteTouchCtrl.refreshHosts();return}minuteTouchCtrl=ChartTouch.bindLongPressScrub({el:$('minuteChart'),getChart:()=>minuteChart,getCount:()=>{const slots=typeof tradingTimes==='function'?tradingTimes():[];return slots.length},seriesIndex:0,delay:320,axisPointerType:'cross',showEchartsTipContent:true})}
+function bindTrainerMinuteTouch(){
+  if(!window.MinuteScrub)return;
+  const el=$('minuteChart'); if(!el)return;
+  if(minuteTouchCtrl){try{minuteTouchCtrl.destroy()}catch(e){} minuteTouchCtrl=null}
+  minuteTouchCtrl=MinuteScrub.bind({
+    chartEl:el,
+    getChart:()=>minuteChart,
+    getCount:()=>{const slots=typeof tradingTimes==='function'?tradingTimes():[];return slots.length},
+    getPoint:(idx)=>{
+      const slots=typeof tradingTimes==='function'?tradingTimes():[];
+      const t=slots[idx]; if(!t||!state)return null;
+      const map=new Map((state.minute_bars||[]).map(x=>[x.time,x]));
+      const x=map.get(t); if(!x)return null;
+      const base=+state.prev_close||+x.close||0;
+      const ch=base?((+x.close/base-1)*100):0;
+      return {time:t,close:x.close,change_pct:ch,high:x.high,low:x.low,volume:x.volume,vwap:x.vwap};
+    },
+    getPrevClose:()=>state?state.prev_close:null,
+    delay:320
+  });
+}
 
 // Price from price-axis Y only (gridIndex 0); volume pane excluded. No revealed-slot gate —
 // axis Y does not leak future closes (unlike reading series values).
