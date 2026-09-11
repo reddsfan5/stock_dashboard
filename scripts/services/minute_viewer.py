@@ -401,7 +401,7 @@ def build_html(initial_payload: dict) -> str:
 .minute-tip-overlay{{position:absolute;top:0;left:0;right:0;z-index:6;pointer-events:none;margin:0;padding:5px 8px;font-size:11px;line-height:1.3;color:#f8fafc;background:rgba(15,23,42,.82);font-variant-numeric:tabular-nums;box-sizing:border-box;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-radius:0 0 6px 6px}}
 .minute-tip-overlay[hidden]{{display:none!important}}
 .minute-tip-overlay b{{font-weight:700}}
-.minute-finger-price{{position:absolute;z-index:7;pointer-events:none;transform:translate(-50%,-120%);padding:3px 7px;border-radius:6px;font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;color:#fff;background:rgba(15,23,42,.88);box-shadow:0 2px 8px rgba(0,0,0,.28);white-space:nowrap}}
+.minute-finger-price{{position:absolute;z-index:7;pointer-events:none;right:2px;left:auto;transform:translateY(-50%);padding:3px 7px;border-radius:6px;font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;color:#fff;background:rgba(15,23,42,.88);box-shadow:0 2px 8px rgba(0,0,0,.28);white-space:nowrap;max-width:42%}}
 .minute-finger-price[hidden]{{display:none!important}}
 .minute-finger-price.up{{background:rgba(180,40,50,.92)}}
 .minute-finger-price.down{{background:rgba(20,130,90,.92)}}
@@ -481,13 +481,17 @@ function yPriceFromTouch(touch){{
   return null;
 }}
 function setMinuteFingerPrice(touch,p){{
-  const fp=$('minuteFingerPrice'),wrap=$('chartWrap');
-  if(!fp||!wrap||!touch)return;
-  const rect=wrap.getBoundingClientRect();
-  let x=touch.clientX-rect.left, y=touch.clientY-rect.top;
-  x=Math.max(28,Math.min(x,rect.width-28));
-  y=Math.max(36,Math.min(y,rect.height-12));
-  fp.style.left=x+'px'; fp.style.top=y+'px';
+  const fp=$('minuteFingerPrice'),wrap=$('chartWrap'),el=$('chart');
+  if(!fp||!wrap||!el||!touch)return;
+  const wrapRect=wrap.getBoundingClientRect();
+  const chartRect=el.getBoundingClientRect();
+  // Pin to the right price-axis edge; only Y tracks the crosshair.
+  let y=touch.clientY-wrapRect.top;
+  const tipH=($('minuteTipBar')&&!$('minuteTipBar').hidden)?($('minuteTipBar').offsetHeight||0):0;
+  y=Math.max(tipH+14,Math.min(y,wrapRect.height-14));
+  fp.style.left='auto';
+  fp.style.right=Math.max(2, wrapRect.right-chartRect.right+2)+'px';
+  fp.style.top=y+'px';
   const yv=yPriceFromTouch(touch);
   const show=yv==null? (p?price(p.close):'—') : price(yv);
   fp.textContent=show;
