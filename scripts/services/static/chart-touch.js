@@ -63,7 +63,8 @@
         },
         axisPointer: {
           show: true,
-          type: axisPointerType
+          type: axisPointerType,
+          label: { show: false }
         }
       };
     }
