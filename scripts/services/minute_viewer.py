@@ -464,17 +464,38 @@ function setMinuteTipBar(p){{
   bar.innerHTML=`<span style="opacity:.9">${{p.time}}</span>　<b style="color:${{color}}">${{price(p.close)}}</b>　<span style="color:${{color}}">${{signed(p.change_pct)}}</span>　<span style="opacity:.85">高 ${{price(p.high)}} 低 ${{price(p.low)}}</span>　<span style="opacity:.85">量 ${{compact(p.volume)}} 均 ${{price(p.vwap)}}</span>`;
   bar.hidden=false;
 }}
+function yPriceFromTouch(touch){{
+  if(!chart||!touch)return null;
+  const el=$('chart'); if(!el)return null;
+  const rect=el.getBoundingClientRect();
+  const x=touch.clientX-rect.left, y=touch.clientY-rect.top;
+  try{{
+    const pt=chart.convertFromPixel({{gridIndex:0}},[x,y]);
+    if(pt&&typeof pt[1]==='number'&&Number.isFinite(pt[1]))return pt[1];
+  }}catch(e){{}}
+  try{{
+    const v=chart.convertFromPixel({{yAxisIndex:0}},[y]);
+    if(typeof v==='number'&&Number.isFinite(v))return v;
+    if(v&&typeof v[0]==='number'&&Number.isFinite(v[0]))return v[0];
+  }}catch(e){{}}
+  return null;
+}}
 function setMinuteFingerPrice(touch,p){{
   const fp=$('minuteFingerPrice'),wrap=$('chartWrap');
-  if(!fp||!wrap||!touch||!p)return;
+  if(!fp||!wrap||!touch)return;
   const rect=wrap.getBoundingClientRect();
   let x=touch.clientX-rect.left, y=touch.clientY-rect.top;
   x=Math.max(28,Math.min(x,rect.width-28));
   y=Math.max(36,Math.min(y,rect.height-12));
   fp.style.left=x+'px'; fp.style.top=y+'px';
-  fp.textContent=price(p.close);
-  fp.classList.toggle('up',+p.change_pct>=0);
-  fp.classList.toggle('down',+p.change_pct<0);
+  const yv=yPriceFromTouch(touch);
+  const show=yv==null? (p?price(p.close):'—') : price(yv);
+  fp.textContent=show;
+  const base=current&&current.prev_close!=null?+current.prev_close:null;
+  const ref=yv!=null?yv:(p?+p.close:null);
+  const up=base!=null&&ref!=null?ref>=base:(p?+p.change_pct>=0:true);
+  fp.classList.toggle('up',up);
+  fp.classList.toggle('down',!up);
   fp.hidden=false;
 }}
 (function bindMinuteTouch(){{
