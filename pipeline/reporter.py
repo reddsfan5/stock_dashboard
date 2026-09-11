@@ -107,7 +107,7 @@ def build_screening_html(
     """生成选股仪表盘 HTML（桌面版）"""
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
     static_dir = os.path.join(PROJECT_DIR, "scripts", "services", "static")
-    asset_files = ("app.css", "app-shell.js", "workbench.js", "workbench.css")
+    asset_files = ("app.css", "app-shell.js", "workbench.js", "workbench.css", "chart-touch.js")
     asset_version = max(
         (int(os.path.getmtime(os.path.join(static_dir, name)))
          for name in asset_files
@@ -280,6 +280,7 @@ try{{var root=document.documentElement;root.dataset.theme=localStorage.getItem('
 <link rel="stylesheet" href="/assets/app.css?v={asset_version}">
 <script src="/assets/app-shell.js?v={asset_version}" defer></script>
 <script id="workbench-js" src="/assets/workbench.js?v={asset_version}" defer></script>
+<script src="/assets/chart-touch.js?v={asset_version}"></script>
 <style>
 .screen-pending .content,.screen-pending .wb-screen-toolbar,.screen-pending footer {{visibility:hidden}}
 .screen-pending .content {{max-height:360px;overflow:hidden}}
@@ -600,11 +601,7 @@ function loadKline(code){{
   if(klineCache[code])return Promise.resolve(klineCache[code]);
   return fetch('/api/journal/kline?code='+encodeURIComponent(code)+'&days=60',{{cache:'no-store'}}).then(function(r){{return r.json().then(function(body){{if(!r.ok)throw new Error(body.error||('HTTP '+r.status));return body}})}}).then(function(body){{klineCache[code]=body;return body}});
 }}
-var klineScrubActive=false;
-var klineLongPressTimer=null;
-var klineTouchStartXY=null;
-var klineScrubMoveHandler=null;
-var klineScrubCtx=null;
+var klineTouchCtrl=null;
 function clearKlineTipBar(){{
   var bar=document.getElementById('klineTipBar');
   if(bar){{bar.hidden=true;bar.textContent='';bar.innerHTML='';}}
@@ -623,124 +620,43 @@ function setKlineTipBarHtml(html){{
   bar.innerHTML=html;
   bar.hidden=false;
 }}
-function exitKlineScrub(){{
-  if(klineLongPressTimer){{clearTimeout(klineLongPressTimer);klineLongPressTimer=null;}}
-  klineTouchStartXY=null;
-  if(!klineScrubActive&&!klineScrubMoveHandler){{
-    var el0=document.getElementById('klineChart');
-    if(el0)el0.classList.remove('is-scrubbing');
-    return;
-  }}
-  klineScrubActive=false;
-  var el=document.getElementById('klineChart');
-  if(el){{
-    el.classList.remove('is-scrubbing');
-    if(klineScrubMoveHandler){{
-      el.removeEventListener('touchmove',klineScrubMoveHandler);
-      klineScrubMoveHandler=null;
-    }}
-  }}
-  var panel=document.getElementById('klinePanel');
-  if(panel)panel.classList.remove('is-scrubbing');
-  if(klineChart){{
-    try{{klineChart.dispatchAction({{type:'hideTip'}});}}catch(e){{}}
-    var coarse=window.matchMedia&&window.matchMedia('(pointer:coarse)').matches;
-    try{{klineChart.setOption({{tooltip:{{trigger:coarse?'none':'axis',triggerOn:coarse?'none':'mousemove|click',showContent:!coarse}},axisPointer:{{show:!coarse,type:'cross'}}}},false);}}catch(e){{}}
-  }}
-  clearKlineTipBar();
-  // Keep klineScrubCtx so the next long-press can scrub again without re-render.
-}}
 function ensureKlineScrubCtx(){{
-  if(klineScrubCtx)return klineScrubCtx;
+  if(window.__klineScrubCtx)return window.__klineScrubCtx;
   var d=currentKlineData, bars=d&&d.bars;
   if(!bars||!bars.length)return null;
-  klineScrubCtx={{
+  window.__klineScrubCtx={{
     dates:bars.map(function(x){{return x.date}}),
     ohlc:bars.map(function(x){{return [x.open,x.close,x.low,x.high]}}),
     prevs:bars.map(function(x){{return x.pre_close}}),
     vols:bars.map(function(x){{return x.amount||0}}),
     changes:bars.map(function(x){{return x.change_pct}})
   }};
-  return klineScrubCtx;
+  return window.__klineScrubCtx;
 }}
-function enterKlineScrub(touch){{
-  if(klineScrubActive)return;
-  if(!ensureKlineScrubCtx())return;
-  klineScrubActive=true;
-  var el=document.getElementById('klineChart');
-  var panel=document.getElementById('klinePanel');
-  if(el)el.classList.add('is-scrubbing');
-  if(panel)panel.classList.add('is-scrubbing');
-  try{{navigator.vibrate&&navigator.vibrate(10);}}catch(e){{}}
-  if(el&&!klineScrubMoveHandler){{
-    klineScrubMoveHandler=function(e){{
-      if(!klineScrubActive)return;
-      e.preventDefault();
-      var t=e.touches&&e.touches[0];
-      if(t)updateKlineScrubFromTouch(t);
-    }};
-    el.addEventListener('touchmove',klineScrubMoveHandler,{{passive:false}});
-  }}
-  if(klineChart){{
-    try{{klineChart.setOption({{tooltip:{{trigger:'axis',triggerOn:'none',show:true,showContent:false}},axisPointer:{{show:true,type:'cross'}}}},false);}}catch(e){{}}
-  }}
-  if(touch)updateKlineScrubFromTouch(touch);
-}}
-function updateKlineScrubFromTouch(touch){{
-  if(!klineChart||!ensureKlineScrubCtx())return;
-  var el=document.getElementById('klineChart');
-  if(!el)return;
-  var rect=el.getBoundingClientRect();
-  var x=touch.clientX-rect.left, y=touch.clientY-rect.top;
-  var idx=-1;
-  try{{
-    var pt=klineChart.convertFromPixel({{gridIndex:0}},[x,y]);
-    if(pt&&typeof pt[0]==='number')idx=Math.round(pt[0]);
-  }}catch(e){{}}
-  if(idx<0){{
-    try{{
-      var pt2=klineChart.convertFromPixel({{xAxisIndex:0}},[x]);
-      if(typeof pt2==='number')idx=Math.round(pt2);
-      else if(pt2&&typeof pt2[0]==='number')idx=Math.round(pt2[0]);
-    }}catch(e){{}}
-  }}
-  var n=klineScrubCtx.dates.length;
-  if(idx<0||idx>=n)return;
-  setKlineTipOverlayText(klineTooltipCompact(idx,klineScrubCtx.ohlc,klineScrubCtx.dates,klineScrubCtx.prevs,klineScrubCtx.vols,klineScrubCtx.changes));
-  try{{
-    klineChart.dispatchAction({{type:'showTip',seriesIndex:0,dataIndex:idx}});
-  }}catch(e){{}}
+function exitKlineScrub(){{
+  if(klineTouchCtrl)klineTouchCtrl.exit();
+  clearKlineTipBar();
 }}
 function bindKlineScrub(chartEl){{
-  if(!chartEl||chartEl.dataset.klineScrubBound==='1')return;
-  chartEl.dataset.klineScrubBound='1';
-  chartEl.addEventListener('touchstart',function(e){{
-    if(!e.touches||e.touches.length!==1)return;
-    if(klineScrubActive)exitKlineScrub();
-    var t=e.touches[0];
-    klineTouchStartXY={{x:t.clientX,y:t.clientY}};
-    if(klineLongPressTimer)clearTimeout(klineLongPressTimer);
-    klineLongPressTimer=setTimeout(function(){{
-      klineLongPressTimer=null;
-      if(!klineTouchStartXY)return;
-      enterKlineScrub({{clientX:klineTouchStartXY.x,clientY:klineTouchStartXY.y}});
-    }},350);
-  }},{{passive:true}});
-  chartEl.addEventListener('touchmove',function(e){{
-    if(klineScrubActive)return;
-    if(!klineLongPressTimer||!klineTouchStartXY||!e.touches||!e.touches[0])return;
-    var t=e.touches[0];
-    var dx=Math.abs(t.clientX-klineTouchStartXY.x), dy=Math.abs(t.clientY-klineTouchStartXY.y);
-    if(dx>10||dy>10){{
-      clearTimeout(klineLongPressTimer);
-      klineLongPressTimer=null;
-      klineTouchStartXY=null;
-    }} else {{
-      klineTouchStartXY={{x:t.clientX,y:t.clientY}};
-    }}
-  }},{{passive:true}});
-  chartEl.addEventListener('touchend',function(){{exitKlineScrub();}},{{passive:true}});
-  chartEl.addEventListener('touchcancel',function(){{exitKlineScrub();}},{{passive:true}});
+  if(klineTouchCtrl){{try{{klineTouchCtrl.destroy();}}catch(e){{}}klineTouchCtrl=null;}}
+  if(!chartEl||!window.ChartTouch)return;
+  var panel=document.getElementById('klinePanel');
+  klineTouchCtrl=ChartTouch.bindLongPressScrub({{
+    el:chartEl,
+    getChart:function(){{return klineChart;}},
+    getCount:function(){{var c=ensureKlineScrubCtx();return c?c.dates.length:0;}},
+    seriesIndex:0,
+    delay:330,
+    panelEl:panel,
+    axisPointerType:'cross',
+    showEchartsTipContent:false,
+    onIndex:function(idx){{
+      var ctx=ensureKlineScrubCtx();
+      if(!ctx)return;
+      setKlineTipOverlayText(klineTooltipCompact(idx,ctx.ohlc,ctx.dates,ctx.prevs,ctx.vols,ctx.changes));
+    }},
+    onExit:function(){{clearKlineTipBar();}}
+  }});
 }}
 function renderKline(d){{
   var bars=d.bars||[],dates=bars.map(function(x){{return x.date}}),ohlc=bars.map(function(x){{return [x.open,x.close,x.low,x.high]}}),changes=bars.map(function(x){{return x.change_pct}}),prevs=bars.map(function(x){{return x.pre_close}}),vols=bars.map(function(x){{return x.amount||0}}),ma5=[],ma10=[];
@@ -757,8 +673,8 @@ function renderKline(d){{
   if(chartEl){{chartEl.classList.remove('chart-touch-lock','is-scrubbing');}}
   bindKlineScrub(chartEl);
   klineChart=echarts.init(chartEl);
-  klineScrubCtx={{dates:dates,ohlc:ohlc,prevs:prevs,vols:vols,changes:changes}};
-  var coarse=window.matchMedia&&window.matchMedia('(pointer:coarse)').matches;
+  window.__klineScrubCtx={{dates:dates,ohlc:ohlc,prevs:prevs,vols:vols,changes:changes}};
+  var coarse=(window.ChartTouch&&ChartTouch.isCoarse)?ChartTouch.isCoarse():(window.matchMedia&&(window.matchMedia('(pointer:coarse)').matches||window.matchMedia('(max-width:760px)').matches));
   function tipHtmlFromParams(ps){{return klineTooltipHtml(ps,ohlc,dates,prevs,vols,changes,'最新收');}}
   function tipCompactFromIndex(idx){{return klineTooltipCompact(idx,ohlc,dates,prevs,vols,changes);}}
   function tipHtmlFromIndex(idx){{
@@ -819,18 +735,18 @@ function renderKline(d){{
   klineChart.off('showTip');
   klineChart.off('hideTip');
   klineChart.on('updateAxisPointer',function(ev){{
-    if(!coarse||!klineScrubActive)return;
+    if(!coarse||!(klineTouchCtrl&&klineTouchCtrl.isActive()))return;
     var idx=indexFromAxisEvent(ev);
     if(idx<0)return;
     setKlineTipOverlayText(tipCompactFromIndex(idx));
   }});
   klineChart.on('showTip',function(ev){{
-    if(!coarse||!klineScrubActive)return;
+    if(!coarse||!(klineTouchCtrl&&klineTouchCtrl.isActive()))return;
     var idx=indexFromAxisEvent(ev);
     if(idx<0)return;
     setKlineTipOverlayText(tipCompactFromIndex(idx));
   }});
-  klineChart.on('hideTip',function(){{if(!klineScrubActive)clearKlineTipBar();}});
+  klineChart.on('hideTip',function(){{if(!(klineTouchCtrl&&klineTouchCtrl.isActive()))clearKlineTipBar();}});
   klineChart.resize();
 }}
 async function showKline(code){{

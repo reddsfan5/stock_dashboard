@@ -267,6 +267,7 @@
 </div>
 
 <script src="/assets/app-shell.js"></script>
+<script src="/assets/chart-touch.js"></script>
 <script src="vendor/echarts.min.js"></script><script>window.echarts||document.write(`<script src='https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js'><\/script>`);</script>
 <script>
 const $=id=>document.getElementById(id);
@@ -279,7 +280,10 @@ function formatSymbolLabel(name, code){
 }
 
 let newsRequesting=false,newsPending=null,newsLastKey='',newsDate='',newsInitialized=false,newsSeen=new Set();
-const dailyChart=echarts.init($('dailyChart')),minuteChart=echarts.init($('minuteChart'));
+const dailyChart=echarts.init($('dailyChart')),minuteChart=echarts.init($('minuteChart'));let dailyTouchCtrl=null,minuteTouchCtrl=null;
+function bindTrainerDailyTouch(){if(!window.ChartTouch)return;if(dailyTouchCtrl){dailyTouchCtrl.refreshHosts();return}dailyTouchCtrl=ChartTouch.bindLongPressScrub({el:$('dailyChart'),getChart:()=>dailyChart,getCount:()=>state&&state.daily_bars?state.daily_bars.length:0,seriesIndex:0,delay:330,axisPointerType:'cross',showEchartsTipContent:true})}
+function bindTrainerMinuteTouch(){if(!window.ChartTouch)return;if(minuteTouchCtrl){minuteTouchCtrl.refreshHosts();return}minuteTouchCtrl=ChartTouch.bindLongPressScrub({el:$('minuteChart'),getChart:()=>minuteChart,getCount:()=>{const slots=typeof tradingTimes==='function'?tradingTimes():[];return slots.length},seriesIndex:0,delay:320,axisPointerType:'cross',showEchartsTipContent:true})}
+
 // Price from price-axis Y only (gridIndex 0); volume pane excluded. No revealed-slot gate —
 // axis Y does not leak future closes (unlike reading series values).
 // Desktop (≥901px)：侧栏停靠悬停填价；移动端聚焦限价输入后静默取价（点图确认 / Esc 取消），无提示条。
@@ -650,6 +654,7 @@ function renderModalAccount(){
 function renderDaily(){
   const bars=state.daily_bars,dates=bars.map(x=>x.date),orders=state.orders.filter(x=>x.filled_shares>0),buys=orders.filter(x=>x.side==='buy').map(x=>[x.date,x.fill_price]),sells=orders.filter(x=>x.side==='sell').map(x=>[x.date,x.fill_price]);
   dailyChart.setOption({animation:false,grid:[{left:62,right:22,top:42,height:'64%'},{left:62,right:22,top:'78%',height:'14%'}],tooltip:{trigger:'axis',axisPointer:{type:'cross'},formatter:ps=>{const i=ps.find(p=>p.seriesName==='日K')?.dataIndex??ps[0]?.dataIndex??0,b=bars[i],change=dailyChangePct(bars,i);return`${b.date}${b.partial?'（进行中）':''}<br>开 ${price(b.open)}　高 ${price(b.high)}<br>低 ${price(b.low)}　收 ${price(b.close)}　<span class="${pnlClass(change)}">当日涨跌 ${signed(change,'%')}</span><br>成交额 ${money(b.amount)}${klineIntervalHtml(bars,i)}`}},xAxis:[{type:'category',data:dates,boundaryGap:true,axisLabel:{show:false}},{type:'category',gridIndex:1,data:dates,boundaryGap:true,axisLabel:{interval:Math.max(0,Math.floor(dates.length/6)-1)}}],yAxis:[{scale:true,splitLine:{lineStyle:{color:'#edf0f5'}}},{gridIndex:1,axisLabel:{formatter:v=>v>=1e8?(v/1e8).toFixed(1)+'亿':(v/1e4).toFixed(0)+'万'},splitLine:{show:false}}],series:[{name:'日K',type:'candlestick',data:bars.map(x=>[x.open,x.close,x.low,x.high]),itemStyle:{color:'#e5484d',color0:'#159568',borderColor:'#e5484d',borderColor0:'#159568'}},{name:'买入',type:'scatter',data:buys,symbol:'triangle',symbolSize:11,itemStyle:{color:'#e5484d'}},{name:'卖出',type:'scatter',data:sells,symbol:'triangle',symbolRotate:180,symbolSize:11,itemStyle:{color:'#159568'}},{name:'成交额',type:'bar',xAxisIndex:1,yAxisIndex:1,data:bars.map(x=>x.amount),itemStyle:{color:p=>bars[p.dataIndex].close>=bars[p.dataIndex].open?'#e98a8d':'#72bea2'}}]},true);
+  if(window.ChartTouch){try{const tip=ChartTouch.tooltipOption({scrubbing:!!(dailyTouchCtrl&&dailyTouchCtrl.isActive()),axisPointerType:'cross',showContent:true});dailyChart.setOption(tip,false)}catch(e){}}bindTrainerDailyTouch();
 }
 
 function renderMinute(){
@@ -659,6 +664,7 @@ function renderMinute(){
     return pt?[x.as_of,pt.close,x.tag]:null;
   }).filter(Boolean);
   minuteChart.setOption({animation:false,grid:[{left:62,right:62,top:42,height:'56%'},{left:62,right:62,top:'76%',height:'12%'}],tooltip:{trigger:'axis',axisPointer:{type:'cross'},formatter:ps=>{const t=slots[ps[0]?.dataIndex??0],x=map.get(t);if(!x)return`${t}<br>尚未播放`;const marks=markers.filter(m=>m[0]===t).map(m=>m[2]).join('、');return`${state.date} ${t}<br><b>${price(x.close)}　${signed((x.close/base-1)*100,'%')}</b><br>开 ${price(x.open)}　高 ${price(x.high)}<br>低 ${price(x.low)}　均价 ${price(x.vwap)}<br>成交量 ${(+x.volume||0).toLocaleString()}　量比 ${optional(x.intraday_volume_ratio,2,'×')}<br>成交额 ${money(x.amount)}${marks?`<br>心态：${escapeHtml(marks)}`:''}`}},xAxis:[{type:'category',data:slots,boundaryGap:false,axisLabel:{show:false}},{type:'category',gridIndex:1,data:slots,boundaryGap:true,axisLabel:{formatter:(v,i)=>i%40===0?v:''}}],yAxis:[{scale:true,splitLine:{lineStyle:{color:'#edf0f5',type:'dashed'}}},{position:'right',scale:true,axisLabel:{formatter:v=>signed((v/base-1)*100,'%')},splitLine:{show:false}},{gridIndex:1,axisLabel:{formatter:v=>v>=1e6?(v/1e6).toFixed(0)+'百万':(v/1e4).toFixed(0)+'万'},splitLine:{show:false}}],series:[{name:'价格',type:'line',data:closes,showSymbol:false,connectNulls:false,lineStyle:{width:1.6,color:'#3478f6'},areaStyle:{color:'rgba(52,120,246,.08)'},markLine:{silent:true,symbol:'none',label:{formatter:`昨收 ${price(base)}`},lineStyle:{color:'#9aa3b2',type:'dashed'},data:[{yAxis:base}]}},{name:'涨跌幅',type:'line',yAxisIndex:1,data:closes,showSymbol:false,lineStyle:{opacity:0}},{name:'买入',type:'scatter',data:buys,symbol:'triangle',symbolSize:12,itemStyle:{color:'#e5484d'}},{name:'卖出',type:'scatter',data:sells,symbol:'triangle',symbolRotate:180,symbolSize:12,itemStyle:{color:'#159568'}},{name:'心态',type:'scatter',data:markers.map(m=>[m[0],m[1]]),symbol:'pin',symbolSize:14,itemStyle:{color:'#d99200'},label:{show:true,formatter:p=>markers[p.dataIndex]?.[2]||'',fontSize:9,color:'#8a5b00',position:'top'}},{name:'成交额',type:'bar',xAxisIndex:1,yAxisIndex:2,data:amounts,itemStyle:{color:p=>{const x=map.get(slots[p.dataIndex]);return x&&x.close>=x.open?'#e98a8d':'#72bea2'}}}]},true);
+  if(window.ChartTouch){try{const tip=ChartTouch.tooltipOption({scrubbing:!!(minuteTouchCtrl&&minuteTouchCtrl.isActive()),axisPointerType:'cross',showContent:true});minuteChart.setOption(tip,false)}catch(e){}}bindTrainerMinuteTouch();
 }
 
 function conditionDescription(x){
