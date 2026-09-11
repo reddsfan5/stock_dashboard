@@ -405,6 +405,12 @@ def build_html(initial_payload: dict) -> str:
 .minute-finger-price[hidden]{{display:none!important}}
 .minute-finger-price.up{{background:rgba(196,48,58,.96);border-color:rgba(255,255,255,.4)}}
 .minute-finger-price.down{{background:rgba(18,120,88,.96);border-color:rgba(255,255,255,.4)}}
+.minute-cross{{position:absolute;inset:0;z-index:5;pointer-events:none}}
+.minute-cross[hidden]{{display:none!important}}
+.minute-cross-v,.minute-cross-h{{position:absolute;background:rgba(55,65,81,.92);pointer-events:none}}
+.minute-cross-v{{top:0;bottom:0;width:1px;left:0;transform:translateX(-50%)}}
+.minute-cross-h{{left:0;right:0;height:1px;top:0;transform:translateY(-50%)}}
+.minute-cross-dot{{position:absolute;width:7px;height:7px;margin:-3px 0 0 -3px;border-radius:50%;background:#3478f6;border:1.5px solid #fff;box-shadow:0 0 0 1px rgba(15,23,42,.35);pointer-events:none}}
 .status{{padding:0 18px 14px;color:var(--muted);font-size:12px;display:flex;justify-content:space-between;gap:10px}}.notice{{display:none;margin-bottom:12px;padding:10px 14px;border-radius:8px;background:#fff6dc;color:#765a00;font-size:13px}}
 .loading{{position:fixed;inset:0;background:rgba(244,246,249,.55);display:none;align-items:center;justify-content:center;z-index:50}}.loading span{{background:#1f2937;color:#fff;padding:10px 18px;border-radius:8px}}.up{{color:var(--red)}}.down{{color:var(--green)}}
 __INTRADAY_REPLAY_CSS__
@@ -447,7 +453,7 @@ __INTRADAY_REPLAY_CSS__
 <div id="app-shell" data-active="minute"></div>
 <div class="loading" id="loading"><span>正在读取分钟缓存…</span></div>
 <main class="page"><div class="topbar"><div class="brand">分时行情查询</div><div class="search-wrap"><div class="search-box"><input id="searchInput" autocomplete="off" data-clear-on-focus="1" placeholder="输入股票名称或代码，如 贵州茅台 / 600519"><button id="searchBtn">查询</button></div><div class="results" id="results"></div></div><div class="toolbar"><a id="journalLink" href="/stock_journal.html">📓 记日记</a><button id="prevDay" title="前一交易日">‹</button><select id="dateSelect" aria-label="选择交易日"></select><button id="nextDay" title="后一交易日">›</button></div></div>
-<div class="notice" id="notice"></div><section class="card"><div class="quote"><div class="identity"><h1 id="symbolName">—</h1><div class="sub" id="symbolMeta">—</div></div><div><span class="last" id="lastPrice">—</span> <span class="change" id="changePct">—</span></div><div class="stats"><div class="stat"><span class="label">今开</span><span class="value" id="openPrice">—</span></div><div class="stat"><span class="label">最高</span><span class="value" id="highPrice">—</span></div><div class="stat"><span class="label">最低</span><span class="value" id="lowPrice">—</span></div><div class="stat"><span class="label">成交量</span><span class="value" id="totalVolume">—</span></div><div class="stat"><span class="label">成交额</span><span class="value" id="totalAmount">—</span></div><div class="stat"><span class="label">盘中量比(5日)</span><span class="value" id="intradayVolumeRatio">—</span></div></div></div><div class="intraday-replay" aria-label="动态分时回放"><button class="replay-primary" id="replayPlay">▶ 动态分时</button><button id="replayStep">推进1分钟</button><button id="replayReset">回到开盘</button><select id="replaySpeed" aria-label="动态分时速度"><option value="1">1×</option><option value="2">2×</option><option value="5" selected>5×</option><option value="10">10×</option></select><button id="replayAll">查看全日</button><span class="replay-clock" id="replayClock">全日</span><span class="replay-progress" id="replayProgress">—</span></div><div id="chartWrap"><div id="minuteTipBar" class="minute-tip-overlay" hidden></div><div id="minuteFingerPrice" class="minute-finger-price" hidden></div><div id="chart"></div></div><div class="status"><span>动态分时固定全天时间轴，只向右揭示已播放行情；鼠标悬停查看分钟价格</span><span>数据源：本地 minute_kline_cache.parquet</span></div></section></main>
+<div class="notice" id="notice"></div><section class="card"><div class="quote"><div class="identity"><h1 id="symbolName">—</h1><div class="sub" id="symbolMeta">—</div></div><div><span class="last" id="lastPrice">—</span> <span class="change" id="changePct">—</span></div><div class="stats"><div class="stat"><span class="label">今开</span><span class="value" id="openPrice">—</span></div><div class="stat"><span class="label">最高</span><span class="value" id="highPrice">—</span></div><div class="stat"><span class="label">最低</span><span class="value" id="lowPrice">—</span></div><div class="stat"><span class="label">成交量</span><span class="value" id="totalVolume">—</span></div><div class="stat"><span class="label">成交额</span><span class="value" id="totalAmount">—</span></div><div class="stat"><span class="label">盘中量比(5日)</span><span class="value" id="intradayVolumeRatio">—</span></div></div></div><div class="intraday-replay" aria-label="动态分时回放"><button class="replay-primary" id="replayPlay">▶ 动态分时</button><button id="replayStep">推进1分钟</button><button id="replayReset">回到开盘</button><select id="replaySpeed" aria-label="动态分时速度"><option value="1">1×</option><option value="2">2×</option><option value="5" selected>5×</option><option value="10">10×</option></select><button id="replayAll">查看全日</button><span class="replay-clock" id="replayClock">全日</span><span class="replay-progress" id="replayProgress">—</span></div><div id="chartWrap"><div id="minuteTipBar" class="minute-tip-overlay" hidden></div><div id="minuteCross" class="minute-cross" hidden><div class="minute-cross-v" id="minuteCrossV"></div><div class="minute-cross-h" id="minuteCrossH"></div><div class="minute-cross-dot" id="minuteCrossDot"></div></div><div id="minuteFingerPrice" class="minute-finger-price" hidden></div><div id="chart"></div></div><div class="status"><span>动态分时固定全天时间轴，只向右揭示已播放行情；鼠标悬停查看分钟价格</span><span>数据源：本地 minute_kline_cache.parquet</span></div></section></main>
 <script src="vendor/echarts.min.js"></script><script>window.echarts||document.write(`<script src='https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js'><\\/script>`);</script>
 <script>__INTRADAY_REPLAY_JS__</script>
 <script src="/assets/chart-touch.js"></script>
@@ -455,9 +461,10 @@ __INTRADAY_REPLAY_CSS__
 const INITIAL_DATA={initial_json};const API_AVAILABLE=location.protocol==='http:'||location.protocol==='https:';const chart=echarts.init(document.getElementById('chart'));let current=INITIAL_DATA,searchTimer=null;const $=id=>document.getElementById(id);
 let minuteTouchCtrl=null;
 function clearMinuteScrubHud(){{
-  const bar=$('minuteTipBar'),fp=$('minuteFingerPrice');
+  const bar=$('minuteTipBar'),fp=$('minuteFingerPrice'),cross=$('minuteCross');
   if(bar){{bar.hidden=true;bar.innerHTML='';}}
   if(fp){{fp.hidden=true;fp.textContent='';fp.classList.remove('up','down');}}
+  if(cross)cross.hidden=true;
 }}
 function setMinuteTipBar(p){{
   const bar=$('minuteTipBar'); if(!bar||!p)return;
@@ -480,6 +487,20 @@ function yPriceFromTouch(touch){{
     if(v&&typeof v[0]==='number'&&Number.isFinite(v[0]))return v[0];
   }}catch(e){{}}
   return null;
+}}
+function setMinuteCross(touch){{
+  const wrap=$('chartWrap'),cross=$('minuteCross'),v=$('minuteCrossV'),h=$('minuteCrossH'),dot=$('minuteCrossDot');
+  if(!wrap||!cross||!touch||!v||!h||!dot)return;
+  const rect=wrap.getBoundingClientRect();
+  let x=touch.clientX-rect.left, y=touch.clientY-rect.top;
+  const tipH=($('minuteTipBar')&&!$('minuteTipBar').hidden)?($('minuteTipBar').offsetHeight||0):0;
+  x=Math.max(0,Math.min(x,rect.width));
+  y=Math.max(tipH,Math.min(y,rect.height));
+  v.style.left=x+'px';
+  h.style.top=y+'px';
+  dot.style.left=x+'px';
+  dot.style.top=y+'px';
+  cross.hidden=false;
 }}
 function setMinuteFingerPrice(touch,p){{
   const fp=$('minuteFingerPrice'),wrap=$('chartWrap'),el=$('chart');
@@ -514,13 +535,19 @@ function setMinuteFingerPrice(touch,p){{
     getCount:function(){{return (current&&current.points)?current.points.length:0;}},
     seriesIndex:0,
     delay:320,
-    axisPointerType:'cross',
+    axisPointerType:'line',
     showEchartsTipContent:false,
+    onEnter:function(){{
+      try{{chart.setOption({{axisPointer:{{show:false}}}},false)}}catch(e){{}}
+    }},
     onIndex:function(idx,ctx){{
       const pts=current&&current.points; if(!pts||!pts[idx])return;
       const p=pts[idx];
       setMinuteTipBar(p);
-      if(ctx&&ctx.touch)setMinuteFingerPrice(ctx.touch,p);
+      if(ctx&&ctx.touch){{
+        setMinuteCross(ctx.touch);
+        setMinuteFingerPrice(ctx.touch,p);
+      }}
     }},
     onExit:function(){{clearMinuteScrubHud();}}
   }});
