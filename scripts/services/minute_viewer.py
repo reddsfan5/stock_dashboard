@@ -401,10 +401,10 @@ def build_html(initial_payload: dict) -> str:
 .minute-tip-overlay{{position:absolute;top:0;left:0;right:0;z-index:6;pointer-events:none;margin:0;padding:5px 8px;font-size:11px;line-height:1.3;color:#f8fafc;background:rgba(15,23,42,.82);font-variant-numeric:tabular-nums;box-sizing:border-box;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-radius:0 0 6px 6px}}
 .minute-tip-overlay[hidden]{{display:none!important}}
 .minute-tip-overlay b{{font-weight:700}}
-.minute-finger-price{{position:absolute;z-index:7;pointer-events:none;right:2px;left:auto;transform:translateY(-50%);padding:3px 7px;border-radius:6px;font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;color:#fff;background:rgba(15,23,42,.88);box-shadow:0 2px 8px rgba(0,0,0,.28);white-space:nowrap;max-width:42%}}
+.minute-finger-price{{position:absolute;z-index:7;pointer-events:none;right:2px;left:auto;transform:translateY(-50%);padding:3px 7px;border-radius:6px;font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;color:#fff!important;-webkit-text-fill-color:#fff;background:rgba(15,23,42,.92);box-shadow:0 2px 8px rgba(0,0,0,.35);white-space:nowrap;max-width:42%;border:1px solid rgba(255,255,255,.35)}}
 .minute-finger-price[hidden]{{display:none!important}}
-.minute-finger-price.up{{background:rgba(180,40,50,.92)}}
-.minute-finger-price.down{{background:rgba(20,130,90,.92)}}
+.minute-finger-price.up{{background:rgba(196,48,58,.96);border-color:rgba(255,255,255,.4)}}
+.minute-finger-price.down{{background:rgba(18,120,88,.96);border-color:rgba(255,255,255,.4)}}
 .status{{padding:0 18px 14px;color:var(--muted);font-size:12px;display:flex;justify-content:space-between;gap:10px}}.notice{{display:none;margin-bottom:12px;padding:10px 14px;border-radius:8px;background:#fff6dc;color:#765a00;font-size:13px}}
 .loading{{position:fixed;inset:0;background:rgba(244,246,249,.55);display:none;align-items:center;justify-content:center;z-index:50}}.loading span{{background:#1f2937;color:#fff;padding:10px 18px;border-radius:8px}}.up{{color:var(--red)}}.down{{color:var(--green)}}
 __INTRADAY_REPLAY_CSS__
