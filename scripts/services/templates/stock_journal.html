@@ -82,7 +82,7 @@ function bindJournalDailyTouch(){if(!window.ChartTouch)return;if(dailyTouchCtrl)
 function bindJournalMinuteTouch(){
   if(!window.MinuteScrub||!minuteChart)return;
   const el=$('minuteChart'); if(!el)return;
-  if(minuteTouchCtrl){try{minuteTouchCtrl.destroy()}catch(e){} minuteTouchCtrl=null}
+  if(minuteTouchCtrl){try{minuteTouchCtrl.refreshHosts()}catch(e){} return}
   minuteTouchCtrl=MinuteScrub.bind({
     chartEl:el,
     getChart:()=>minuteChart,

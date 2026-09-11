@@ -286,7 +286,8 @@ function bindTrainerDailyTouch(){if(!window.ChartTouch)return;if(dailyTouchCtrl)
 function bindTrainerMinuteTouch(){
   if(!window.MinuteScrub)return;
   const el=$('minuteChart'); if(!el)return;
-  if(minuteTouchCtrl){try{minuteTouchCtrl.destroy()}catch(e){} minuteTouchCtrl=null}
+  // Playback calls renderMinute often; keep one scrub binding so long-press HUD is not destroyed mid-gesture.
+  if(minuteTouchCtrl){try{minuteTouchCtrl.refreshHosts()}catch(e){} return}
   minuteTouchCtrl=MinuteScrub.bind({
     chartEl:el,
     getChart:()=>minuteChart,
