@@ -653,9 +653,6 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
             return
-        if params.get('training_session') and parsed.path.endswith('.html') and parsed.path not in (
-            '/trading_trainer.html', '/stock_journal.html', '/symbol.html', '/market_news.html'):
-            return self._send_json({'error': '该页面包含最新行情，请结束训练后查看'}, status=409)
         if params.get('training_session') and parsed.path.startswith('/api/') and not parsed.path.startswith('/api/trainer/'):
             from scripts.services.training_context import read_context
             try:
