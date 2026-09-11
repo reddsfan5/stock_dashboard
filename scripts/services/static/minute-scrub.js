@@ -214,8 +214,11 @@
       },
       onIndex: function (idx, ctx) {
         var p = getPoint(idx);
-        if (!p) return;
-        setTip(p);
+        if (p) setTip(p);
+        else {
+          hud.tip.hidden = true;
+          hud.tip.innerHTML = '';
+        }
         try { getChart() && getChart().setOption({ axisPointer: { show: false } }, false); } catch (e) {}
         if (ctx && ctx.touch) {
           setCross(ctx.touch);

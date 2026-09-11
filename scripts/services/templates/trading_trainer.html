@@ -294,10 +294,9 @@ function bindTrainerMinuteTouch(){
     getPoint:(idx)=>{
       const slots=typeof tradingTimes==='function'?tradingTimes():[];
       const t=slots[idx]; if(!t||!state)return null;
-      const map=new Map((state.minute_bars||[]).map(x=>[x.time,x]));
-      const x=map.get(t); if(!x)return null;
-      const base=+state.prev_close||+x.close||0;
-      const ch=base?((+x.close/base-1)*100):0;
+      const pts=state.minute_points||[];
+      const x=pts.find(p=>p.time===t); if(!x)return null;
+      const ch=x.change_pct!=null?+x.change_pct:(()=>{const base=+state.prev_close||+x.close||0;return base?((+x.close/base-1)*100):0})();
       return {time:t,close:x.close,change_pct:ch,high:x.high,low:x.low,volume:x.volume,vwap:x.vwap};
     },
     getPrevClose:()=>state?state.prev_close:null,
