@@ -6,6 +6,7 @@
 
   var NAV = [
     {key:'daily',href:'/daily_ops.html',label:'每日操盘',icon:'◫',group:'日常看盘'},
+    {key:'shortlist',href:'/shortlist.html',label:'短名单理由卡',icon:'▣',group:'日常看盘'},
     {key:'dashboard',href:'/dashboard.html',label:'选股仪表盘',icon:'▦',group:'日常看盘'},
     {key:'watchlist',href:'/watchlist.html',label:'观察池',icon:'☆',group:'日常看盘'},
     {key:'symbol',href:'/symbol.html',label:'标的上下文',icon:'◎',group:'日常看盘'},

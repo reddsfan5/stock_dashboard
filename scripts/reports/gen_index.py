@@ -16,6 +16,7 @@ MARKET_NEWS_URL = "http://127.0.0.1:8765/market_news.html"
 WATCHLIST_URL = "http://127.0.0.1:8765/watchlist.html"
 SYMBOL_URL = "http://127.0.0.1:8765/symbol.html"
 DAILY_OPS_URL = "http://127.0.0.1:8765/daily_ops.html"
+SHORTLIST_URL = "http://127.0.0.1:8765/shortlist.html"
 SERVICE_URLS = {
     "dashboard.html": DASHBOARD_URL,
     "minute_view.html": MINUTE_VIEW_URL,
@@ -26,6 +27,7 @@ SERVICE_URLS = {
     "watchlist.html": WATCHLIST_URL,
     "symbol.html": SYMBOL_URL,
     "daily_ops.html": DAILY_OPS_URL,
+    "shortlist.html": SHORTLIST_URL,
 }
 
 # 用户视角的导航结构：高频入口在前，低频研究与历史实验在后。
@@ -39,6 +41,7 @@ GROUPS = [
         "description": "每天更新数据后优先使用：先看全局，再看板块、个股与分时细节。",
         "tone": "daily",
         "items": [
+            ("shortlist.html", "🧾", "短名单理由卡", "多维拼装的每日 10～15 只候选：形态命中、量价、板块强度、观察池与风险提示", "每日选股"),
             ("dashboard.html", "🎛️", "选股仪表盘", "技术形态扫描叠加量比、换手、动量、风险和估值指标，可筛选排序并查看K线", "每日选股"),
             ("watchlist.html", "👀", "观察池与次日跟踪", "从选股结果加入观察/待买，跟踪次日收益与申万一级板块强度", "每日选股"),
             ("market_news.html", "📰", "市场资讯复盘", "同花顺市场级重要资讯按早盘、午间、收盘归档，支持按模拟时刻防剧透查看并记录消息如何影响判断", "消息时间轴"),
@@ -300,6 +303,7 @@ main{{max-width:1300px;margin:0 auto;padding:8px 32px 20px}}
     <div class="ops-ctas">
       <a class="ops-cta ops-cta-primary" href="{DAILY_OPS_URL}">打开每日清单</a>
       <a class="ops-cta" href="{TRADING_TRAINER_URL}">进入交易训练</a>
+      <a class="ops-cta" href="{SHORTLIST_URL}">短名单</a>
       <a class="ops-cta" href="{WATCHLIST_URL}">观察池</a>
       <a class="ops-cta" href="{MARKET_NEWS_URL}">市场资讯</a>
     </div>
