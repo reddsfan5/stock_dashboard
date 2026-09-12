@@ -5,7 +5,8 @@
   1. python -m scripts.update_cache                 # 或 --only stocks,etfs,...
   2. 管线已含 watchlist_track；也可单独：
        python -m scripts.update_cache --only watchlist_track
-  3. python -m scripts.reports.gen_daily_ops        # 本脚本：清单 + 可选板块快照
+  3. python -m scripts.reports.gen_daily_ops        # 清单 + 板块快照 + 短名单理由卡
+     或单独：python -m scripts.reports.gen_shortlist
   4. 打开 http://127.0.0.1:8765/daily_ops.html 或工作台入口
 
 也可：python -m scripts.reports.gen_daily_ops --skip-sector
@@ -147,9 +148,10 @@ th{{color:var(--muted)}}.num{{text-align:right;font-variant-numeric:tabular-nums
     <h2>今日检查清单</h2>
     <h3>核心节奏</h3>
     <div class="checklist">
-      <a class="item priority" href="/dashboard.html"><div class="step">1</div><div><b>选股仪表盘</b><span>查看当日形态命中，感兴趣的代码点进标的上下文</span></div></a>
-      <a class="item priority" href="/watchlist.html"><div class="step">2</div><div><b>观察池 / 次日跟踪</b><span>确认待买与次日收益；板块强度可在下方快照核对</span></div></a>
-      <a class="item priority" href="/trading_trainer.html"><div class="step">3</div><div><b>T+1 训练</b><span>对假设状态为「训练中」的标的做无剧透演练</span></div></a>
+      <a class="item priority" href="/shortlist.html"><div class="step">1</div><div><b>短名单理由卡</b><span>多维拼装的 10～20 只候选：为何入选 / 主要风险</span></div></a>
+      <a class="item priority" href="/dashboard.html"><div class="step">2</div><div><b>选股仪表盘</b><span>查看当日形态命中，感兴趣的代码点进标的上下文</span></div></a>
+      <a class="item priority" href="/watchlist.html"><div class="step">3</div><div><b>观察池 / 次日跟踪</b><span>确认待买与次日收益；板块强度可在下方快照核对</span></div></a>
+      <a class="item priority" href="/trading_trainer.html"><div class="step">4</div><div><b>T+1 训练</b><span>对假设状态为「训练中」的标的做无剧透演练</span></div></a>
     </div>
     <h3>记录与复核</h3>
     <div class="checklist">
@@ -237,6 +239,13 @@ def generate(*, skip_sector: bool = False, top_n: int = 15) -> Path:
             sector = None
     generated_at = _now_label()
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    try:
+        from scripts.reports.gen_shortlist import main as gen_shortlist_main
+        # 板块快照刚刷新过则跳过重复拉取
+        gen_shortlist_main(["--skip-sector-refresh"])
+    except Exception as exc:
+        print(f"⚠ 短名单理由卡未生成: {exc}")
+
     OUT_HTML.write_text(
         build_html(status=status, sector=sector, generated_at=generated_at),
         encoding="utf-8",
