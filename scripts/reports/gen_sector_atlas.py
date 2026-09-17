@@ -29,7 +29,8 @@ def build(data, catalog):
     stocks = ''.join(f'''<article class="atlas-stock" data-layer="{e(s['layer'])}" data-search="{e(s['name']+' '+s['code']+' '+s['business'])}"><header><a class="stock-name" href="/symbol.html?code={s['code']}">{e(s['name'])}<small>{e(s['code'])}</small></a><span class="atlas-tag">{e(s['layer'])}</span></header><p>{e(s['business'])}</p><p class="atlas-meta">{e(s['boundary'])}</p><footer><a href="{e(s['source'])}" target="_blank" rel="noopener">{e(s['source_label'])} ↗</a><a href="/symbol.html?code={s['code']}">查看标的 →</a></footer></article>''' for s in data['stocks'])
     filters = ''.join(f'<option>{e(x[0])}</option>' for x in data['layers'])
     options = ''.join(f'<option value="{e(x["id"])}" {"selected" if x["id"]==data["id"] else ""}>{e(x["name"])}</option>' for x in catalog)
-    values = dict(COVER=e('/assets/sector-atlas/'+data['id']+'/'+data['chapters'][0]['image']),CHECKED=e(data['checked_date']),NAME=e(data['name']),SUBTITLE=e(data['subtitle']),DEFINITION=e(data['definition']),BOUNDARY=e(data['boundary']),TOC=toc,LAYERS=layers,CHAPTERS=chapters,PARTS=parts,STOCKS=stocks,FILTERS=filters,OPTIONS=options,COUNT=str(len(catalog)))
+    first_chapter = '#'+data['chapters'][0]['id']
+    values = dict(COVER=e('/assets/sector-atlas/'+data['id']+'/'+data['chapters'][0]['image']),CHECKED=e(data['checked_date']),NAME=e(data['name']),SUBTITLE=e(data['subtitle']),DEFINITION=e(data['definition']),BOUNDARY=e(data['boundary']),FIRST_CHAPTER=e(first_chapter),TOC=toc,LAYERS=layers,CHAPTERS=chapters,PARTS=parts,STOCKS=stocks,FILTERS=filters,OPTIONS=options,COUNT=str(len(catalog)))
     html = TEMPLATE.read_text(encoding='utf-8')
     for key,value in values.items():
         html = html.replace('__'+key+'__', value)
