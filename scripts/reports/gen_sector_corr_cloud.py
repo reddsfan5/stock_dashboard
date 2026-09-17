@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""申万二级板块相关点云：2022→今残差相关 + MDS 三维 + Three.js 可查询页。
+"""申万二级板块相关点云：残差相关 MDS 三维 + 领先滞后箭头 + Three.js 查询页。
 
 用法:
   python -m scripts.reports.gen_sector_corr_cloud
@@ -26,6 +26,12 @@ MIN_NAMES_PER_DAY = 5
 CORR_THR = 0.42
 MAX_EDGES_PER_NODE = 8
 MIN_YEAR_CONFIRM = 2
+MAX_LAG = 4  # 周频滞后天数（约 1–4 周）
+LEAD_XCORR_THR = 0.08
+LEAD_ASYM = 0.015  # 领先方向需略强于反向
+LEAD_MAX_OUT = 4  # 每点最多指出几条领先边
+EVENT_Q = 0.80
+HORIZON = 5
 OUTPUT_HTML = PROJECT_DIR / "output" / "sector_corr_cloud.html"
 OUTPUT_JSON = PROJECT_DIR / "cache" / "sector_corr_cloud.json"
 MOM1 = PROJECT_DIR / "cache" / "indicators_mom1.parquet"
@@ -138,7 +144,7 @@ def year_confirm(resid: pd.DataFrame, a: str, b: str, thr: float) -> int:
     if not np.isfinite(full):
         return 0
     ok = 0
-    for y, sub in resid[[a, b]].groupby(resid.index.year):
+    for _, sub in resid[[a, b]].groupby(resid.index.year):
         sub = sub.dropna()
         if len(sub) < 60:
             continue
@@ -148,9 +154,7 @@ def year_confirm(resid: pd.DataFrame, a: str, b: str, thr: float) -> int:
     return ok
 
 
-
 def top_neighbors(corr: pd.DataFrame, k: int = 6) -> dict[str, list]:
-    """每点按|ρ|保留 Top-K 邻居，保证查询聚焦时孤立点也能展开。"""
     names = list(corr.columns)
     out: dict[str, list] = {n: [] for n in names}
     vals = corr.values
@@ -169,6 +173,7 @@ def top_neighbors(corr: pd.DataFrame, k: int = 6) -> dict[str, list]:
             if got >= k:
                 break
     return out
+
 
 def build_edges(corr: pd.DataFrame, resid: pd.DataFrame) -> list[dict]:
     names = list(corr.columns)
@@ -197,8 +202,132 @@ def build_edges(corr: pd.DataFrame, resid: pd.DataFrame) -> list[dict]:
     return edges
 
 
+def _xcorr_at_lag(a: np.ndarray, b: np.ndarray, lag: int, min_n: int = 40) -> float:
+    """corr(a_t, b_{t+lag}) for lag>=1."""
+    if lag <= 0:
+        return np.nan
+    x = a[:-lag]
+    y = b[lag:]
+    mask = np.isfinite(x) & np.isfinite(y)
+    if mask.sum() < min_n:
+        return np.nan
+    x, y = x[mask], y[mask]
+    sx, sy = x.std(), y.std()
+    if sx < 1e-12 or sy < 1e-12:
+        return np.nan
+    return float(np.corrcoef(x, y)[0, 1])
+
+
+def event_follow_prob(leader: np.ndarray, follower: np.ndarray, horizon: int = HORIZON, q: float = EVENT_Q) -> dict:
+    """leader 日残差 > 分位后，follower 未来 horizon 日累计为正的条件概率 vs 基准。"""
+    n = len(leader)
+    if n < horizon + 50:
+        return {"n": 0, "p_up": None, "p_dn": None, "base_up": None, "base_dn": None, "lift_up": None, "lift_dn": None}
+    # future cum return of follower
+    fut = np.full(n, np.nan)
+    for t in range(n - horizon):
+        window = follower[t + 1 : t + 1 + horizon]
+        if np.isfinite(window).sum() < horizon:
+            continue
+        fut[t] = np.nansum(window)
+    valid = np.isfinite(leader) & np.isfinite(fut)
+    if valid.sum() < 80:
+        return {"n": int(valid.sum()), "p_up": None, "p_dn": None, "base_up": None, "base_dn": None, "lift_up": None, "lift_dn": None}
+    thr_hi = np.nanquantile(leader[valid], q)
+    thr_lo = np.nanquantile(leader[valid], 1 - q)
+    base_up = float(np.mean(fut[valid] > 0))
+    base_dn = float(np.mean(fut[valid] < 0))
+    up_mask = valid & (leader >= thr_hi)
+    dn_mask = valid & (leader <= thr_lo)
+    p_up = float(np.mean(fut[up_mask] > 0)) if up_mask.sum() >= 20 else None
+    p_dn = float(np.mean(fut[dn_mask] < 0)) if dn_mask.sum() >= 20 else None
+    return {
+        "n_up": int(up_mask.sum()),
+        "n_dn": int(dn_mask.sum()),
+        "p_up": None if p_up is None else round(p_up, 3),
+        "p_dn": None if p_dn is None else round(p_dn, 3),
+        "base_up": round(base_up, 3),
+        "base_dn": round(base_dn, 3),
+        "lift_up": None if p_up is None else round(p_up - base_up, 3),
+        "lift_dn": None if p_dn is None else round(p_dn - base_dn, 3),
+    }
+
+
+def build_lead_edges(resid: pd.DataFrame, corr: pd.DataFrame) -> list[dict]:
+    """周频残差上挖掘 A 领先 B；事件概率仍用日频残差（更贴近交易观察窗）。"""
+    names = list(resid.columns)
+    # 周频：按日历周求和，抑制日噪声，交叉相关更可读
+    weekly = resid.resample("W-FRI").sum(min_count=2)
+    warr = {n: weekly[n].values.astype(float) for n in names}
+    darr = {n: resid[n].values.astype(float) for n in names}
+
+    pair_pool = []
+    for i, a in enumerate(names):
+        for b in names[i + 1 :]:
+            c = corr.loc[a, b]
+            if np.isfinite(c) and abs(c) >= 0.20:
+                pair_pool.append((a, b, float(c)))
+    pair_pool.sort(key=lambda t: -abs(t[2]))
+    pair_pool = pair_pool[: min(len(pair_pool), 3000)]
+
+    cands = []
+    for a, b, sync in pair_pool:
+        best_ab = (-1, np.nan)
+        best_ba = (-1, np.nan)
+        for lag in range(1, MAX_LAG + 1):
+            cab = _xcorr_at_lag(warr[a], warr[b], lag)
+            cba = _xcorr_at_lag(warr[b], warr[a], lag)
+            if np.isfinite(cab) and (not np.isfinite(best_ab[1]) or abs(cab) > abs(best_ab[1])):
+                best_ab = (lag, cab)
+            if np.isfinite(cba) and (not np.isfinite(best_ba[1]) or abs(cba) > abs(best_ba[1])):
+                best_ba = (lag, cba)
+        if np.isfinite(best_ab[1]) and abs(best_ab[1]) >= LEAD_XCORR_THR:
+            rev = abs(best_ba[1]) if np.isfinite(best_ba[1]) else 0.0
+            if abs(best_ab[1]) >= rev + LEAD_ASYM:
+                cands.append((a, b, best_ab[0], float(best_ab[1]), sync))
+        if np.isfinite(best_ba[1]) and abs(best_ba[1]) >= LEAD_XCORR_THR:
+            rev = abs(best_ab[1]) if np.isfinite(best_ab[1]) else 0.0
+            if abs(best_ba[1]) >= rev + LEAD_ASYM:
+                cands.append((b, a, best_ba[0], float(best_ba[1]), sync))
+
+    cands.sort(key=lambda t: -abs(t[3]))
+    out_deg = {n: 0 for n in names}
+    edges = []
+    for src, tgt, lag, xc, sync in cands:
+        if out_deg[src] >= LEAD_MAX_OUT:
+            continue
+        ev = event_follow_prob(darr[src], darr[tgt])
+        # 必须有可交易意义的条件概率提升，避免纯噪声交叉相关
+        lift_ok = (
+            (ev.get("lift_up") is not None and ev["lift_up"] >= 0.025)
+            or (ev.get("lift_dn") is not None and ev["lift_dn"] >= 0.025)
+        )
+        if not lift_ok:
+            continue
+        edges.append({
+            "source": src,
+            "target": tgt,
+            "lag": int(lag),
+            "lag_unit": "week",
+            "xcorr": round(xc, 4),
+            "abs": round(abs(xc), 4),
+            "sign": 1 if xc >= 0 else -1,
+            "sync": round(sync, 4),
+            "p_up": ev.get("p_up"),
+            "p_dn": ev.get("p_dn"),
+            "base_up": ev.get("base_up"),
+            "base_dn": ev.get("base_dn"),
+            "lift_up": ev.get("lift_up"),
+            "lift_dn": ev.get("lift_dn"),
+            "n_up": ev.get("n_up", 0),
+            "n_dn": ev.get("n_dn", 0),
+            "horizon": HORIZON,
+        })
+        out_deg[src] += 1
+    return edges
+
+
 def expand_query(q: str, names: list[str], l1_of: dict[str, str]) -> list[str]:
-    """自动扩展：优先最长关键词规则，避免「电力」被短词「电」扩到整个电子。"""
     q = (q or "").strip()
     if not q:
         return []
@@ -229,6 +358,7 @@ def pack_payload(piv: pd.DataFrame, resid: pd.DataFrame, meta: pd.DataFrame) -> 
     corr = resid.corr(method="pearson", min_periods=120)
     names = [c for c in corr.columns if corr[c].notna().sum() > 10]
     corr = corr.loc[names, names]
+    resid = resid[names]
     cmat = corr.fillna(0).values.copy()
     np.fill_diagonal(cmat, 1.0)
     dist = np.sqrt(np.maximum(0.0, 2.0 * (1.0 - cmat)))
@@ -236,11 +366,8 @@ def pack_payload(piv: pd.DataFrame, resid: pd.DataFrame, meta: pd.DataFrame) -> 
     xyz = (xyz - xyz.mean(0)) / (xyz.std(0) + 1e-9) * 40.0
 
     meta_i = meta.set_index("id").reindex(names)
-    edges = build_edges(corr, resid[names])
-    # 给度为 0 的点补 2 条最强相关边（虚边标记 soft=1），便于点云连线与查询展开
-    linked = set()
-    for e in edges:
-        linked.add(e["source"]); linked.add(e["target"])
+    edges = build_edges(corr, resid)
+    linked = {e["source"] for e in edges} | {e["target"] for e in edges}
     soft = []
     for name in names:
         if name in linked:
@@ -251,8 +378,11 @@ def pack_payload(piv: pd.DataFrame, resid: pd.DataFrame, meta: pd.DataFrame) -> 
         top = row.reindex(row.abs().sort_values(ascending=False).index).head(2)
         for other, c in top.items():
             a, b = sorted([name, other])
-            key = (a, b)
-            if key in {(x["source"], x["target"]) if x["source"] < x["target"] else (x["target"], x["source"]) for x in edges + soft}:
+            existing = {
+                (x["source"], x["target"]) if x["source"] < x["target"] else (x["target"], x["source"])
+                for x in edges + soft
+            }
+            if (a, b) in existing:
                 continue
             soft.append({
                 "source": name, "target": other,
@@ -260,6 +390,11 @@ def pack_payload(piv: pd.DataFrame, resid: pd.DataFrame, meta: pd.DataFrame) -> 
                 "sign": 1 if c >= 0 else -1, "years": 0, "soft": 1,
             })
     edges = edges + soft
+
+    print("  计算领先—滞后边与跟涨/跟跌概率…")
+    lead_edges = build_lead_edges(resid, corr)
+    print(f"  领先边 {len(lead_edges)} 条")
+
     last = piv[names].ffill().iloc[-1]
     cum20 = ((1 + piv[names].fillna(0) / 100).tail(20).prod() - 1) * 100
 
@@ -279,8 +414,24 @@ def pack_payload(piv: pd.DataFrame, resid: pd.DataFrame, meta: pd.DataFrame) -> 
             "cum20": None if not np.isfinite(cum20.get(name, np.nan)) else round(float(cum20.get(name)), 2),
         })
 
-    # 可视化边仍用稳健阈值；邻居表用 Top-K |ρ|，避免「电力」等点在图上孤立无法展开
     neighbors = top_neighbors(corr, k=6)
+    lead_out: dict[str, list] = {n: [] for n in names}
+    lead_in: dict[str, list] = {n: [] for n in names}
+    for e in lead_edges:
+        item = {
+            "id": e["target"], "lag": e["lag"], "xcorr": e["xcorr"], "abs": e["abs"],
+            "lift_up": e["lift_up"], "lift_dn": e["lift_dn"],
+            "p_up": e["p_up"], "p_dn": e["p_dn"],
+        }
+        lead_out[e["source"]].append(item)
+        lead_in[e["target"]].append({
+            "id": e["source"], "lag": e["lag"], "xcorr": e["xcorr"], "abs": e["abs"],
+            "lift_up": e["lift_up"], "lift_dn": e["lift_dn"],
+            "p_up": e["p_up"], "p_dn": e["p_dn"],
+        })
+    for k in names:
+        lead_out[k].sort(key=lambda d: -d["abs"])
+        lead_in[k].sort(key=lambda d: -d["abs"])
 
     l1_of = {n["id"]: n["l1"] for n in nodes}
     query_demo = {q: expand_query(q, names, l1_of) for q in ("电力", "半导体", "白酒")}
@@ -292,10 +443,16 @@ def pack_payload(piv: pd.DataFrame, resid: pd.DataFrame, meta: pd.DataFrame) -> 
         "n_days": int(piv.notna().any(axis=1).sum()),
         "n_sectors": len(nodes),
         "corr_thr": CORR_THR,
-        "note": "坐标：去市场beta后残差相关 → 经典MDS三维；边为|ρ|阈值+多年同号复现的同步相关（非因果）。查询会按关键词自动扩展相关二级。",
+        "lead_thr": LEAD_XCORR_THR,
+        "max_lag": MAX_LAG,
+        "horizon": HORIZON,
+        "note": "同步边=去beta日残差相关；箭头=周频残差交叉相关领先（滞后周数）+ 日频事件跟涨/跟跌条件概率提升。非因果，仅统计倾向。",
         "nodes": nodes,
         "edges": edges,
+        "lead_edges": lead_edges,
         "neighbors": neighbors,
+        "lead_out": lead_out,
+        "lead_in": lead_in,
         "presets": ["电力", "半导体", "白酒", "新能源", "医药", "军工", "银行", "地产"],
         "query_demo": query_demo,
         "expand_rules": QUERY_EXPAND,
@@ -311,7 +468,7 @@ def render_html(payload: dict) -> str:
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>申万二级 · 相关点云</title>
 <style>
-:root{{--bg:#070b14;--panel:rgba(12,18,32,.9);--line:rgba(120,160,255,.22);--text:#e8eefc;--muted:#8b9bb8;--accent:#5ad1ff;--hot:#ff7a7a;--ok:#3ddc97}}
+:root{{--bg:#070b14;--panel:rgba(12,18,32,.92);--line:rgba(120,160,255,.22);--text:#e8eefc;--muted:#8b9bb8;--accent:#5ad1ff;--hot:#ff7a7a;--ok:#3ddc97;--lead:#ffd166}}
 *{{box-sizing:border-box}}
 html,body{{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Noto Sans SC",sans-serif;overflow:hidden}}
 #c{{position:fixed;inset:0;display:block}}
@@ -320,23 +477,27 @@ html,body{{margin:0;height:100%;background:var(--bg);color:var(--text);font-fami
 .top{{top:16px;left:16px;right:16px;display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start}}
 .card{{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 14px;backdrop-filter:blur(10px);box-shadow:0 8px 32px rgba(0,0,0,.35)}}
 .title{{font-size:15px;font-weight:650}}
-.sub{{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.45;max-width:460px}}
-.search{{display:flex;gap:8px;align-items:center;margin-top:10px;min-width:min(440px,100%)}}
-.search input{{flex:1;background:#0b1220;border:1px solid var(--line);color:var(--text);border-radius:10px;padding:10px 12px;font-size:14px;outline:none}}
+.sub{{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.45;max-width:520px}}
+.search{{display:flex;gap:8px;align-items:center;margin-top:10px;min-width:min(460px,100%);flex-wrap:wrap}}
+.search input{{flex:1;min-width:160px;background:#0b1220;border:1px solid var(--line);color:var(--text);border-radius:10px;padding:10px 12px;font-size:14px;outline:none}}
 .search input:focus{{border-color:var(--accent)}}
-.search button,.chip{{background:#132038;color:var(--text);border:1px solid var(--line);border-radius:999px;padding:8px 12px;font-size:12px;cursor:pointer}}
-.search button:hover,.chip:hover,.chip.active{{border-color:var(--accent);color:var(--accent)}}
+.search button,.chip,.mode-btn{{background:#132038;color:var(--text);border:1px solid var(--line);border-radius:999px;padding:8px 12px;font-size:12px;cursor:pointer}}
+.search button:hover,.chip:hover,.chip.active,.mode-btn:hover,.mode-btn.active{{border-color:var(--accent);color:var(--accent)}}
+.mode-btn.active{{background:rgba(90,209,255,.12)}}
 .chips{{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}}
-.side{{top:16px;right:16px;width:min(340px,92vw);max-height:calc(100vh - 32px);overflow:auto}}
+.modes{{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}}
+.side{{top:16px;right:16px;width:min(360px,92vw);max-height:calc(100vh - 32px);overflow:auto}}
 .side h3{{margin:0 0 8px;font-size:14px}}
 .meta{{font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.4}}
-.kv{{display:grid;grid-template-columns:64px 1fr;gap:4px 8px;font-size:12px;margin-bottom:10px}}
+.kv{{display:grid;grid-template-columns:72px 1fr;gap:4px 8px;font-size:12px;margin-bottom:10px}}
 .kv b{{color:var(--muted);font-weight:500}}
+.sec{{font-size:12px;color:var(--muted);margin:12px 0 6px}}
 .list{{list-style:none;padding:0;margin:0}}
 .list li{{display:flex;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.06);font-size:12px;cursor:pointer}}
 .list li:hover{{color:var(--accent)}}
-.pos{{color:var(--hot)}} .neg{{color:var(--ok)}}
-.hint{{position:fixed;bottom:14px;left:16px;font-size:11px;color:var(--muted);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 10px;max-width:min(720px,90vw)}}
+.list .sub2{{display:block;color:var(--muted);font-size:11px;margin-top:2px}}
+.pos{{color:var(--hot)}} .neg{{color:var(--ok)}} .lead{{color:var(--lead)}}
+.hint{{position:fixed;bottom:14px;left:16px;font-size:11px;color:var(--muted);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 10px;max-width:min(760px,90vw)}}
 .empty{{color:var(--muted);font-size:12px;line-height:1.5}}
 @media(max-width:720px){{.side{{top:auto;bottom:12px;right:12px;left:12px;width:auto;max-height:36vh}}}}
 </style>
@@ -346,11 +507,15 @@ html,body{{margin:0;height:100%;background:var(--bg);color:var(--text);font-fami
 <div class="hud top">
   <div class="card">
     <div class="title">申万二级 · 相关点云</div>
-    <div class="sub">去市场 beta 后的残差相关 → MDS 三维。点近≈结构相近；红/绿线=正/负稳健同步相关。查询会自动扩展相关二级（如「电力」→电网/电源/储能等）。</div>
+    <div class="sub">去市场 beta 后的残差结构。同步模式看共涨共跌；传导模式看领先箭头与跟涨/跟跌概率。查询自动扩展相关二级。</div>
     <div class="search">
       <input id="q" placeholder="查询板块，如：电力、半导体、白酒…" autocomplete="off"/>
       <button id="go" type="button">聚焦</button>
       <button id="reset" type="button">全局</button>
+    </div>
+    <div class="modes">
+      <button class="mode-btn active" id="mode-sync" type="button">同步相关</button>
+      <button class="mode-btn" id="mode-lead" type="button">领先传导</button>
     </div>
     <div class="chips" id="presets"></div>
   </div>
@@ -361,7 +526,7 @@ html,body{{margin:0;height:100%;background:var(--bg);color:var(--text);font-fami
   <div class="kv" id="p-kv"></div>
   <div id="p-body" class="empty">输入关键词自动扩展并高亮该簇。</div>
 </aside>
-<div class="hint">数据 {payload['start']} → {payload['end']} · {payload['n_sectors']} 个二级 · {payload['n_days']} 个交易日 · 边阈值 |ρ|≥{payload['corr_thr']} · 生成 {payload['generated_at']}</div>
+<div class="hint">数据 {payload['start']} → {payload['end']} · {payload['n_sectors']} 二级 · 同步边 |ρ|≥{payload['corr_thr']} · 领先周频 |xcorr|≥{payload['lead_thr']} · 跟涨观察 {payload['horizon']} 日 · 生成 {payload['generated_at']}</div>
 <script type="importmap">{{"imports":{{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}}}</script>
 <script type="module">
 import * as THREE from 'three';
@@ -387,8 +552,7 @@ scene.add(new THREE.AmbientLight(0x9eb7ff, 0.8));
 const key = new THREE.PointLight(0x5ad1ff, 1.15, 700); key.position.set(80,110,70); scene.add(key);
 const fill = new THREE.PointLight(0xff6b6b, 0.32, 700); fill.position.set(-90,-30,-80); scene.add(fill);
 
-{{ // starfield
-  const n=900, pos=new Float32Array(n*3);
+{{ const n=900, pos=new Float32Array(n*3);
   for(let i=0;i<n;i++){{ pos[i*3]=(Math.random()-0.5)*520; pos[i*3+1]=(Math.random()-0.5)*520; pos[i*3+2]=(Math.random()-0.5)*520; }}
   const g=new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos,3));
   scene.add(new THREE.Points(g, new THREE.PointsMaterial({{color:0x243552, size:0.55, transparent:true, opacity:0.5}})));
@@ -428,20 +592,64 @@ for(let i=0;i<N;i++){{
   s.scale.set(5,5,1); scene.add(s); sprites.push(s);
 }}
 
-const edgePos=[], edgeCol=[];
-const cPos=new THREE.Color(0xff7a7a), cNeg=new THREE.Color(0x3ddc97);
-for(const e of DATA.edges){{
-  const a=nodeById[e.source], b=nodeById[e.target]; if(!a||!b) continue;
-  edgePos.push(a.x,a.y,a.z, b.x,b.y,b.z);
-  const col=e.sign>=0?cPos:cNeg;
-  const w=0.22+0.78*Math.min(1,(e.abs-0.4)/0.4);
-  edgeCol.push(col.r*w,col.g*w,col.b*w, col.r*w,col.g*w,col.b*w);
+function buildSyncEdges(){{
+  const edgePos=[], edgeCol=[];
+  const cPos=new THREE.Color(0xff7a7a), cNeg=new THREE.Color(0x3ddc97);
+  for(const e of DATA.edges){{
+    const a=nodeById[e.source], b=nodeById[e.target]; if(!a||!b) continue;
+    edgePos.push(a.x,a.y,a.z, b.x,b.y,b.z);
+    const col=e.sign>=0?cPos:cNeg;
+    const w=0.22+0.78*Math.min(1,(e.abs-0.35)/0.4);
+    edgeCol.push(col.r*w,col.g*w,col.b*w, col.r*w,col.g*w,col.b*w);
+  }}
+  const geo=new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(edgePos,3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(edgeCol,3));
+  return new THREE.LineSegments(geo, new THREE.LineBasicMaterial({{vertexColors:true, transparent:true, opacity:0.34, depthWrite:false}}));
 }}
-const edgeGeo=new THREE.BufferGeometry();
-edgeGeo.setAttribute('position', new THREE.Float32BufferAttribute(edgePos,3));
-edgeGeo.setAttribute('color', new THREE.Float32BufferAttribute(edgeCol,3));
-const edgeLines=new THREE.LineSegments(edgeGeo, new THREE.LineBasicMaterial({{vertexColors:true, transparent:true, opacity:0.34, depthWrite:false}}));
-scene.add(edgeLines);
+
+const syncLines = buildSyncEdges(); scene.add(syncLines);
+const leadGroup = new THREE.Group(); scene.add(leadGroup);
+leadGroup.visible = false;
+
+function rebuildLeadArrows(filterIds=null){{
+  while(leadGroup.children.length){{
+    const ch=leadGroup.children.pop();
+    ch.geometry?.dispose?.(); ch.material?.dispose?.();
+  }}
+  const edges = DATA.lead_edges||[];
+  const cPos=new THREE.Color(0xffd166), cNeg=new THREE.Color(0x7aa2ff);
+  for(const e of edges){{
+    if(filterIds && filterIds.size){{
+      if(!filterIds.has(e.source) && !filterIds.has(e.target)) continue;
+    }}
+    const a=nodeById[e.source], b=nodeById[e.target]; if(!a||!b) continue;
+    const start=new THREE.Vector3(a.x,a.y,a.z);
+    const end=new THREE.Vector3(b.x,b.y,b.z);
+    const dir=end.clone().sub(start);
+    const len=dir.length(); if(len<1e-3) continue;
+    dir.normalize();
+    const shaftLen = Math.max(0.1, len - 3.2);
+    const mid = start.clone().add(dir.clone().multiplyScalar(shaftLen/2));
+    const w = 0.35 + 0.9*Math.min(1,(e.abs-0.15)/0.25);
+    const col = e.sign>=0 ? cPos : cNeg;
+    const shaft = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.12*w, 0.12*w, shaftLen, 6),
+      new THREE.MeshBasicMaterial({{color:col, transparent:true, opacity:0.75}})
+    );
+    shaft.position.copy(mid);
+    shaft.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), dir);
+    leadGroup.add(shaft);
+    const head = new THREE.Mesh(
+      new THREE.ConeGeometry(0.55*w, 2.4, 8),
+      new THREE.MeshBasicMaterial({{color:col, transparent:true, opacity:0.9}})
+    );
+    head.position.copy(start.clone().add(dir.clone().multiplyScalar(shaftLen + 1.0)));
+    head.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), dir);
+    leadGroup.add(head);
+  }}
+}}
+rebuildLeadArrows();
 
 const labelGroup=new THREE.Group(); scene.add(labelGroup);
 function makeLabel(text, color='#e8eefc'){{
@@ -457,6 +665,18 @@ function makeLabel(text, color='#e8eefc'){{
 }}
 
 let coreIds=new Set(), focusIds=new Set();
+let mode = 'sync'; // sync | lead
+
+function setMode(m){{
+  mode = m;
+  document.getElementById('mode-sync').classList.toggle('active', m==='sync');
+  document.getElementById('mode-lead').classList.toggle('active', m==='lead');
+  syncLines.visible = m==='sync';
+  leadGroup.visible = m==='lead';
+  applyFocusVisual();
+  if(coreIds.size) renderPanel([...coreIds], [...focusIds].filter(id=>!coreIds.has(id)));
+  else renderPanel(null, []);
+}}
 
 function expandQuery(q){{
   q=(q||'').trim(); if(!q) return [];
@@ -481,10 +701,18 @@ function expandQuery(q){{
 
 function egoOf(cores){{
   const one=new Set(cores), two=new Set();
-  for(const id of cores) for(const nb of (DATA.neighbors[id]||[])) one.add(nb.id);
-  for(const id of one){{
-    if(cores.includes(id)) continue;
-    for(const nb of (DATA.neighbors[id]||[])) if(!one.has(nb.id)) two.add(nb.id);
+  const nmap = mode==='lead' ? null : DATA.neighbors;
+  if(mode==='lead'){{
+    for(const id of cores){{
+      for(const nb of (DATA.lead_out[id]||[])) one.add(nb.id);
+      for(const nb of (DATA.lead_in[id]||[])) one.add(nb.id);
+    }}
+  }} else {{
+    for(const id of cores) for(const nb of (nmap[id]||[])) one.add(nb.id);
+    for(const id of one){{
+      if(cores.includes(id)) continue;
+      for(const nb of (nmap[id]||[])) if(!one.has(nb.id)) two.add(nb.id);
+    }}
   }}
   return {{one, two}};
 }}
@@ -523,7 +751,18 @@ function applyFocusVisual(){{
     sprites[i].scale.set(scale,scale,1);
   }}
   colAttr.needsUpdate=true;
-  edgeLines.material.opacity = has ? 0.55 : 0.34;
+  syncLines.material.opacity = has ? 0.55 : 0.34;
+  if(mode==='lead') rebuildLeadArrows(has ? focusIds : null);
+}}
+
+function fmtPct(x){{
+  if(x==null || Number.isNaN(x)) return '-';
+  return (x*100).toFixed(0)+'%';
+}}
+function fmtLift(x){{
+  if(x==null || Number.isNaN(x)) return '-';
+  const s=(x>=0?'+':'')+(x*100).toFixed(0)+'pt';
+  return s;
 }}
 
 function renderPanel(cores, neighborIds){{
@@ -533,30 +772,60 @@ function renderPanel(cores, neighborIds){{
   const body=document.getElementById('p-body');
   if(!cores||!cores.length){{
     title.textContent='全局视图';
-    meta.textContent=`${{DATA.n_sectors}} 个二级 · 边 ${{DATA.edges.length}} 条（|ρ|≥${{DATA.corr_thr}} 且多年复现）`;
+    if(mode==='lead'){{
+      meta.textContent=`${{DATA.n_sectors}} 个二级 · 领先边 ${{(DATA.lead_edges||[]).length}} 条（周频 |xcorr|≥${{DATA.lead_thr}}，滞后1–${{DATA.max_lag}}周）`;
+      body.innerHTML=`<div class="empty">金色/蓝色箭头：A → B 表示 A 领先 B。侧栏在聚焦后显示跟涨/跟跌条件概率相对基准的提升。</div>`;
+    }} else {{
+      meta.textContent=`${{DATA.n_sectors}} 个二级 · 同步边 ${{DATA.edges.length}} 条（|ρ|≥${{DATA.corr_thr}} 且多年复现）`;
+      body.innerHTML=`<div class="empty">${{DATA.note}}</div>`;
+    }}
     kv.innerHTML='';
-    body.innerHTML=`<div class="empty">${{DATA.note}}</div>`;
     return;
   }}
   title.textContent = cores.length===1 ? cores[0] : `聚焦簇（${{cores.length}}）`;
-  meta.textContent = `自动扩展核心 ${{cores.length}} · 一跳邻居 ${{neighborIds.length}}`;
   if(cores.length===1){{
     const n=nodeById[cores[0]];
     kv.innerHTML=`<b>一级</b><span>${{n.l1||'-'}}</span><b>成分</b><span>${{n.n||'-'}} 只</span><b>近20日</b><span class="${{(n.cum20||0)>=0?'pos':'neg'}}">${{n.cum20??'-'}}%</span><b>最新</b><span class="${{(n.last||0)>=0?'pos':'neg'}}">${{n.last??'-'}}%</span>`;
   }} else {{
-    kv.innerHTML=cores.slice(0,12).map(id=>`<b>核心</b><span>${{id}}</span>`).join('');
+    kv.innerHTML=cores.slice(0,10).map(id=>`<b>核心</b><span>${{id}}</span>`).join('');
   }}
-  const rows=[], seen=new Set();
-  for(const c of cores){{
-    for(const nb of (DATA.neighbors[c]||[])){{
-      if(coreIds.has(nb.id)||seen.has(nb.id)) continue;
-      seen.add(nb.id); rows.push(nb);
+
+  if(mode==='lead'){{
+    meta.textContent = `传导模式 · 核心 ${{cores.length}} · 关联 ${{neighborIds.length}}`;
+    const outs=[], inns=[], seenO=new Set(), seenI=new Set();
+    for(const c of cores){{
+      for(const nb of (DATA.lead_out[c]||[])){{
+        if(coreIds.has(nb.id)||seenO.has(nb.id)) continue;
+        seenO.add(nb.id); outs.push({{...nb, from:c}});
+      }}
+      for(const nb of (DATA.lead_in[c]||[])){{
+        if(coreIds.has(nb.id)||seenI.has(nb.id)) continue;
+        seenI.add(nb.id); inns.push({{...nb, to:c}});
+      }}
     }}
+    outs.sort((a,b)=>b.abs-a.abs); inns.sort((a,b)=>b.abs-a.abs);
+    const rowOut = outs.slice(0,12).map(r=>`<li data-id="${{r.id}}"><span>${{r.id}}<span class="sub2">滞后 ${{r.lag}} 周 · xcorr ${{r.xcorr.toFixed(2)}} · 跟涨 ${{fmtPct(r.p_up)}}（${{fmtLift(r.lift_up)}}）· 跟跌 ${{fmtPct(r.p_dn)}}（${{fmtLift(r.lift_dn)}}）</span></span><span class="lead">→</span></li>`).join('');
+    const rowIn = inns.slice(0,12).map(r=>`<li data-id="${{r.id}}"><span>${{r.id}}<span class="sub2">滞后 ${{r.lag}} 周 · xcorr ${{r.xcorr.toFixed(2)}} · 跟涨 ${{fmtPct(r.p_up)}}（${{fmtLift(r.lift_up)}}）· 跟跌 ${{fmtPct(r.p_dn)}}（${{fmtLift(r.lift_dn)}}）</span></span><span class="lead">←</span></li>`).join('');
+    body.innerHTML = `
+      <div class="sec">它领先谁（箭头指出）</div>
+      ${{outs.length?`<ul class="list">${{rowOut}}</ul>`:`<div class="empty">暂无明显领先对象</div>`}}
+      <div class="sec">谁领先它（箭头指入）</div>
+      ${{inns.length?`<ul class="list">${{rowIn}}</ul>`:`<div class="empty">暂无明显领先来源</div>`}}
+      <div class="empty" style="margin-top:8px">跟涨/跟跌 = 领先方残差处于自身高/低分位后，跟随方未来 ${{DATA.horizon}} 日累计涨/跌的条件概率；括号为相对无条件基准的提升。</div>`;
+  }} else {{
+    meta.textContent = `同步模式 · 核心 ${{cores.length}} · 一跳邻居 ${{neighborIds.length}}`;
+    const rows=[], seen=new Set();
+    for(const c of cores){{
+      for(const nb of (DATA.neighbors[c]||[])){{
+        if(coreIds.has(nb.id)||seen.has(nb.id)) continue;
+        seen.add(nb.id); rows.push(nb);
+      }}
+    }}
+    rows.sort((a,b)=>b.abs-a.abs);
+    body.innerHTML = rows.length
+      ? `<ul class="list">${{rows.slice(0,24).map(r=>`<li data-id="${{r.id}}"><span>${{r.id}}</span><span class="${{r.corr>=0?'pos':'neg'}}">ρ ${{r.corr.toFixed(2)}}</span></li>`).join('')}}</ul>`
+      : `<div class="empty">该簇暂无足够强的稳健相关边，仍可看空间邻近。</div>`;
   }}
-  rows.sort((a,b)=>b.abs-a.abs);
-  body.innerHTML = rows.length
-    ? `<ul class="list">${{rows.slice(0,24).map(r=>`<li data-id="${{r.id}}"><span>${{r.id}}</span><span class="${{r.corr>=0?'pos':'neg'}}">ρ ${{r.corr.toFixed(2)}}</span></li>`).join('')}}</ul>`
-    : `<div class="empty">该簇暂无足够强的稳健相关边，仍可看空间邻近。</div>`;
   body.querySelectorAll('li').forEach(li => li.onclick=()=>{{ document.getElementById('q').value=li.dataset.id; setFocus([li.dataset.id]); }});
 }}
 
@@ -594,6 +863,8 @@ function runQuery(){{
 document.getElementById('go').onclick=runQuery;
 document.getElementById('reset').onclick=()=>{{ document.getElementById('q').value=''; setFocus([]); }};
 document.getElementById('q').addEventListener('keydown', e=>{{ if(e.key==='Enter') runQuery(); }});
+document.getElementById('mode-sync').onclick=()=>setMode('sync');
+document.getElementById('mode-lead').onclick=()=>setMode('lead');
 const presetsEl=document.getElementById('presets');
 (DATA.presets||[]).forEach(p=>{{
   const b=document.createElement('button'); b.className='chip'; b.type='button'; b.textContent=p;
@@ -624,16 +895,16 @@ def update_nav() -> None:
         return
     txt = gen_index.read_text(encoding="utf-8")
     if "sector_corr_cloud.html" in txt:
+        # refresh description if present
         return
     anchor = "sector_atlas.html"
     if anchor not in txt:
         return
     injection = (
         '("sector_corr_cloud.html", "🌌", "板块相关点云", '
-        '"申万二级残差相关三维点云，支持电力等查询自动扩展聚焦", "板块跟踪"),\n            '
+        '"申万二级残差相关三维点云，支持同步/领先传导与查询聚焦", "板块跟踪"),\n            '
         f'("{anchor}"'
     )
-    # try tuple style used by gen_index
     old = f'("{anchor}"'
     if old in txt:
         gen_index.write_text(txt.replace(old, injection, 1), encoding="utf-8")
@@ -651,10 +922,10 @@ def main() -> None:
     piv, meta = load_sw2_returns()
     print(f"  板块 {piv.shape[1]} · 交易日 {piv.shape[0]} · 截止 {piv.index.max().date()}")
     mkt = market_proxy(piv)
-    print("去市场 beta，MDS + 稳健相关边…")
+    print("去市场 beta，MDS + 同步边…")
     resid = residualize(piv, mkt)
     payload = pack_payload(piv, resid, meta)
-    print(f"  节点 {payload['n_sectors']} · 边 {len(payload['edges'])}")
+    print(f"  节点 {payload['n_sectors']} · 同步边 {len(payload['edges'])} · 领先边 {len(payload['lead_edges'])}")
 
     OUTPUT_JSON.parent.mkdir(parents=True, exist_ok=True)
     OUTPUT_HTML.parent.mkdir(parents=True, exist_ok=True)
@@ -669,8 +940,16 @@ def main() -> None:
         hits = expand_query(q, names, l1_of)
         print(f"  查询「{q}」→ {len(hits)}: {hits[:10]}{'…' if len(hits)>10 else ''}")
 
+    # sample lead edges for smoke
+    leads = payload["lead_edges"][:5]
+    for e in leads:
+        print(f"  领先样例 {e['source']} → {e['target']} lag={e['lag']} xcorr={e['xcorr']} lift_up={e['lift_up']} lift_dn={e['lift_dn']}")
+
     if not args.no_nav:
         update_nav()
+        # refresh index to pick up any title tweaks
+        import subprocess
+        subprocess.run([sys.executable, "-m", "scripts.reports.gen_index"], cwd=PROJECT_DIR, check=False)
 
 
 if __name__ == "__main__":
