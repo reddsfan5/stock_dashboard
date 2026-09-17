@@ -15,6 +15,7 @@ STOCK_JOURNAL_URL = "http://127.0.0.1:8765/stock_journal.html"
 MARKET_NEWS_URL = "http://127.0.0.1:8765/market_news.html"
 WATCHLIST_URL = "http://127.0.0.1:8765/watchlist.html"
 SYMBOL_URL = "http://127.0.0.1:8765/symbol.html"
+MARKET_GAP_BACKTEST_URL = "http://127.0.0.1:8765/market_gap_backtest.html"
 DAILY_OPS_URL = "http://127.0.0.1:8765/daily_ops.html"
 SHORTLIST_URL = "http://127.0.0.1:8765/shortlist.html"
 SERVICE_URLS = {
@@ -26,6 +27,7 @@ SERVICE_URLS = {
     "market_news.html": MARKET_NEWS_URL,
     "watchlist.html": WATCHLIST_URL,
     "symbol.html": SYMBOL_URL,
+    "market_gap_backtest.html": MARKET_GAP_BACKTEST_URL,
     "daily_ops.html": DAILY_OPS_URL,
     "shortlist.html": SHORTLIST_URL,
 }
@@ -99,6 +101,8 @@ GROUPS = [
         "description": "回答市场规律和方法论问题，适合样本扩展或逻辑调整后重新运行。",
         "tone": "research",
         "items": [
+            ("market_gap_backtest.html", "↕️", "指数高低开三日回测", "按指数、日期、缺口阈值和退出日动态统计高低开后的路径、胜率、强度分层与年度稳定性", "择时研究"),
+            ("sector_corr_cloud.html", "🌌", "板块相关点云", "申万二级残差相关三维点云，支持电力等查询自动扩展聚焦", "板块跟踪"),
             ("sector_atlas.html", "◈", "板块图谱", "用图文理解板块定义、产业链上下游与相关个股，首篇商业航天", "产业认知"),
             ("market_proverbs.html", "🧠", "市场口诀回测（前7条）", "把小涨、大涨、横盘和急涨慢跌量化为七项事件研究，对比后续收益、指数超额和条件基线", "经验检验"),
             ("slow_rise_backtest.html", "🌱", "低位缓涨3～5日回测", "近30日相对低位后缓涨N日，次日开盘买入，严格T+1，触及5%止盈，否则第5日退出", "可执行验证"),
