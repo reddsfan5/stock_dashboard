@@ -1,1 +1,38 @@
-PLACEHOLDER_PART0
+#!/usr/bin/env python3
+"""申万二级板块相关点云：残差相关 MDS 三维 + 领先滞后箭头 + Three.js 查询页。
+
+用法:
+  python -m scripts.reports.gen_sector_corr_cloud
+  python -m scripts.reports.gen_sector_corr_cloud --no-nav
+  python -m scripts.reports.gen_sector_corr_cloud --from-cache --no-nav
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from datetime import datetime
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+
+PROJECT_DIR = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(PROJECT_DIR))
+
+from data.industry import StockInfo
+
+START = "2022-01-01"
+MIN_NAMES_PER_DAY = 5
+CORR_THR = 0.42
+MAX_EDGES_PER_NODE = 8
+MIN_YEAR_CONFIRM = 2
+MAX_LAG = 4  # 周频滞后天数（约 1–4 周）
+LEAD_XCORR_THR = 0.08
+LEAD_ASYM = 0.015  # 领先方向需略强于反向
+LEAD_MAX_OUT = 4  # 每点最多指出几条领先边
+EVENT_Q = 0.80
+HORIZON = 5
+OUTPUT_HTML = PROJECT_DIR / "output" / "sector_corr_cloud.html"
+OUTPUT_JSON = PROJECT_DIR / "cache" / "sector_corr_cloud.json"
+MOM1 = PROJECT_DIR / "cache" / "indicators_mom1.parquet"
