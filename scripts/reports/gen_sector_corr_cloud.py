@@ -1,2 +1,1 @@
-#!/usr/bin/env python3
-PLACEHOLDER_WILL_REPLACE
+/tmp/sector_corr_content.txt
