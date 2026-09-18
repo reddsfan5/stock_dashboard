@@ -396,63 +396,109 @@ def render_shortlist_html(payload: dict) -> str:
     cards = payload.get("cards") or []
     market_date = payload.get("market_date") or "—"
     generated_at = payload.get("generated_at") or "—"
+    generated_label = str(generated_at).replace("T", " ")[:19]
+    candidate_count = int(payload.get("candidate_count") or 0)
+    selection_rate = (len(cards) / candidate_count * 100) if candidate_count else 0.0
+    top_score = _num(cards[0].get("score")) if cards else None
+    export_rows = []
     card_html = []
     for card in cards:
         metrics = card.get("metrics") or {}
-        def fmt(key, suffix=""):
+
+        def fmt(key, suffix="", *, signed=False):
             v = metrics.get(key)
             if v is None or v == "":
                 return "—"
             try:
-                return f"{float(v):.2f}{suffix}"
+                number = float(v)
+                prefix = "+" if signed and number > 0 else ""
+                return f"{prefix}{number:.2f}{suffix}"
             except (TypeError, ValueError):
                 return str(v)
 
+        def metric_tone(key: str) -> str:
+            value = _num(metrics.get(key))
+            if key not in {"市场相对强弱20%", "20日动量%"} or value is None or value == 0:
+                return ""
+            return " is-up" if value > 0 else " is-down"
+
         why = "".join(f"<li>{_esc(x)}</li>" for x in card.get("why") or [])
         risks = "".join(f"<li>{_esc(x)}</li>" for x in card.get("risks") or [])
-        tabs = "、".join(_esc(x) for x in card.get("tab_labels") or [])
+        tab_chips = "".join(
+            f"<span class='signal-chip'>{_esc(x)}</span>" for x in card.get("tab_labels") or []
+        ) or "<span class='signal-chip is-muted'>暂无策略标签</span>"
         links = card.get("links") or {}
         watch = card.get("watchlist")
         watch_badge = (
-            f"<span class='badge'>观察池·{_esc(watch.get('status_label') or watch.get('status'))}</span>"
+            f"<span class='watch-badge'>观察池 · {_esc(watch.get('status_label') or watch.get('status'))}</span>"
             if watch else ""
         )
+        sector_change = _num(card.get("sector_change_pct"))
+        sector_tone = ""
+        if sector_change is not None:
+            sector_tone = " is-up" if sector_change > 0 else " is-down" if sector_change < 0 else ""
         sector_bit = _esc(card.get("sector") or "—")
         if card.get("sector_change_pct") is not None:
-            sector_bit += f" ({card['sector_change_pct']:+.2f}%)"
+            sector_bit += f" <span class='sector-change{sector_tone}'>{card['sector_change_pct']:+.2f}%</span>"
+        rank = int(card.get("rank") or 0)
+        code = str(card.get("code") or "")
+        plain_code = code[2:] if len(code) == 8 and code[:2].lower() in {"sh", "sz", "bj"} else code
+        export_rows.append(f"{plain_code} {card.get('name') or ''}".strip())
+        score = _num(card.get("score"))
+        score_label = f"{score:.2f}" if score is not None else "—"
+        card_classes = ["candidate-card"]
+        if rank == 1:
+            card_classes.append("is-featured")
+        if 1 <= rank <= 3:
+            card_classes.append("is-podium")
+        metric_rows = [
+            ("成交量比20", "量比 20", fmt("成交量比20"), ""),
+            ("成交额比20", "额比 20", fmt("成交额比20"), ""),
+            ("市场相对强弱20%", "相对强弱", fmt("市场相对强弱20%", "%", signed=True), metric_tone("市场相对强弱20%")),
+            ("20日动量%", "20 日动量", fmt("20日动量%", "%", signed=True), metric_tone("20日动量%")),
+            ("ATR14%", "ATR 14", fmt("ATR14%", "%"), ""),
+            ("距60日高点%", "距 60 日高点", fmt("距60日高点%", "%", signed=True), ""),
+        ]
+        metric_html = "".join(
+            f"<div class='metric-item'><span>{_esc(label)}</span><strong class='metric-value{tone}'>{_esc(value)}</strong></div>"
+            for _, label, value, tone in metric_rows
+        )
         card_html.append(f"""
-<article class="card">
-  <header>
-    <div class="title"><span class="rank">#{card.get('rank')}</span>
-      <a href="{_esc(links.get('symbol', '#'))}">{_esc(card.get('code'))}</a>
-      <b>{_esc(card.get('name') or '')}</b>
-      {watch_badge}
+<article class="{' '.join(card_classes)}">
+  <header class="candidate-head">
+    <div class="candidate-identity">
+      <span class="rank-badge" aria-label="排名第 {rank} 名">TOP {rank:02d}</span>
+      <div>
+        <h2><a href="{_esc(links.get('symbol', '#'))}">{_esc(card.get('name') or code)}</a></h2>
+        <div class="candidate-code">{_esc(code)}</div>
+      </div>
     </div>
-    <div class="meta">评分 {card.get('score')} · 板块 {sector_bit} · 命中 {tabs or '—'}</div>
+    <div class="score-block"><span>综合评分</span><strong>{score_label}</strong></div>
   </header>
-  <div class="metrics">
-    <div><span>量比20</span><b>{fmt('成交量比20')}</b></div>
-    <div><span>额比20</span><b>{fmt('成交额比20')}</b></div>
-    <div><span>相对强弱</span><b>{fmt('市场相对强弱20%','%')}</b></div>
-    <div><span>动量20</span><b>{fmt('20日动量%','%')}</b></div>
-    <div><span>ATR14</span><b>{fmt('ATR14%','%')}</b></div>
-    <div><span>距高点</span><b>{fmt('距60日高点%','%')}</b></div>
+  <div class="signal-strip">
+    <span class="sector-chip">{sector_bit}</span>
+    {tab_chips}
+    {watch_badge}
   </div>
-  <div class="cols">
-    <section><h3>为何入选</h3><ul>{why}</ul></section>
-    <section><h3>主要风险</h3><ul>{risks}</ul></section>
+  <div class="metric-grid">{metric_html}</div>
+  <div class="analysis-grid">
+    <section class="reason-panel"><h3><span aria-hidden="true">✓</span> 入选依据</h3><ul>{why}</ul></section>
+    <section class="risk-panel"><h3><span aria-hidden="true">!</span> 风险核对</h3><ul>{risks}</ul></section>
   </div>
-  <footer class="links">
-    <a href="{_esc(links.get('symbol','#'))}">标的上下文</a>
-    <a href="{_esc(links.get('minute','#'))}">分时</a>
-    <a href="{_esc(links.get('trainer','#'))}">训练</a>
-    <a href="{_esc(links.get('journal','#'))}">日记</a>
-    <a href="{_esc(links.get('dashboard','#'))}">选股页</a>
+  <footer class="candidate-actions">
+    <a class="card-primary-action" href="{_esc(links.get('symbol','#'))}">打开标的研究 <span aria-hidden="true">→</span></a>
+    <nav aria-label="{_esc(card.get('name') or code)}快捷入口">
+      <a href="{_esc(links.get('minute','#'))}">分时</a>
+      <a href="{_esc(links.get('trainer','#'))}">训练</a>
+      <a href="{_esc(links.get('journal','#'))}">日记</a>
+      <a href="{_esc(links.get('dashboard','#'))}">选股页</a>
+    </nav>
   </footer>
 </article>""")
 
-    body_cards = "\n".join(card_html) or "<p class='app-empty'>暂无建设性命中可入短名单。请先更新选股仪表盘。</p>"
+    body_cards = "\n".join(card_html) or "<p class='app-empty shortlist-empty'>暂无建设性命中可入短名单。请先更新选股仪表盘。</p>"
     notes = "".join(f"<li>{_esc(n)}</li>" for n in payload.get("notes") or [])
+    export_json = json.dumps("\n".join(export_rows), ensure_ascii=False).replace("</", "<\\/")
     return f"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -461,42 +507,45 @@ def render_shortlist_html(payload: dict) -> str:
 <title>每日短名单理由卡</title>
 <link rel="stylesheet" href="/assets/app.css">
 <link rel="stylesheet" href="/assets/workbench.css">
+<link rel="stylesheet" href="/assets/shortlist.css">
 <script defer src="/assets/app-shell.js"></script>
-<style>
-main.wrap{{max-width:920px;margin:0 auto;padding:16px 14px 40px}}
-.hero{{margin-bottom:14px}}
-.hero h1{{font-size:1.25rem;margin:0 0 6px}}
-.hero p{{margin:0;color:var(--app-muted,#667085);font-size:.9rem}}
-.card{{background:var(--app-card,#fff);border:1px solid var(--app-border,#e5e8ef);border-radius:12px;padding:12px 14px;margin:0 0 12px}}
-.card .title{{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline}}
-.card .rank{{color:var(--app-muted,#667085);font-variant-numeric:tabular-nums}}
-.card .meta{{margin-top:4px;font-size:.82rem;color:var(--app-muted,#667085)}}
-.badge{{font-size:.72rem;background:#eef4ff;color:#2952cc;padding:2px 6px;border-radius:999px}}
-.metrics{{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:10px 0;font-variant-numeric:tabular-nums}}
-.metrics span{{display:block;font-size:.72rem;color:var(--app-muted,#667085)}}
-.metrics b{{font-size:.95rem}}
-.cols{{display:grid;grid-template-columns:1fr 1fr;gap:10px}}
-.cols h3{{margin:0 0 4px;font-size:.85rem}}
-.cols ul{{margin:0;padding-left:1.1rem;font-size:.86rem;line-height:1.45}}
-.links{{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;font-size:.85rem}}
-.notes{{font-size:.82rem;color:var(--app-muted,#667085)}}
-@media(max-width:700px){{
-  .metrics{{grid-template-columns:repeat(2,minmax(0,1fr))}}
-  .cols{{grid-template-columns:1fr}}
-}}
-</style>
+<script defer src="/assets/shortlist.js"></script>
 </head>
 <body>
 <main class="wrap">
-  <div class="hero">
-    <h1>每日短名单理由卡</h1>
-    <p>指标日 { _esc(str(market_date)) } · 生成 { _esc(str(generated_at)) } · 共 {len(cards)} 只
-       （候选 {payload.get('candidate_count', 0)}）</p>
-    <p style="margin-top:6px"><a href="/daily_ops.html">← 每日操盘</a> · <a href="/dashboard.html">选股仪表盘</a></p>
-  </div>
-  {body_cards}
-  <ul class="notes">{notes}</ul>
+  <section class="shortlist-hero" aria-labelledby="pageTitle">
+    <div class="hero-topline">
+      <div class="hero-copy">
+        <div class="eyebrow">DAILY RESEARCH SHORTLIST</div>
+        <h1 id="pageTitle">每日短名单理由卡</h1>
+        <p>把形态命中、量价表现、板块强度与风险提示压缩成一页，先看优先级，再进入标的研究。</p>
+      </div>
+      <div class="hero-actions">
+        <button class="btn btn-primary" id="copyShortlist" type="button">复制全部标的</button>
+        <a class="btn" href="/daily_ops.html">每日操盘</a>
+        <a class="btn" href="/dashboard.html">选股仪表盘</a>
+      </div>
+    </div>
+    <div class="summary-grid" aria-label="短名单摘要">
+      <div class="summary-item summary-date"><span>指标交易日</span><strong>{_esc(str(market_date))}</strong><small>生成于 {_esc(generated_label)}</small></div>
+      <div class="summary-item"><span>今日入选</span><strong>{len(cards)}<small> 只</small></strong><small>按综合评分排序</small></div>
+      <div class="summary-item"><span>全量候选</span><strong>{candidate_count}<small> 只</small></strong><small>进入多维拼装池</small></div>
+      <div class="summary-item"><span>入选比例</span><strong>{selection_rate:.2f}<small>%</small></strong><small>宁缺毋滥，板块分散</small></div>
+      <div class="summary-item"><span>最高评分</span><strong>{f'{top_score:.2f}' if top_score is not None else '—'}</strong><small>仅用于候选排序</small></div>
+    </div>
+    <div class="copy-status" id="copyStatus" role="status" aria-live="polite"></div>
+  </section>
+  <section class="section-heading" aria-labelledby="candidateHeading">
+    <div><span class="section-kicker">按优先级排列</span><h2 id="candidateHeading">今日候选</h2></div>
+    <p>红绿只表达行情方向；蓝色表示研究优先级，不代表买入建议。</p>
+  </section>
+  <div class="candidate-grid">{body_cards}</div>
+  <details class="method-notes">
+    <summary>口径与使用提示</summary>
+    <ul>{notes}</ul>
+  </details>
 </main>
+<script id="shortlistExportData" type="application/json">{export_json}</script>
 </body>
 </html>
 """

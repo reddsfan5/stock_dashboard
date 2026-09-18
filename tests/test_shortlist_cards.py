@@ -4,6 +4,7 @@ from scripts.reports.shortlist_cards import (
     assemble_shortlist,
     diversify_pick,
     extract_dashboard_payload,
+    render_shortlist_html,
     score_candidate,
 )
 
@@ -77,6 +78,34 @@ class ShortlistCardsTest(unittest.TestCase):
             in_watchlist=True,
         )
         self.assertGreater(high, low)
+
+    def test_render_shortlist_uses_decision_first_layout_and_safe_export(self):
+        payload = {
+            "market_date": "2026-09-18",
+            "generated_at": "2026-09-18T22:45:01+08:00",
+            "candidate_count": 40,
+            "cards": [{
+                "rank": 1,
+                "code": "sh600000",
+                "name": "浦发银行",
+                "sector": "银行",
+                "sector_change_pct": 1.2,
+                "score": 9.8765,
+                "tab_labels": ["横盘震荡"],
+                "metrics": {"市场相对强弱20%": 2.1, "20日动量%": -1.0},
+                "why": ["量价配合"],
+                "risks": ["仍需确认"],
+                "links": {"symbol": "/symbol.html?code=sh600000"},
+            }],
+            "notes": ["仅供研究"],
+        }
+        html = render_shortlist_html(payload)
+        self.assertIn('class="candidate-card is-featured is-podium"', html)
+        self.assertIn("复制全部标的", html)
+        self.assertIn("入选依据", html)
+        self.assertIn("600000 浦发银行", html)
+        self.assertIn("/assets/shortlist.css", html)
+        self.assertIn("/assets/shortlist.js", html)
 
 
 if __name__ == "__main__":
