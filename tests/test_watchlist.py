@@ -11,6 +11,7 @@ from data.watchlist import (
     compute_next_day_return,
     rank_sector_strength,
 )
+from scripts.services.watchlist import WatchlistService
 
 
 class WatchlistRepositoryTest(unittest.TestCase):
@@ -69,6 +70,15 @@ class WatchlistRepositoryTest(unittest.TestCase):
         self.assertAlmostEqual(tracks[0]["return_pct"], -5.0)
         self.assertTrue(tracks[0]["pattern_failed"])
         self.assertEqual(tracks[0]["item_id"], item["id"])
+
+    def test_search_symbols_supports_partial_name_and_code(self):
+        service = WatchlistService(
+            repository=self.repo,
+            name_map={"sh600519": "贵州茅台", "sz000001": "平安银行"},
+        )
+        self.assertEqual(service.search_symbols("茅台")[0]["code"], "sh600519")
+        self.assertEqual(service.search_symbols("000001")[0]["name"], "平安银行")
+        self.assertEqual(service.search_symbols("sh123456")[0]["code"], "sh123456")
 
 
 class NextDayReturnTest(unittest.TestCase):

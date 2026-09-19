@@ -6,10 +6,9 @@
 
   var NAV = [
     {key:'daily',href:'/daily_ops.html',label:'每日操盘',icon:'◫',group:'日常看盘'},
-    {key:'shortlist',href:'/shortlist.html',label:'短名单理由卡',icon:'▣',group:'日常看盘'},
+    {key:'shortlist',href:'/shortlist.html',label:'每日精选',icon:'▣',group:'日常看盘'},
     {key:'dashboard',href:'/dashboard.html',label:'选股仪表盘',icon:'▦',group:'日常看盘'},
     {key:'watchlist',href:'/watchlist.html',label:'观察池',icon:'☆',group:'日常看盘'},
-    {key:'symbol',href:'/symbol.html',label:'标的上下文',icon:'◎',group:'日常看盘'},
     {key:'minute',href:'/minute_view.html',label:'分时查询',icon:'⌁',group:'日常看盘'},
     {key:'news',href:'/market_news.html',label:'市场资讯',icon:'≡',group:'日常看盘'},
     {key:'trainer',href:'/trading_trainer.html',label:'交易训练',icon:'▷',group:'交易训练'},
@@ -18,7 +17,8 @@
     {key:'sectors',href:'/sector_atlas.html',label:'板块图谱',icon:'◈',group:'研究复盘'},
     {key:'home',href:'/index.html',label:'全部工具',icon:'⋯',group:'研究复盘'}
   ];
-  var PATH_KEY = {'/':'home'};
+  // 标的页是带具体代码的详情页，保留页面状态映射但不作为无目标标的的侧栏入口。
+  var PATH_KEY = {'/':'home','/symbol.html':'symbol'};
   NAV.forEach(function(item){PATH_KEY[item.href]=item.key;});
   function emit(name, value) { window.dispatchEvent(new CustomEvent('stockapp:'+name, {detail:value})); }
   function webUrl(path) {
@@ -217,7 +217,7 @@
         group=item.group;
         return heading+'<a class="wb-nav-link" data-nav="'+item.key+'" href="'+webUrl(item.href)+'" title="'+item.label+'"><span class="wb-nav-icon" aria-hidden="true">'+item.icon+'</span><span class="wb-nav-label">'+item.label+'</span></a>';
       }).join('');
-      var item=NAV.find(function(n){return n.key===key;});
+      var item=NAV.find(function(n){return n.key===key;}) || (key === 'symbol' ? {label:'标的上下文'} : null);
       host.innerHTML='<aside class="wb-sidebar" id="wb-sidebar"><a class="wb-brand" href="'+webUrl('/daily_ops.html')+'"><span class="wb-logo">Q</span><span class="wb-nav-label">量化工作台<small>研究 · 交易 · 复盘</small></span></a><nav aria-label="主导航">'+nav+'</nav><div class="wb-sidebar-foot">A 股研究工作台</div></aside>'+
         '<button class="wb-scrim" hidden aria-label="关闭导航"></button>'+
         '<header class="wb-topbar"><button class="wb-menu" aria-label="切换导航" aria-controls="wb-sidebar" aria-expanded="false">☰</button><span class="wb-page-name">'+(item?item.label:'量化工作台')+'</span>'+toolButtonsHtml()+'</header>'+

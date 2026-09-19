@@ -5,8 +5,8 @@ async (page) => {
   const results = [], errors = [], failedResources = [];
   q.on('pageerror', e => errors.push(e.message));
   q.on('response', r => {if(r.status() >= 400) failedResources.push({url:r.url(),status:r.status()});});
-  const routes = ['index.html','daily_ops.html','dashboard.html','watchlist.html',
-    'symbol.html?code=sh600000','minute_view.html','trading_trainer.html',
+  const routes = ['index.html','daily_ops.html','dashboard.html','watchlist.html','watchlist_monitor.html',
+    'shortlist.html','shortlist_monitor.html','symbol.html?code=sh600000','minute_view.html','trading_trainer.html',
     'grid_simulator.html','stock_journal.html?code=sh600000','market_news.html'];
   try {
     for (const [width,height] of [[1440,900],[1024,768],[390,844],[360,800],[844,390]]) {

@@ -16,6 +16,8 @@ intersection.html
 
 # 图片
 *.png
+!docs/assets/
+!docs/assets/*.png
 
 # 日志
 *.log

@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>观察池收益监控 · 量化工作台</title>
+  <link rel="stylesheet" href="/assets/app.css"><link rel="stylesheet" href="/assets/workbench.css">
+  <link rel="stylesheet" href="/assets/watchlist-monitor.css?v=1">
+  <script defer src="/assets/app-shell.js"></script><script defer src="/assets/watchlist-monitor.js?v=1"></script>
+</head>
+<body>
+<div id="app-shell" data-active="watchlist"></div>
+<main class="watch-monitor-page">
+  <nav class="watch-monitor-breadcrumb"><a href="/watchlist.html">观察池</a><span>/</span><span>收益监控</span></nav>
+  <header class="watch-monitor-hero">
+    <div class="watch-monitor-hero-top"><div><p class="watch-monitor-eyebrow">WATCHLIST · COHORT REVIEW</p><h1>观察池收益监控</h1><p>按实际加入观察池的日期分批复盘后续价格空间，筛出日只作为辅助线索。</p></div><a class="watch-monitor-back" href="/watchlist.html">返回观察池 <span>↗</span></a></div>
+    <div class="watch-monitor-context"><div><span>当前批次</span><strong id="contextBatch">全部批次</strong></div><div><span>观察窗口</span><strong id="contextHorizon">5 个交易日</strong></div><div><span>行情截止</span><strong id="contextAsOf">读取中</strong></div><div><span>最近计算</span><strong id="contextFreshness">读取中</strong></div></div>
+  </header>
+  <section class="watch-monitor-batch"><div><span class="watch-monitor-kicker">BATCH SELECTOR</span><h2>按加入批次查看</h2><p>加入日期来自观察池创建时间；最新批次没有后续交易日时显示“等待入场”。</p></div><div class="watch-monitor-batch-actions"><label for="batchSelect">加入日期</label><select id="batchSelect"><option value="">全部批次</option></select><button id="olderBatch" type="button">← 较早</button><button id="newerBatch" type="button">较新 →</button></div></section>
+  <section class="watch-monitor-controls"><div class="watch-monitor-horizon" id="horizonButtons"><button data-horizon="1">1 日</button><button data-horizon="3">3 日</button><button data-horizon="5" class="is-active">5 日</button><button data-horizon="10">10 日</button><button data-horizon="20">20 日</button></div><div class="watch-monitor-fields"><label>从<input id="fromDate" type="date"></label><label>到<input id="toDate" type="date"></label><label>状态<select id="status"><option value="">全部状态</option><option value="watching">观察中</option><option value="planned">待买</option><option value="bought">已买</option><option value="dropped">已放弃</option></select></label><label>来源<select id="source"><option value="">全部来源</option></select></label><label>排序<select id="sort"><option value="joined_date">加入日期</option><option value="peak_return_pct">峰值高到低</option><option value="close_return_pct">收盘高到低</option></select></label><button id="resetFilters" type="button">查看全部批次</button></div></section>
+  <div class="watch-monitor-alert" id="notice" role="status" aria-live="polite">正在读取收益记录…</div>
+  <section class="watch-monitor-overview"><article class="watch-monitor-lead"><span>理论峰值 · 中位数 <b title="窗口内最高价相对入场开盘价">ⓘ</b></span><strong id="peakMedian">—</strong><div><small>窗口末收盘中位</small><b id="closeMedian">—</b></div><p>理论峰值代表曾出现的价格空间，不代表能在最高点成交。</p></article><div class="watch-monitor-metrics" id="metrics"></div></section>
+  <section class="watch-monitor-section"><div class="watch-monitor-section-head"><div><span class="watch-monitor-kicker">01 / BATCH REVIEW</span><h2>批次表现</h2><p>点击加入日期，可切换到该批观察池标的。</p></div><span id="cohortCount" class="watch-monitor-count">—</span></div><div class="watch-monitor-table-wrap"><table class="watch-monitor-table cohort-table"><thead><tr><th>加入日期</th><th>筛出日</th><th class="number">样本 / 完成</th><th class="number">峰值中位</th><th class="number">收盘中位</th><th class="number">正收益</th><th class="number">收盘超额</th></tr></thead><tbody id="cohortBody"></tbody></table></div></section>
+  <section class="watch-monitor-section"><div class="watch-monitor-section-head"><div><span class="watch-monitor-kicker">02 / ITEM DETAILS</span><h2>标的明细</h2><p>加入日期与筛出日分栏展示，避免把两个时间口径混为一谈。</p></div><span id="itemCount" class="watch-monitor-count">—</span></div><div class="watch-monitor-table-wrap"><table class="watch-monitor-table item-table"><thead><tr><th>标的</th><th>加入 / 筛出</th><th>状态</th><th>来源</th><th>入场</th><th class="number">理论峰值</th><th class="number">窗口收盘</th><th class="number">最大不利</th><th class="number">收盘超额</th></tr></thead><tbody id="itemBody"></tbody></table></div><div class="watch-monitor-pager"><button id="prevPage" type="button">上一页</button><span id="pageInfo">—</span><button id="nextPage" type="button">下一页</button></div></section>
+  <aside class="watch-monitor-method"><strong>口径说明</strong><p>主批次日期是加入观察池的上海本地日期，筛出日单独保留；入场价取加入日后的第一个真实交易日开盘。结果不模拟手续费、滑点、涨跌停排队和真实成交，红色表示上涨，绿色表示下跌。</p></aside>
+</main>
+</body></html>

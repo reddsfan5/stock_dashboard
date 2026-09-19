@@ -34,6 +34,13 @@ th{color:var(--muted);font-weight:600}
 .bar .fill{height:100%;background:var(--red)}.bar .fill.neg{background:var(--green)}
 .notice{color:var(--muted);font-size:12px;margin-top:6px}
 .err{color:var(--red);font-size:12px}
+.instrument-field{min-width:280px;flex:1}
+.instrument-picker{position:relative}
+.instrument-picker>input{width:100%;min-width:260px}
+.instrument-results{display:none;position:absolute;z-index:20;top:calc(100% + 5px);left:0;right:0;max-height:260px;overflow:auto;background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 28px rgba(20,34,60,.16)}
+.instrument-result{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 12px;border-bottom:1px solid var(--line);cursor:pointer}
+.instrument-result:last-child{border-bottom:0}.instrument-result:hover,.instrument-result:focus{background:#edf4ff;outline:0}.instrument-result strong{font-size:13px}.instrument-result code{font-size:12px;color:var(--blue);font-variant-numeric:tabular-nums}.field-hint{display:block;color:var(--muted);font-size:11px;line-height:1.4;margin-top:4px}.field-hint.is-selected{color:var(--blue)}
+@media(max-width:760px){.instrument-field{min-width:100%}.instrument-picker>input{min-width:0}.instrument-results{left:0;right:0;max-height:42vh}}
 </style>
 </head>
 <body>
@@ -46,8 +53,14 @@ th{color:var(--muted);font-weight:600}
   <div class="panel app-reveal">
     <h2>加入观察</h2>
     <div class="row">
-      <label>代码<input id="code" placeholder="sh600519"></label>
-      <label>名称<input id="name" placeholder="可选"></label>
+      <label class="instrument-field">标的
+        <div class="instrument-picker">
+          <input id="instrumentSearch" autocomplete="off" aria-controls="instrumentResults" aria-autocomplete="list" placeholder="输入代码、简称或名称，如 600519 / 茅台">
+          <div class="instrument-results" id="instrumentResults" role="listbox"></div>
+        </div>
+        <span class="field-hint" id="instrumentHint">支持模糊匹配，点选候选后加入；也可直接输入完整代码。</span>
+      </label>
+      <input id="code" type="hidden"><input id="name" type="hidden">
       <label>状态<select id="status"><option value="watching">观察中</option><option value="planned">待买</option><option value="bought">已买</option></select></label>
       <label>来源模块<input id="module" placeholder="continuity"></label>
       <label>筛出日<input id="screenDate" type="date"></label>
@@ -172,15 +185,75 @@ async function loadSectors(){
 function $(id){return document.getElementById(id)}
 function toastMsg(msg,tone){if(window.StockAppShell&&StockAppShell.toast)StockAppShell.toast(msg,{tone:tone||'info'});}
 
+let instrumentRows=[];
+let instrumentSearchTimer=0;
+let instrumentSearchSeq=0;
+function hideInstrumentResults(){ $('instrumentResults').style.display='none'; }
+function selectInstrument(row){
+  $('code').value=row.code||'';
+  $('name').value=row.name||'';
+  $('instrumentSearch').value=row.name ? `${row.name} · ${row.code}` : row.code;
+  $('instrumentHint').textContent='已选择 '+(row.name||row.code)+'，可直接加入观察池。';
+  $('instrumentHint').classList.add('is-selected');
+  hideInstrumentResults();
+}
+function renderInstrumentResults(rows){
+  instrumentRows=rows||[];
+  const box=$('instrumentResults');
+  if(!instrumentRows.length){
+    box.innerHTML='<div class="instrument-result"><span>没有匹配的本地标的</span></div>';
+    box.style.display='block';
+    return;
+  }
+  box.innerHTML=instrumentRows.map((row,i)=>`<div class="instrument-result" role="option" tabindex="0" data-index="${i}"><strong>${esc(row.name||'未命名标的')}</strong><code>${esc(row.code)}</code></div>`).join('');
+  box.style.display='block';
+}
+async function searchInstruments(){
+  const q=$('instrumentSearch').value.trim();
+  if(!q){ instrumentRows=[]; hideInstrumentResults(); return; }
+  const seq=++instrumentSearchSeq;
+  try{
+    const rows=await api('/api/watchlist/search?q='+encodeURIComponent(q)+'&limit=20');
+    if(seq===instrumentSearchSeq) renderInstrumentResults(rows);
+  }catch(e){
+    if(seq===instrumentSearchSeq){ instrumentRows=[]; $('instrumentHint').textContent='标的搜索暂不可用，可直接输入完整代码。'; }
+  }
+}
+$('instrumentSearch').oninput=()=>{
+  $('code').value=''; $('name').value='';
+  $('instrumentHint').textContent='支持模糊匹配，点选候选后加入；也可直接输入完整代码。';
+  $('instrumentHint').classList.remove('is-selected');
+  clearTimeout(instrumentSearchTimer);
+  instrumentSearchTimer=setTimeout(searchInstruments,180);
+};
+$('instrumentSearch').onkeydown=(e)=>{
+  if(e.key==='Escape'){hideInstrumentResults();return;}
+  if(e.key==='Enter' && instrumentRows.length===1){e.preventDefault();selectInstrument(instrumentRows[0]);}
+};
+$('instrumentResults').onclick=(e)=>{
+  const row=e.target.closest('[data-index]');
+  if(row) selectInstrument(instrumentRows[Number(row.dataset.index)]);
+};
+$('instrumentResults').onkeydown=(e)=>{
+  if(e.key==='Enter'){
+    const row=e.target.closest('[data-index]');
+    if(row) selectInstrument(instrumentRows[Number(row.dataset.index)]);
+  }
+};
+document.addEventListener('click',e=>{if(!e.target.closest('.instrument-picker'))hideInstrumentResults();});
 
 $('addBtn').onclick = async ()=>{
   $('addErr').textContent='';
   try{
+    if(!$('code').value && instrumentRows.length===1) selectInstrument(instrumentRows[0]);
+    const typed=$('instrumentSearch').value.trim();
+    const code=$('code').value.trim() || (/^(?:(?:sh|sz)?\d{6})$/i.test(typed) ? typed : '');
+    if(!code) throw new Error('请输入代码、简称或名称，并从匹配结果中选择标的');
     await api('/api/watchlist/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-      code:$('code').value, name:$('name').value, status:$('status').value,
+      code, name:$('name').value, status:$('status').value,
       source_module:$('module').value, screen_date:$('screenDate').value, thesis:$('thesis').value
     })});
-    $('code').value=''; $('thesis').value='';
+    $('code').value=''; $('name').value=''; $('instrumentSearch').value=''; instrumentRows=[]; hideInstrumentResults(); $('instrumentHint').textContent='支持模糊匹配，点选候选后加入；也可直接输入完整代码。'; $('instrumentHint').classList.remove('is-selected'); $('thesis').value='';
     toastMsg('已加入观察池','ok');
     window.dispatchEvent(new Event('stockapp:watch-added'));
     await loadWatch();

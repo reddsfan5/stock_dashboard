@@ -711,7 +711,7 @@ button:hover,.chip:hover,.chip.active,.seg button.active{border-color:var(--acce
   <div class="fly-body">
     <div class="fly-pane active" id="paneCtrl" data-pane="ctrl">
       <div class="title">申万二级 · 相关点云</div>
-      <div class="sub">去市场 beta 后的残差结构。点颜色/大小=涨跌（红涨绿跌）；连线为持续流动光流。查询可切换「板块 / 标的」。</div>
+      <div class="sub">去市场 beta 后的残差结构。点颜色/大小=涨跌（红涨绿跌）；连线为持续流动光流。查询可切换「板块 / 标的」。领先传导只显示当前中心板块的最强连接，每个方向保留前3条。当前点云是关系观察，不代表历史时点信号。</div>
       <div class="search">
         <div class="seg" id="qmode">
           <button type="button" class="active" data-v="sector">板块</button>
@@ -824,6 +824,30 @@ let qMode = 'sector';
 let mode = 'sync';
 let coreIds = new Set();
 let focusIds = new Set();
+const LEAD_FOCUSED_TOTAL_LIMIT = 12;
+const LEAD_PER_CORE_DIRECTION = 3;
+const LEAD_PANEL_LIMIT = 6;
+
+// xcorr 是传导强度主排序，事件概率提升用于同强度边的次级区分。
+function leadStrength(edge) {
+  const lift = Math.max(Math.abs(Number(edge.lift_up) || 0), Math.abs(Number(edge.lift_dn) || 0));
+  return (Number(edge.abs) || Math.abs(Number(edge.xcorr) || 0)) + Math.min(0.2, lift) * 0.35;
+}
+function sortLeadEdges(edges) {
+  return [...edges].sort((a, b) => leadStrength(b) - leadStrength(a) || (Number(b.abs) || 0) - (Number(a.abs) || 0));
+}
+function visibleLeadEdges(filterIds = null) {
+  const all = DATA.lead_edges || [];
+  // 领先传导必须围绕当前中心板块解释；全局视图不绘制无关连线。
+  if (!filterIds || !filterIds.size) return [];
+  const picked = new Map();
+  for (const core of filterIds) {
+    const outgoing = sortLeadEdges(all.filter(edge => edge.source === core)).slice(0, LEAD_PER_CORE_DIRECTION);
+    const incoming = sortLeadEdges(all.filter(edge => edge.target === core)).slice(0, LEAD_PER_CORE_DIRECTION);
+    for (const edge of [...outgoing, ...incoming]) picked.set(`${edge.source}|${edge.target}`, edge);
+  }
+  return sortLeadEdges([...picked.values()]).slice(0, LEAD_FOCUSED_TOTAL_LIMIT);
+}
 
 function retOf(n) {
   const v = retWindow === 'cum20' ? (n.cum20 ?? n.cum_20 ?? n.ret20) : (n.last ?? n.ret1 ?? n.day);
@@ -912,7 +936,7 @@ const leadGroup = new THREE.Group(); scene.add(leadGroup); leadGroup.visible = f
 function rebuildLeadArrows(filterIds = null) {
   while (leadGroup.children.length) { const ch = leadGroup.children.pop(); ch.geometry?.dispose?.(); ch.material?.dispose?.(); }
   const cPos = new THREE.Color(0xffd166), cNeg = new THREE.Color(0x7aa2ff);
-  for (const e of (DATA.lead_edges || [])) {
+  for (const e of visibleLeadEdges(filterIds)) {
     if (filterIds && filterIds.size && !filterIds.has(e.source) && !filterIds.has(e.target)) continue;
     const a = nodeById[e.source], b = nodeById[e.target]; if (!a || !b) continue;
     const start = new THREE.Vector3(a.x, a.y, a.z), end = new THREE.Vector3(b.x, b.y, b.z);
@@ -983,7 +1007,7 @@ function rebuildFlow() {
       addFlow(a.x, a.y, a.z, b.x, b.y, b.z, e.sign >= 0 ? 0xff8a8a : 0x3ddc97, 0.45 + 0.5 * s);
     }
   } else {
-    for (const e of (DATA.lead_edges || [])) {
+    for (const e of visibleLeadEdges(coreIds)) {
       if (!(coreIds.has(e.source) || coreIds.has(e.target))) continue;
       if (!(focusIds.has(e.source) || focusIds.has(e.target))) continue;
       const a = nodeById[e.source], b = nodeById[e.target]; if (!a || !b) continue;
@@ -1042,6 +1066,28 @@ function searchStocks(q) {
   }
   return out;
 }
+function applyDeepLink() {
+  const params = new URLSearchParams(location.search);
+  const stock = (params.get('stock') || params.get('code') || '').trim();
+  if (!stock) return;
+  const hit = searchStocks(stock)[0];
+  qMode = 'stock';
+  document.querySelectorAll('#qmode button').forEach(b => b.classList.toggle('active', b.dataset.v === 'stock'));
+  const input = document.getElementById('q');
+  input.placeholder = '输入股票名称或代码…';
+  input.value = stock;
+  if (!hit) {
+    updateHints();
+    document.getElementById('pBody').innerHTML = '<div class="empty">点云索引中暂未找到该标的，仍可手动查询板块。</div>';
+    return;
+  }
+  setFocus([hit.sector]);
+  const source = params.get('from');
+  const title = document.getElementById('pTitle');
+  if (title) title.textContent = `${hit.name} · ${hit.sector}`;
+  const meta = document.getElementById('pMeta');
+  if (meta) meta.textContent = `${source === 'shortlist' ? '来自短名单 · ' : source === 'symbol' ? '来自标的上下文 · ' : ''}已聚焦所属申万二级板块`;
+}
 function egoOf(cores) {
   const one = new Set(cores), two = new Set();
   if (mode === 'lead') {
@@ -1064,7 +1110,7 @@ function applyFocusVisual() {
   const has = focusIds.size > 0;
   syncLines.visible = mode === 'sync' && !has;
   leadGroup.visible = mode === 'lead';
-  if (mode === 'lead') rebuildLeadArrows(has ? focusIds : null);
+  if (mode === 'lead') rebuildLeadArrows(has ? coreIds : null);
   rebuildFlow();
   renderBoard();
 }
@@ -1097,8 +1143,8 @@ function renderPanel(cores, neighborIds) {
   if (!cores || !cores.length) {
     if (title) title.textContent = '全局视图';
     if (mode === 'lead') {
-      meta.textContent = `${DATA.n_sectors} 个二级 · 领先边 ${(DATA.lead_edges || []).length} 条（周频 |xcorr|≥${DATA.lead_thr}，滞后1–${DATA.max_lag}周）`;
-      body.innerHTML = `<div class="empty">金色/蓝色箭头：A → B 表示 A 领先 B。光流沿箭头方向持续流动。</div>`;
+      meta.textContent = `${DATA.n_sectors} 个二级 · 尚未聚焦中心板块 · 共 ${(DATA.lead_edges || []).length} 条候选领先边`;
+      body.innerHTML = `<div class="empty">请先查询或点击一个板块。聚焦后只显示该中心板块最强的入向与出向连接，避免无关连线干扰。</div>`;
     } else {
       meta.textContent = `${DATA.n_sectors} 个二级 · 同步边 ${DATA.edges.length} 条（|ρ|≥${DATA.corr_thr} 且多年复现）`;
       body.innerHTML = `<div class="empty">${DATA.note || ''}</div>`;
@@ -1115,15 +1161,16 @@ function renderPanel(cores, neighborIds) {
     renderMembers(null);
   }
   if (mode === 'lead') {
-    meta.textContent = `传导模式 · 核心 ${cores.length} · 关联 ${neighborIds.length}`;
+    const visible = visibleLeadEdges(coreIds).length;
+    meta.textContent = `传导模式 · 核心 ${cores.length} · 显示最强 ${visible} 条连接 · 关联 ${neighborIds.length}`;
     const outs = [], inns = [], seenO = new Set(), seenI = new Set();
     for (const c of cores) {
       for (const nb of (DATA.lead_out[c] || [])) { if (coreIds.has(nb.id) || seenO.has(nb.id)) continue; seenO.add(nb.id); outs.push(nb); }
       for (const nb of (DATA.lead_in[c] || [])) { if (coreIds.has(nb.id) || seenI.has(nb.id)) continue; seenI.add(nb.id); inns.push(nb); }
     }
-    outs.sort((a, b) => b.abs - a.abs); inns.sort((a, b) => b.abs - a.abs);
-    const rowOut = outs.slice(0, 12).map(r => `<li data-id="${r.id}"><span>${r.id}<span class="sub2">滞后 ${r.lag} 周 · xcorr ${r.xcorr.toFixed(2)} · 跟涨 ${fmtPct(r.p_up)}（${fmtLift(r.lift_up)}）· 跟跌 ${fmtPct(r.p_dn)}（${fmtLift(r.lift_dn)}）</span></span><span class="leadc">→</span></li>`).join('');
-    const rowIn = inns.slice(0, 12).map(r => `<li data-id="${r.id}"><span>${r.id}<span class="sub2">滞后 ${r.lag} 周 · xcorr ${r.xcorr.toFixed(2)} · 跟涨 ${fmtPct(r.p_up)}（${fmtLift(r.lift_up)}）· 跟跌 ${fmtPct(r.p_dn)}（${fmtLift(r.lift_dn)}）</span></span><span class="leadc">←</span></li>`).join('');
+    outs.sort((a, b) => leadStrength(b) - leadStrength(a)); inns.sort((a, b) => leadStrength(b) - leadStrength(a));
+    const rowOut = outs.slice(0, LEAD_PANEL_LIMIT).map(r => `<li data-id="${r.id}"><span>${r.id}<span class="sub2">滞后 ${r.lag} 周 · xcorr ${r.xcorr.toFixed(2)} · 跟涨 ${fmtPct(r.p_up)}（${fmtLift(r.lift_up)}）· 跟跌 ${fmtPct(r.p_dn)}（${fmtLift(r.lift_dn)}）</span></span><span class="leadc">→</span></li>`).join('');
+    const rowIn = inns.slice(0, LEAD_PANEL_LIMIT).map(r => `<li data-id="${r.id}"><span>${r.id}<span class="sub2">滞后 ${r.lag} 周 · xcorr ${r.xcorr.toFixed(2)} · 跟涨 ${fmtPct(r.p_up)}（${fmtLift(r.lift_up)}）· 跟跌 ${fmtPct(r.p_dn)}（${fmtLift(r.lift_dn)}）</span></span><span class="leadc">←</span></li>`).join('');
     body.innerHTML = `<div class="sec">它领先谁（箭头指出）</div>${outs.length ? `<ul class="list">${rowOut}</ul>` : `<div class="empty">暂无明显领先对象</div>`}<div class="sec">谁领先它（箭头指入）</div>${inns.length ? `<ul class="list">${rowIn}</ul>` : `<div class="empty">暂无明显领先来源</div>`}`;
   } else {
     meta.textContent = `同步模式 · 核心 ${cores.length} · 一跳邻居 ${neighborIds.length}`;
@@ -1315,6 +1362,8 @@ document.getElementById('flyClose').onclick = () => setDockMode('hidden');
   dockMode = '__init__';
   setDockMode(saved, { persist: false });
 })();
+
+applyDeepLink();
 
 applyNodeAppearance();
 rebuildFlow();

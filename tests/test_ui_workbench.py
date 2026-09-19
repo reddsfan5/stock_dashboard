@@ -95,6 +95,25 @@ class ServiceCompatibilityTest(unittest.TestCase):
         self.assertIn('wb-screen-actions', source)
         self.assertNotIn('导出当前命中 TXT', source)
 
+    def test_symbol_context_is_detail_only_not_a_sidebar_entry(self):
+        source = (ASSETS / 'app-shell.js').read_text(encoding='utf-8')
+        self.assertNotIn("{key:'symbol',href:'/symbol.html',label:'标的上下文'", source)
+        self.assertIn("'/symbol.html':'symbol'", source)
+        self.assertIn("key === 'symbol' ? {label:'标的上下文'}", source)
+
+    def test_symbol_context_exposes_sector_correlation_link(self):
+        source = (ASSETS / 'symbol-page.js').read_text(encoding='utf-8')
+        classification = (ASSETS / 'classification.js').read_text(encoding='utf-8')
+        point_cloud = (Path(__file__).resolve().parents[1] / 'scripts' / 'reports' / 'gen_sector_corr_cloud.py').read_text(encoding='utf-8')
+        self.assertIn("/sector_corr_cloud.html?stock=", source)
+        self.assertIn("classification-cloud-actions", classification)
+        self.assertIn("当前结构参考", classification)
+        self.assertIn("function applyDeepLink()", point_cloud)
+        self.assertIn("params.get('stock') || params.get('code')", point_cloud)
+        self.assertIn("已聚焦所属申万二级板块", point_cloud)
+        self.assertIn("const LEAD_PER_CORE_DIRECTION = 3", point_cloud)
+        self.assertIn("if (!filterIds || !filterIds.size) return []", point_cloud)
+
 
 if __name__ == '__main__':
     unittest.main()

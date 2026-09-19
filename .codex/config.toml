@@ -1,0 +1,31 @@
+# 项目级本地 MCP。由 Codex 按需启动 STDIO 子进程，不监听端口。
+[mcp_servers.stock-data]
+command = "/Users/dong_007/D/stock/.venv/bin/python"
+args = ["-m", "stock_mcp.server"]
+cwd = "/Users/dong_007/D/stock"
+enabled = true
+required = false
+startup_timeout_sec = 10
+tool_timeout_sec = 120
+enabled_tools = [
+  "get_data_status",
+  "search_symbols",
+  "get_catalog",
+  "get_daily_bars",
+  "get_minute_bars",
+  "get_feature_snapshot",
+  "run_screener",
+  "get_market_context",
+  "get_market_news",
+  "get_symbol_context",
+  "get_research_artifacts",
+]
+
+[mcp_servers.stock-data.tools.get_daily_bars]
+output_token_limit = 12000
+
+[mcp_servers.stock-data.tools.get_minute_bars]
+output_token_limit = 16000
+
+[mcp_servers.stock-data.tools.run_screener]
+output_token_limit = 12000

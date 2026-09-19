@@ -16,6 +16,17 @@ def _run_write_app(label: str, import_path: str, attr: str = "write_app") -> Non
     print(f"✓ {label}")
 
 
+def _refresh_daily_ops() -> None:
+    """刷新每日操盘清单及当日每日精选历史。
+
+    每日更新时主动刷新板块快照；短名单生成器会复用该快照，
+    不再重复计算。
+    """
+    from scripts.reports.gen_daily_ops import generate as generate_daily_ops
+
+    generate_daily_ops(skip_sector=False)
+
+
 def main() -> int:
     critical_jobs = (
         ("网格模拟器", "scripts.services.grid_simulator"),
@@ -34,6 +45,14 @@ def main() -> int:
             failed.append(label)
 
     try:
+        # 页面生成是旁路任务，不计入原有关键页计数，也不应阻断每日更新。
+        from scripts.services.watchlist_monitor import write_app as write_watchlist_monitor_app
+        write_watchlist_monitor_app()
+        print("✓ 观察池收益监控")
+    except Exception as exc:
+        print(f"! 观察池收益监控页面刷新失败（非关键）: {exc}")
+
+    try:
         from scripts.reports.gen_sector_atlas import generate as generate_sector_atlas
         generate_sector_atlas()
         print("✓ 板块图谱")
@@ -41,11 +60,11 @@ def main() -> int:
         print(f"! 板块图谱刷新失败（非关键）: {exc}")
 
     try:
-        from scripts.reports.gen_daily_ops import generate as generate_daily_ops
-        generate_daily_ops(skip_sector=True)
+        _refresh_daily_ops()
         print("✓ 每日操盘清单")
     except Exception as exc:
-        print(f"! 每日操盘清单刷新失败（非关键）: {exc}")
+        print(f"✗ 每日操盘清单与每日精选历史刷新失败: {exc}", file=sys.stderr)
+        failed.append("每日操盘清单/每日精选历史")
 
     if failed:
         print(f"✗ 关键交互页刷新失败: {', '.join(failed)}", file=sys.stderr)

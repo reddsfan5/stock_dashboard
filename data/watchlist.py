@@ -271,7 +271,7 @@ class WatchlistRepository:
     def add(
         self,
         *,
-        user_id,
+        user_id=1,
         code: str,
         name: str = "",
         status: str = "watching",
@@ -336,7 +336,7 @@ class WatchlistRepository:
                 item_id = cursor.lastrowid
         return self.get(item_id, user_id=user_id)
 
-    def get(self, item_id: int, *, user_id) -> dict:
+    def get(self, item_id: int, *, user_id=1) -> dict:
         user_id = require_user_id(user_id)
         with self._connect() as connection:
             row = connection.execute(
@@ -350,7 +350,7 @@ class WatchlistRepository:
     def list_items(
         self,
         *,
-        user_id,
+        user_id=1,
         status: str = None,
         code: str = None,
         limit: int = 200,
@@ -379,7 +379,7 @@ class WatchlistRepository:
             ).fetchall()
         return [_decode_row(row) for row in rows]
 
-    def set_status(self, item_id: int, status: str, *, user_id, note: str = None) -> dict:
+    def set_status(self, item_id: int, status: str, *, user_id=1, note: str = None) -> dict:
         user_id = require_user_id(user_id)
         status = str(status or "").strip()
         if status not in STATUSES:
@@ -404,7 +404,7 @@ class WatchlistRepository:
                 )
         return self.get(item_id, user_id=user_id)
 
-    def soft_delete(self, item_id: int, *, user_id) -> dict:
+    def soft_delete(self, item_id: int, *, user_id=1) -> dict:
         user_id = require_user_id(user_id)
         stamp = _now()
         with self._connect() as connection:
@@ -425,7 +425,7 @@ class WatchlistRepository:
             ).fetchone()
         return _decode_row(row)
 
-    def save_track_result(self, payload: dict, *, user_id, item_id: int = None) -> dict:
+    def save_track_result(self, payload: dict, *, user_id=1, item_id: int = None) -> dict:
         user_id = require_user_id(user_id)
         code = normalize_code(payload["code"])
         screen_date = _iso_date(payload["screen_date"], "筛出日")
@@ -481,7 +481,7 @@ class WatchlistRepository:
     def list_tracks(
         self,
         *,
-        user_id,
+        user_id=1,
         track_date: str = None,
         screen_date: str = None,
         code: str = None,
@@ -527,7 +527,7 @@ class WatchlistRepository:
         self,
         kline_loader,
         *,
-        user_id,
+        user_id=1,
         as_of: str = None,
         fail_threshold_pct: float = -3.0,
         active_only: bool = True,

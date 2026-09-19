@@ -45,6 +45,8 @@ PAGE_PATHS = {
     "journal": "/stock_journal.html",
     "news": "/market_news.html",
     "watchlist": "/watchlist.html",
+    "watchlist_monitor": "/watchlist_monitor.html",
+    "shortlist_monitor": "/shortlist_monitor.html",
     "symbol": "/symbol.html",
     "web": "/index.html",
 }
@@ -55,6 +57,8 @@ TARGET_ALIASES = {
     "journal": "web",
     "news": "web",
     "watchlist": "web",
+    "watchlist_monitor": "web",
+    "shortlist_monitor": "web",
     "symbol": "web",
     "interactive": "web",
     "static": "reports",
@@ -315,6 +319,8 @@ def start_web(requested_target="web", replace_conflicts=False, lan=True):
     print("  日记：  http://127.0.0.1:{}/stock_journal.html".format(WEB_PORT))
     print("  资讯：  http://127.0.0.1:{}/market_news.html".format(WEB_PORT))
     print("  观察池：http://127.0.0.1:{}/watchlist.html".format(WEB_PORT))
+    print("  观察池收益：http://127.0.0.1:{}/watchlist_monitor.html".format(WEB_PORT))
+    print("  短名单收益：http://127.0.0.1:{}/shortlist_monitor.html".format(WEB_PORT))
     print("  日志：  {}".format(log_path))
     return True
 
@@ -458,7 +464,7 @@ def resolve_targets(target):
 
 def build_parser():
     parser = argparse.ArgumentParser(
-        description="统一管理分时、网格、T+1训练、选股日记、市场资讯、观察池和静态报告服务"
+        description="统一管理分时、网格、T+1训练、选股日记、市场资讯、观察池收益监控和静态报告服务"
     )
     parser.add_argument(
         "action", nargs="?", default="start",
@@ -467,7 +473,7 @@ def build_parser():
     )
     parser.add_argument(
         "target", nargs="?", default="all",
-        choices=["all", "web", "interactive", "minute", "grid", "trainer", "journal", "news", "watchlist", "reports", "report", "static"],
+        choices=["all", "web", "interactive", "minute", "grid", "trainer", "journal", "news", "watchlist", "watchlist_monitor", "shortlist_monitor", "reports", "report", "static"],
         help="默认 all；minute/grid/trainer/journal/news/watchlist 共用 web 进程",
     )
     parser.add_argument(

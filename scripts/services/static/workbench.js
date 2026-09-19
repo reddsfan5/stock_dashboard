@@ -191,7 +191,8 @@
       const modal=modalFor('加入观察池',add,$('#addBtn'));
       const main=document.createElement('div');main.className='wb-watch-main';wrap.prepend(main);
       const bar=document.createElement('div');bar.className='wb-section-head';
-      bar.append(tabs(['观察池','次日跟踪'],i=>{list.hidden=i!==0;track.hidden=i!==1;}),button('＋ 加入观察',modal.open,true));
+      const monitorLink=document.createElement('a');monitorLink.className='wb-btn';monitorLink.href=shell.webUrl('/watchlist_monitor.html');monitorLink.textContent='收益监控';
+      bar.append(tabs(['观察池','次日跟踪'],i=>{list.hidden=i!==0;track.hidden=i!==1;}),monitorLink,button('＋ 加入观察',modal.open,true));
       main.append(bar,list,track);
       const sectors=details('板块强度',[sector],wrap,innerWidth>=768);sector.classList.remove('app-reveal');
       window.addEventListener('stockapp:watch-added',()=>modal.dialog.close());

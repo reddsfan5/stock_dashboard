@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>每日精选收益监控 · 量化工作台</title>
+  <link rel="stylesheet" href="/assets/app.css">
+  <link rel="stylesheet" href="/assets/workbench.css">
+  <link rel="stylesheet" href="/assets/shortlist-monitor.css?v=3">
+  <script defer src="/assets/app-shell.js"></script>
+  <script defer src="/assets/shortlist-monitor.js?v=4"></script>
+</head>
+<body>
+  <div id="app-shell" data-active="shortlist"></div>
+  <main class="monitor-page">
+    <nav class="monitor-breadcrumb" aria-label="当前位置">
+      <a href="/shortlist.html" id="backShortlist">每日精选</a><span aria-hidden="true">/</span><span>收益监控</span>
+    </nav>
+    <header class="monitor-hero">
+      <div class="monitor-hero-top">
+        <div><p class="monitor-eyebrow">DAILY PICKS · OUTCOME REVIEW</p><h1>每日精选收益监控</h1><p class="monitor-subtitle">每日精选在后续交易日，曾经给出多少价格空间？窗口结束时又留下多少收益？</p></div>
+        <a class="monitor-return" href="/shortlist.html" id="heroShortlist">返回每日精选 <span aria-hidden="true">↗</span></a>
+      </div>
+      <div class="monitor-context">
+        <div><span>观察窗口</span><strong id="contextHorizon">5 个交易日</strong></div>
+        <div><span>候选范围</span><strong id="contextRange">全部历史批次</strong></div>
+        <div><span>行情截止</span><strong id="contextAsOf">读取中</strong></div>
+        <div><span>最近计算</span><strong id="contextFreshness">读取中</strong></div>
+      </div>
+    </header>
+
+    <section class="monitor-batch-picker" aria-label="按入选批次查看">
+      <div class="monitor-batch-copy"><span class="monitor-kicker">BATCH SELECTOR</span><h2>按入选批次查看</h2><p>选定一天，只看该批候选的后续表现；也可切回全部批次。</p></div>
+      <div class="monitor-batch-actions"><label for="batchSelect">入选日期</label><select id="batchSelect" aria-label="入选批次"><option value="">全部批次</option></select><button type="button" id="olderBatch" aria-label="较早批次" title="较早批次">← 较早</button><button type="button" id="newerBatch" aria-label="较新批次" title="较新批次">较新 →</button></div>
+    </section>
+
+    <section class="monitor-controls" aria-label="筛选条件">
+      <div class="monitor-horizon" id="horizonButtons" aria-label="观察窗口">
+        <button type="button" data-horizon="1">1 日</button><button type="button" data-horizon="3">3 日</button><button type="button" data-horizon="5" class="is-active">5 日</button><button type="button" data-horizon="10">10 日</button><button type="button" data-horizon="20">20 日</button>
+      </div>
+      <div class="monitor-fields">
+        <label>从 <input id="fromDate" type="date"></label><label>到 <input id="toDate" type="date"></label><label>前 N 名 <input id="rankMax" type="number" min="1" placeholder="全部"></label><label>板块 <select id="sector"><option value="">全部板块</option></select></label><label>状态 <select id="status"><option value="">全部状态</option><option value="complete">已完成</option><option value="partial">观察中</option><option value="pending">等待入场</option><option value="unavailable">无数据</option></select></label>
+        <button type="button" class="monitor-reset" id="resetFilters">查看全部批次</button>
+      </div>
+    </section>
+    <div class="monitor-alert" id="notice" role="status" aria-live="polite">正在读取收益记录…</div>
+
+    <section class="monitor-overview" aria-label="收益总览">
+      <article class="monitor-lead">
+        <div class="monitor-lead-label">理论峰值 · 中位数 <span title="次日开盘至窗口内最高价；只表示出现过的价格空间">ⓘ</span></div><strong id="peakMedian" class="monitor-lead-value">—</strong>
+        <div class="monitor-lead-baseline"><span>窗口末收盘中位</span><b id="closeMedian">—</b></div><p>同时看收盘结果，避免把最高价当作可直接兑现的收益。</p>
+      </article>
+      <div class="monitor-metrics" id="metrics"></div>
+    </section>
+
+    <section class="monitor-section" aria-labelledby="cohortTitle">
+      <div class="monitor-section-head"><div><p class="monitor-kicker">01 / BATCH REVIEW</p><h2 id="cohortTitle">按入选日期看表现</h2><p>点击日期查看该批收益；“每日精选”返回当日入选依据。</p></div><span id="cohortCount" class="monitor-count">—</span></div>
+      <div class="monitor-table-wrap"><table class="monitor-table cohort-table"><thead><tr><th>精选日期</th><th class="number">样本 / 已完成</th><th class="number">峰值中位</th><th class="number">+5% 命中</th><th class="number">收盘中位</th><th class="number">沪深300收盘</th><th class="number">收盘超额</th></tr></thead><tbody id="cohortBody"></tbody></table></div>
+    </section>
+
+    <section class="monitor-section" aria-labelledby="itemsTitle">
+      <div class="monitor-section-head"><div><p class="monitor-kicker">02 / CANDIDATE DETAILS</p><h2 id="itemsTitle">候选明细</h2><p>峰值、收盘和最大不利波动均以入选后的首个交易日开盘价为基准。</p></div><div class="monitor-detail-actions"><label>排序 <select id="sort"><option value="rank">排名优先</option><option value="peak_return_pct">峰值高到低</option><option value="close_return_pct">收盘高到低</option></select></label><span id="itemCount" class="monitor-count">—</span></div></div>
+      <div class="monitor-table-wrap"><table class="monitor-table item-table"><thead><tr><th>标的 / 精选日期</th><th>板块</th><th>状态</th><th>入场价 / 日期</th><th class="number">理论峰值</th><th class="number">窗口收盘</th><th class="number">最大不利</th><th class="number">峰值超额</th></tr></thead><tbody id="itemBody"></tbody></table></div>
+      <div class="monitor-pager"><button type="button" id="prevPage">上一页</button><span id="pageInfo">—</span><button type="button" id="nextPage">下一页</button></div>
+    </section>
+    <aside class="monitor-method"><strong>口径说明</strong><p>次日开盘价为入场基准，观察窗口包含入场日。理论峰值取窗口内最高价，表示曾出现的最大价格空间；它不代表能够在最高价成交。结果未计手续费、滑点和涨跌停成交限制。红色为上涨，绿色为下跌。</p></aside>
+  </main>
+</body>
+</html>

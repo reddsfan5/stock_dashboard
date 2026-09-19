@@ -37,7 +37,7 @@ from data.storage import atomic_write_json
 
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STATUS_FILE = os.path.join(PROJECT_DIR, "cache", "daily_update_status.json")
-STAGES = ("stocks", "etfs", "index", "minute", "enrich", "validate", "news", "market_context", "stock_facts", "watchlist_track", "reports")
+STAGES = ("stocks", "etfs", "index", "minute", "enrich", "validate", "news", "market_context", "stock_facts", "watchlist_track", "watchlist_monitor", "reports")
 REPORT_JOBS = (
     ("行情与板块报告", (sys.executable, "-m", "scripts.reports.gen_market")),
     ("选股仪表盘", (sys.executable, "-m", "scripts.screen")),
@@ -818,6 +818,30 @@ class DailyUpdatePipeline:
         }
         return True, f"观察池跟踪完成：{tracked} 条（{len(users)} 用户）", details
 
+    def _watchlist_monitor_stage(self):
+        """非关键：按加入批次刷新观察池后续收益。"""
+        from data.users import UserRepository, bootstrap_admin
+        from data.watchlist_monitor import WatchlistMonitorService
+
+        bootstrap_admin()
+        target = self.target_date or pd.Timestamp.today().normalize()
+        as_of = pd.Timestamp(target).strftime("%Y-%m-%d")
+        service = WatchlistMonitorService()
+        users = UserRepository().list_users(enabled_only=True)
+        refreshed = failed = 0
+        details = {"as_of": as_of, "users": []}
+        for user in users:
+            try:
+                result = service.refresh(user_id=user["id"], as_of=as_of)
+                refreshed += int(result.get("rows", 0))
+                details["users"].append({"user_id": user["id"], **result})
+            except Exception as exc:  # noqa: BLE001 — 旁路监控不得阻断主链路
+                failed += 1
+                service.repository.record_failure(user["id"], exc)
+                details["users"].append({"user_id": user["id"], "error": str(exc)})
+        details.update({"rows": refreshed, "failed_users": failed})
+        return True, f"观察池收益监控完成：{refreshed} 条（失败 {failed} 用户）", details
+
     def _stock_facts_stage(self):
         """非关键：交易日历、涨跌停事实、ST 状态。失败不阻断主链路。"""
         from data.calendar import TradingCalendar
@@ -872,6 +896,7 @@ class DailyUpdatePipeline:
             ("market_context", False, self._market_context_stage),
             ("stock_facts", False, self._stock_facts_stage),
             ("watchlist_track", False, self._watchlist_track_stage),
+            ("watchlist_monitor", False, self._watchlist_monitor_stage),
             ("reports", False, self._reports_stage),
         ]
         for name, critical, function in stage_functions:

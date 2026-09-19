@@ -95,7 +95,10 @@ class ShortlistCardsTest(unittest.TestCase):
                 "metrics": {"市场相对强弱20%": 2.1, "20日动量%": -1.0},
                 "why": ["量价配合"],
                 "risks": ["仍需确认"],
-                "links": {"symbol": "/symbol.html?code=sh600000"},
+                "links": {
+                    "symbol": "/symbol.html?code=sh600000",
+                    "corr_cloud": "/sector_corr_cloud.html?stock=sh600000&from=shortlist",
+                },
             }],
             "notes": ["仅供研究"],
         }
@@ -104,8 +107,29 @@ class ShortlistCardsTest(unittest.TestCase):
         self.assertIn("复制全部标的", html)
         self.assertIn("入选依据", html)
         self.assertIn("600000 浦发银行", html)
+        self.assertIn("板块联动", html)
+        self.assertIn("/sector_corr_cloud.html?stock=sh600000&amp;from=shortlist", html)
         self.assertIn("/assets/shortlist.css", html)
         self.assertIn("/assets/shortlist.js", html)
+
+    def test_render_shortlist_exposes_history_date_navigation(self):
+        payload = {
+            "market_date": "2026-09-17",
+            "generated_at": "2026-09-17T18:00:00+08:00",
+            "candidate_count": 20,
+            "cards": [],
+        }
+        html = render_shortlist_html(payload, history_dates=[
+            {"market_date": "2026-09-18", "selected_count": 15},
+            {"market_date": "2026-09-17", "selected_count": 12},
+            {"market_date": "2026-09-16", "selected_count": 10},
+        ])
+        self.assertIn("历史候选", html)
+        self.assertIn("正在查看历史快照", html)
+        self.assertIn("2026-09-17 · 12 只", html)
+        self.assertIn("/shortlist.html?date=2026-09-16", html)
+        self.assertIn("/shortlist.html?date=2026-09-18", html)
+        self.assertIn("回到最新", html)
 
 
 if __name__ == "__main__":

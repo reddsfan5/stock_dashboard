@@ -675,13 +675,33 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
         if parsed.path == "/api/system/status":
             from scripts.services.system_status import public_status
             return self._send_json(public_status())
+        if parsed.path == "/shortlist.html":
+            from scripts.services.shortlist_history import render_saved_shortlist
+            requested_date = params.get("date", [None])[0]
+            try:
+                body = render_saved_shortlist(requested_date).encode("utf-8")
+            except ValueError as exc:
+                return self.send_error(400, str(exc))
+            except LookupError as exc:
+                if requested_date:
+                    return self.send_error(404, str(exc))
+                # 兼容首次升级但尚未生成历史库的场景，仍可打开当前静态页。
+                return super().do_GET()
+            except Exception as exc:
+                return self.send_error(500, f"读取候选历史失败: {exc}")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
         if parsed.path == "/api/health":
             return self._send_json({
                 "status": "ok",
                 "service": "stock-interactive-web",
                 "version": 1,
                 "listen_host": self.server.server_address[0],
-                "features": ["minute", "grid", "trainer", "journal", "news", "market_context", "training_loop", "watchlist", "symbol_context", "hypotheses", "auth"],
+                "features": ["minute", "grid", "trainer", "journal", "news", "market_context", "training_loop", "watchlist", "watchlist_monitor", "symbol_context", "hypotheses", "shortlist_history", "shortlist_monitor", "auth"],
                 "pid": os.getpid(),
             })
         if parsed.path == "/api/minute/search":
@@ -789,6 +809,8 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
             return self._journal_get(parsed)
         if parsed.path.startswith("/api/watchlist/"):
             return self._watchlist_get(parsed)
+        if parsed.path == "/api/shortlist/monitor":
+            return self._shortlist_monitor_get(parsed)
         if parsed.path in ("/api/symbol/context", "/api/symbol/hypothesis"):
             return self._symbol_get(parsed)
         if parsed.path.startswith("/assets/"):
@@ -1117,6 +1139,10 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
                     user_id=self._uid(),
                     status=status, code=code, limit=params.get("limit", [200])[0]
                 )
+            elif parsed.path == "/api/watchlist/search":
+                result = self.watchlist.search_symbols(
+                    params.get("q", [""])[0], limit=int(params.get("limit", [20])[0])
+                )
             elif parsed.path == "/api/watchlist/tracks":
                 result = self.watchlist.tracks(
                     user_id=self._uid(),
@@ -1129,6 +1155,19 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
                     market_date=params.get("date", [None])[0] or None,
                     top_n=int(params.get("top_n", ["15"])[0]),
                 )
+            elif parsed.path == "/api/watchlist/monitor":
+                result = self.watchlist.monitor(
+                    user_id=self._uid(),
+                    date_from=params.get("from", [None])[0] or None,
+                    date_to=params.get("to", [None])[0] or None,
+                    batch=params.get("batch", [None])[0] or None,
+                    horizon=int(params.get("horizon", ["5"])[0]),
+                    status=params.get("status", [None])[0] or None,
+                    source=params.get("source", [None])[0] or None,
+                    sort=params.get("sort", ["joined_date"])[0],
+                    offset=int(params.get("offset", ["0"])[0]),
+                    limit=int(params.get("limit", ["100"])[0]),
+                )
             else:
                 return self._send_json({"error": "接口不存在"}, status=404)
             return self._send_json(result)
@@ -1138,6 +1177,37 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
             return self._send_json({"error": str(exc)}, status=400)
         except Exception as exc:
             return self._send_json({"error": f"读取观察池失败: {exc}"}, status=500)
+
+    def _shortlist_monitor_get(self, parsed):
+        """只读每日精选收益监控接口；参数白名单由数据层再次校验。"""
+        params = parse_qs(parsed.query)
+        try:
+            from data.shortlist_monitor import ShortlistMonitorService
+
+            def optional_int(name):
+                raw = params.get(name, [""])[0]
+                return int(raw) if raw not in (None, "") else None
+
+            service = ShortlistMonitorService()
+            result = service.query(
+                date_from=params.get("from", [None])[0] or None,
+                date_to=params.get("to", [None])[0] or None,
+                horizon=int(params.get("horizon", ["5"])[0]),
+                rank_max=optional_int("rank_max"),
+                sector=params.get("sector", [None])[0] or None,
+                status=params.get("status", [None])[0] or None,
+                sort=params.get("sort", ["rank"])[0],
+                offset=int(params.get("offset", ["0"])[0]),
+                limit=int(params.get("limit", ["100"])[0]),
+            )
+            result["requested_as_of"] = params.get("as_of", [None])[0] or None
+            return self._send_json(result)
+        except LookupError as exc:
+            return self._send_json({"error": str(exc)}, status=404)
+        except (TypeError, ValueError) as exc:
+            return self._send_json({"error": str(exc)}, status=400)
+        except Exception as exc:
+            return self._send_json({"error": f"读取每日精选收益监控失败: {exc}"}, status=500)
 
     def _watchlist_post(self, parsed):
         try:
@@ -1266,6 +1336,8 @@ def serve(repository: MinuteRepository, trainer, journal, news, market_context, 
     print(f"✓ 选股日记工作台: http://{host}:{port}/stock_journal.html")
     print(f"✓ 市场资讯复盘: http://{host}:{port}/market_news.html")
     print(f"✓ 观察池跟踪: http://{host}:{port}/watchlist.html")
+    print(f"✓ 观察池收益监控: http://{host}:{port}/watchlist_monitor.html")
+    print(f"✓ 每日精选收益监控: http://{host}:{port}/shortlist_monitor.html")
     print(f"✓ 标的上下文: http://{host}:{port}/symbol.html")
     print(f"  已索引 {len(repository.search_rows)} 个缓存标的，按 Ctrl+C 停止")
     try:
@@ -1306,6 +1378,7 @@ def main():
         from scripts.services.watchlist import (
             WatchlistService, write_app as write_watchlist_app,
         )
+        from scripts.services.watchlist_monitor import write_app as write_watchlist_monitor_app
         from scripts.services.symbol_context import (
             SymbolContextService, write_app as write_symbol_app,
         )
@@ -1314,6 +1387,7 @@ def main():
         write_journal_app()
         write_news_app()
         write_watchlist_app()
+        write_watchlist_monitor_app()
         write_symbol_app()
         from scripts.reports.gen_sector_atlas import generate as generate_sector_atlas
         generate_sector_atlas()

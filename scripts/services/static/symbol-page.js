@@ -14,6 +14,7 @@ async function api(path, opts){
   return body;
 }
 function pct(v){if(v==null||v==='')return '—';const n=+v; const cls=n>0?'up':n<0?'down':'';return `<span class="num ${cls}">${n>0?'+':''}${n.toFixed(2)}</span>`}
+function display(v){return v==null||v===''||String(v).toLowerCase()==='nan'?'—':String(v)}
 function badge(status,label){return `<span class="badge ${esc(status)}">${esc(label||status)}</span>`}
 
 let currentCode = '';
@@ -44,15 +45,51 @@ function render(data){
   $('symbolName').textContent = data.name || data.code;
   $('symbolCode').textContent = data.code;
   const L = data.links || {};
+  const hits = data.screen_hits || {};
+  const w = data.watchlist || {};
+  const tracks = (data.tracks||{}).items||[];
+  const tr = data.training || {};
+  const j = data.journal || {};
+  const h = data.hypotheses || {};
+  const stt = data.screen_to_trade || {};
   $('quickLinks').innerHTML = [
     ['分时', L.minute || ('/minute_view.html?code='+encodeURIComponent(data.code))],
     ['日记', L.journal || ('/stock_journal.html?code='+encodeURIComponent(data.code))],
     ['训练', L.trainer || ('/trading_trainer.html?code='+encodeURIComponent(data.code))],
     ['观察池', L.watchlist || '/watchlist.html'],
-    ['仪表盘', L.dashboard || '/dashboard.html']
+    ['仪表盘', L.dashboard || '/dashboard.html'],
+    ['板块联动', '/sector_corr_cloud.html?stock='+encodeURIComponent(data.code)+'&from=symbol']
   ].map(([t,h])=>`<a href="${esc(h)}">${t}</a>`).join('');
 
-  const hits = data.screen_hits || {};
+  const hitCount=(hits.modules||[]).length;
+  const watchCount=+(w.count||0),trainingCount=+(tr.count||0),journalCount=+(j.count||0),hypothesisCount=+(h.count||0),tradeCount=+(stt.trade_count||0);
+  let verdict='尚未建立研究上下文',verdictMeta='暂无最新选股命中、观察池、训练、日记或假设记录',verdictState='';
+  if(hitCount){
+    verdict=`最新选股命中 ${hitCount} 项`;
+    verdictMeta=(hits.modules||[]).map(x=>x.title||x.module).join(' · ')+(hits.dashboard_mtime?` · 更新于 ${hits.dashboard_mtime}`:'');
+    verdictState='state-signal';
+  }else if(watchCount){
+    verdict='已进入观察池，等待条件验证';
+    verdictMeta=(w.items||[])[0]?.thesis||(w.items||[])[0]?.note||'继续核对触发条件与失效条件';
+    verdictState='state-watch';
+  }else if(trainingCount+journalCount+hypothesisCount+tradeCount){
+    verdict=tradeCount?'已有历史验证样本，暂无最新选股命中':'已有研究记录，暂无最新选股命中';
+    verdictMeta=[trainingCount?`训练 ${trainingCount} 次`:'',journalCount?`日记 ${journalCount} 例`:'',hypothesisCount?`假设 ${hypothesisCount} 条`:'',tradeCount?`${stt.module_title||stt.module||'策略'} ${tradeCount} 笔`:''].filter(Boolean).join(' · ');
+  }
+  $('contextVerdict').textContent=verdict;
+  $('contextVerdict').className=`context-verdict-title ${verdictState}`.trim();
+  $('contextVerdictMeta').textContent=verdictMeta;
+  const journalEntries=(j.cases||[]).reduce((sum,item)=>sum+(+item.entry_count||0),0);
+  const summary=[
+    {label:'最新选股信号',value:hitCount?`${hitCount} 项`:'未命中',note:hits.dashboard_mtime||'等待仪表盘结果',active:hitCount>0},
+    {label:'观察池',value:watchCount?`${watchCount} 条`:'未加入',note:(w.items||[])[0]?.status_label||'暂无跟踪计划',active:watchCount>0},
+    {label:'训练',value:trainingCount?`${trainingCount} 次`:'暂无',note:`决策 ${tr.decision_count||0} 条`,active:trainingCount>0},
+    {label:'选股日记',value:journalCount?`${journalCount} 例`:'暂无',note:`记录 ${journalEntries} 条`,active:journalCount>0},
+    {label:'研究假设',value:hypothesisCount?`${hypothesisCount} 条`:'暂无',note:'形成验证闭环',active:hypothesisCount>0},
+    {label:'历史样本',value:tradeCount?`${tradeCount} 笔`:'暂无',note:stt.module_title||stt.module||stt.message||'选股→交易验证',active:tradeCount>0}
+  ];
+  $('contextSummary').innerHTML=summary.map(item=>`<div class="summary-item ${item.active?'is-active':''}"><span class="summary-label">${item.label}</span><strong class="summary-value">${item.value}</strong><span class="summary-note" title="${esc(item.note)}">${esc(item.note)}</span></div>`).join('');
+
   $('screenMeta').textContent = hits.dashboard_mtime ? `仪表盘 ${hits.dashboard_mtime}` : '';
   if((hits.modules||[]).length){
     $('screenHits').className='chips';
@@ -62,7 +99,6 @@ function render(data){
     $('screenHits').textContent = hits.message || '暂无命中';
   }
 
-  const w = data.watchlist || {};
   if((w.items||[]).length){
     $('watchBlock').className='';
     $('watchBlock').innerHTML = `<table class="app-table"><thead><tr><th>状态</th><th>来源</th><th>筛出日</th><th>论点</th></tr></thead><tbody>${
@@ -72,7 +108,6 @@ function render(data){
     $('watchBlock').className='empty';
     $('watchBlock').textContent = '观察池中暂无该代码';
   }
-  const tracks = (data.tracks||{}).items||[];
   if(tracks.length){
     $('trackBlock').innerHTML = `<table class="app-table"><thead><tr><th>筛出日</th><th>跟踪日</th><th class="num">次日%</th><th>失效</th></tr></thead><tbody>${
       tracks.map(t=>`<tr><td>${esc(t.screen_date)}</td><td>${esc(t.track_date)}</td><td class="num">${pct(t.return_pct)}</td><td>${t.pattern_failed?'是':'否'}</td></tr>`).join('')
@@ -81,7 +116,6 @@ function render(data){
     $('trackBlock').innerHTML = '<div class="empty">暂无次日跟踪记录</div>';
   }
 
-  const tr = data.training || {};
   if((tr.runs||[]).length){
     $('trainBlock').className='';
     $('trainBlock').innerHTML = `<div class="meta" style="margin-bottom:8px">会话 ${tr.count} · 决策合计 ${tr.decision_count||0}</div>
@@ -93,7 +127,6 @@ function render(data){
     $('trainBlock').textContent = '暂无训练会话';
   }
 
-  const j = data.journal || {};
   if((j.cases||[]).length){
     $('journalBlock').className='';
     $('journalBlock').innerHTML = `<table class="app-table"><thead><tr><th>案例</th><th>状态</th><th class="num">记录</th><th>最近行情日</th><th></th></tr></thead><tbody>${
@@ -105,7 +138,6 @@ function render(data){
     $('journalBlock').textContent = '暂无日记案例';
   }
 
-  const h = data.hypotheses || {};
   if((h.items||[]).length){
     $('hypoBlock').className='';
     $('hypoBlock').innerHTML = `<table class="app-table"><thead><tr><th>标题</th><th>状态</th><th>论点</th><th>更新</th><th>推进</th></tr></thead><tbody>${
@@ -134,13 +166,12 @@ function render(data){
     $('hypoBlock').textContent = '暂无假设，可在下方新建';
   }
 
-  const stt = data.screen_to_trade || {};
   $('sttMeta').textContent = stt.generated_at ? `报告 ${stt.generated_at}` : '';
   if(stt.available && (stt.recent_trades||[]).length){
     $('sttBlock').className='';
     $('sttBlock').innerHTML = `<div class="meta" style="margin-bottom:8px">${esc(stt.module_title||stt.module||'')} · 样本 ${stt.trade_count} · 平均净收益 ${stt.avg_net_return_pct??'—'}%</div>
       <table class="app-table"><thead><tr><th>信号日</th><th>入场</th><th>退出</th><th class="num">净收益%</th><th>原因</th></tr></thead><tbody>${
-        stt.recent_trades.map(t=>`<tr><td>${esc(t.signal_date)}</td><td>${esc(t.entry_date)}</td><td>${esc(t.exit_date)}</td><td class="num">${pct(t.net_return_pct)}</td><td>${esc(t.exit_reason)}</td></tr>`).join('')
+        stt.recent_trades.map(t=>`<tr><td>${esc(display(t.signal_date))}</td><td>${esc(display(t.entry_date))}</td><td>${esc(display(t.exit_date))}</td><td class="num">${pct(t.net_return_pct)}</td><td>${esc(display(t.exit_reason))}</td></tr>`).join('')
       }</tbody></table>`;
   } else {
     $('sttBlock').className='empty';
@@ -152,6 +183,8 @@ async function loadCode(code){
   const raw = (code||'').trim();
   if(!raw){$('loadErr').textContent='请输入代码';return}
   $('loadErr').textContent='';
+  const button=$('loadBtn'),original=button.textContent;
+  button.disabled=true;button.textContent='加载中…';$('identityPanel').setAttribute('aria-busy','true');
   try{
     const data = await api('/api/symbol/context?code='+encodeURIComponent(raw));
     render(data);
@@ -162,6 +195,8 @@ async function loadCode(code){
   }catch(e){
     $('loadErr').textContent = e.message;
     notice(e.message,true);
+  }finally{
+    button.disabled=false;button.textContent=original;$('identityPanel').removeAttribute('aria-busy');
   }
 }
 

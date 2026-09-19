@@ -1,4 +1,4 @@
-"""每日短名单理由卡：把选股命中、决策快照、板块强度、观察池拼成可读卡片。
+"""每日精选：把选股命中、决策快照、板块强度、观察池拼成可读卡片。
 
 数据优先读 output/dashboard.html 内嵌的 KLINE_META / TAB_CODES（与选股页同源），
 不重新跑全市场选股。板块强度读 cache/sector_strength_snapshot.json，缺失时可刷新。
@@ -151,7 +151,7 @@ def score_candidate(
     score = 0.0
     constructive = [t for t in tabs if t in CONSTRUCTIVE_TABS]
     if not constructive and "trend-down" in tabs:
-        # 纯下跌命中默认不进短名单（仍可在全量里看到）；评分给极低
+        # 纯下跌命中默认不进每日精选（仍可在全量里看到）；评分给极低
         score -= 5.0
     for t in tabs:
         score += TAB_WEIGHT.get(t, 1.0)
@@ -248,7 +248,7 @@ def build_why_risk(
     if "trend-down" in tabs and constructive:
         risk.append("同时命中下跌趋势，注意形态与趋势冲突")
     elif "trend-down" in tabs:
-        risk.append("主命中为连续下跌，默认不作多头短名单主逻辑")
+        risk.append("主命中为连续下跌，默认不作多头精选主逻辑")
     if atr is not None and atr >= 7:
         risk.append(f"ATR14% 约 {atr:.1f}，波动偏大")
     if dd is not None and dd <= -20:
@@ -370,6 +370,7 @@ def assemble_shortlist(
                 "trainer": f"/trading_trainer.html?code={code}",
                 "minute": f"/minute_view.html?code={code}",
                 "dashboard": f"/dashboard.html#code={code}",
+                "corr_cloud": f"/sector_corr_cloud.html?stock={code}&from=shortlist",
             },
         })
 
@@ -392,7 +393,11 @@ def assemble_shortlist(
     }
 
 
-def render_shortlist_html(payload: dict) -> str:
+def render_shortlist_html(
+    payload: dict,
+    *,
+    history_dates: Optional[List[dict]] = None,
+) -> str:
     cards = payload.get("cards") or []
     market_date = payload.get("market_date") or "—"
     generated_at = payload.get("generated_at") or "—"
@@ -401,6 +406,68 @@ def render_shortlist_html(payload: dict) -> str:
     selection_rate = (len(cards) / candidate_count * 100) if candidate_count else 0.0
     top_score = _num(cards[0].get("score")) if cards else None
     export_rows = []
+    history_dates = list(history_dates or [])
+    history_date_values = [
+        str(item.get("market_date") or "")
+        for item in history_dates
+        if item.get("market_date")
+    ]
+    selected_date = str(market_date)
+    if selected_date not in history_date_values and selected_date != "—":
+        history_dates.insert(0, {
+            "market_date": selected_date,
+            "selected_count": len(cards),
+            "candidate_count": candidate_count,
+        })
+        history_date_values.insert(0, selected_date)
+    latest_date = history_date_values[0] if history_date_values else selected_date
+    selected_index = history_date_values.index(selected_date) if selected_date in history_date_values else 0
+    newer_date = history_date_values[selected_index - 1] if selected_index > 0 else None
+    older_date = (
+        history_date_values[selected_index + 1]
+        if selected_index + 1 < len(history_date_values)
+        else None
+    )
+    is_history = bool(latest_date and selected_date != latest_date)
+
+    history_options = "".join(
+        (
+            f"<option value='{_esc(item.get('market_date'))}'"
+            f"{' selected' if str(item.get('market_date')) == selected_date else ''}>"
+            f"{_esc(item.get('market_date'))} · {int(item.get('selected_count') or 0)} 只"
+            "</option>"
+        )
+        for item in history_dates
+        if item.get("market_date")
+    )
+
+    def date_link(value: Optional[str], label: str, relation: str) -> str:
+        if not value:
+            return f"<span class='history-nav-btn is-disabled' aria-disabled='true'>{label}</span>"
+        return (
+            f"<a class='history-nav-btn' rel='{relation}' "
+            f"href='/shortlist.html?date={_esc(value)}'>{label}</a>"
+        )
+
+    history_control = ""
+    if history_options:
+        history_control = f"""
+    <form class="history-toolbar" action="/shortlist.html" method="get">
+      <div class="history-label">
+        <span>历史候选</span>
+        <strong>{'正在查看历史快照' if is_history else '当前为最新快照'}</strong>
+      </div>
+      <div class="history-controls">
+        {date_link(older_date, '← 前一交易日', 'prev')}
+        <label class="history-select-wrap">
+          <span class="sr-only">选择候选日期</span>
+          <select id="historyDateSelect" name="date" aria-label="选择历史候选日期">{history_options}</select>
+        </label>
+        <button class="history-submit" type="submit">查看</button>
+        {date_link(newer_date, '后一交易日 →', 'next')}
+        {f'<a class="history-latest" href="/shortlist.html">回到最新</a>' if is_history else ''}
+      </div>
+    </form>"""
     card_html = []
     for card in cards:
         metrics = card.get("metrics") or {}
@@ -464,7 +531,7 @@ def render_shortlist_html(payload: dict) -> str:
             for _, label, value, tone in metric_rows
         )
         card_html.append(f"""
-<article class="{' '.join(card_classes)}">
+<article class="{' '.join(card_classes)}" data-shortlist-code="{_esc(code)}">
   <header class="candidate-head">
     <div class="candidate-identity">
       <span class="rank-badge" aria-label="排名第 {rank} 名">TOP {rank:02d}</span>
@@ -485,9 +552,14 @@ def render_shortlist_html(payload: dict) -> str:
     <section class="reason-panel"><h3><span aria-hidden="true">✓</span> 入选依据</h3><ul>{why}</ul></section>
     <section class="risk-panel"><h3><span aria-hidden="true">!</span> 风险核对</h3><ul>{risks}</ul></section>
   </div>
+  <div class="candidate-outcome" data-outcome-code="{_esc(code)}">
+    <span class="outcome-label">收益监控</span><span class="outcome-placeholder">正在读取 5 日窗口…</span>
+    <a href="/shortlist_monitor.html?from={_esc(selected_date)}&amp;to={_esc(selected_date)}&amp;horizon=5" class="outcome-link">查看当日</a>
+  </div>
   <footer class="candidate-actions">
     <a class="card-primary-action" href="{_esc(links.get('symbol','#'))}">打开标的研究 <span aria-hidden="true">→</span></a>
     <nav aria-label="{_esc(card.get('name') or code)}快捷入口">
+      <a class="candidate-action-context" href="{_esc(links.get('corr_cloud','#'))}" title="查看当前申万二级板块的同步相关与领先传导">板块联动</a>
       <a href="{_esc(links.get('minute','#'))}">分时</a>
       <a href="{_esc(links.get('trainer','#'))}">训练</a>
       <a href="{_esc(links.get('journal','#'))}">日记</a>
@@ -496,7 +568,7 @@ def render_shortlist_html(payload: dict) -> str:
   </footer>
 </article>""")
 
-    body_cards = "\n".join(card_html) or "<p class='app-empty shortlist-empty'>暂无建设性命中可入短名单。请先更新选股仪表盘。</p>"
+    body_cards = "\n".join(card_html) or "<p class='app-empty shortlist-empty'>暂无建设性命中可入每日精选。请先更新选股仪表盘。</p>"
     notes = "".join(f"<li>{_esc(n)}</li>" for n in payload.get("notes") or [])
     export_json = json.dumps("\n".join(export_rows), ensure_ascii=False).replace("</", "<\\/")
     return f"""<!DOCTYPE html>
@@ -504,12 +576,12 @@ def render_shortlist_html(payload: dict) -> str:
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>每日短名单理由卡</title>
+<title>每日精选</title>
 <link rel="stylesheet" href="/assets/app.css">
 <link rel="stylesheet" href="/assets/workbench.css">
-<link rel="stylesheet" href="/assets/shortlist.css">
+<link rel="stylesheet" href="/assets/shortlist.css?v=3">
 <script defer src="/assets/app-shell.js"></script>
-<script defer src="/assets/shortlist.js"></script>
+<script defer src="/assets/shortlist.js?v=2"></script>
 </head>
 <body>
 <main class="wrap">
@@ -517,18 +589,20 @@ def render_shortlist_html(payload: dict) -> str:
     <div class="hero-topline">
       <div class="hero-copy">
         <div class="eyebrow">DAILY RESEARCH SHORTLIST</div>
-        <h1 id="pageTitle">每日短名单理由卡</h1>
+        <h1 id="pageTitle">每日精选</h1>
         <p>把形态命中、量价表现、板块强度与风险提示压缩成一页，先看优先级，再进入标的研究。</p>
       </div>
       <div class="hero-actions">
         <button class="btn btn-primary" id="copyShortlist" type="button">复制全部标的</button>
+        <a class="btn" href="/shortlist_monitor.html?from={_esc(selected_date)}&amp;to={_esc(selected_date)}">查看当日收益监控</a>
         <a class="btn" href="/daily_ops.html">每日操盘</a>
         <a class="btn" href="/dashboard.html">选股仪表盘</a>
       </div>
     </div>
-    <div class="summary-grid" aria-label="短名单摘要">
+    {history_control}
+    <div class="summary-grid" aria-label="每日精选摘要">
       <div class="summary-item summary-date"><span>指标交易日</span><strong>{_esc(str(market_date))}</strong><small>生成于 {_esc(generated_label)}</small></div>
-      <div class="summary-item"><span>今日入选</span><strong>{len(cards)}<small> 只</small></strong><small>按综合评分排序</small></div>
+      <div class="summary-item"><span>当日入选</span><strong>{len(cards)}<small> 只</small></strong><small>按综合评分排序</small></div>
       <div class="summary-item"><span>全量候选</span><strong>{candidate_count}<small> 只</small></strong><small>进入多维拼装池</small></div>
       <div class="summary-item"><span>入选比例</span><strong>{selection_rate:.2f}<small>%</small></strong><small>宁缺毋滥，板块分散</small></div>
       <div class="summary-item"><span>最高评分</span><strong>{f'{top_score:.2f}' if top_score is not None else '—'}</strong><small>仅用于候选排序</small></div>
@@ -536,7 +610,7 @@ def render_shortlist_html(payload: dict) -> str:
     <div class="copy-status" id="copyStatus" role="status" aria-live="polite"></div>
   </section>
   <section class="section-heading" aria-labelledby="candidateHeading">
-    <div><span class="section-kicker">按优先级排列</span><h2 id="candidateHeading">今日候选</h2></div>
+    <div><span class="section-kicker">按优先级排列</span><h2 id="candidateHeading">{_esc(selected_date)} 候选</h2></div>
     <p>红绿只表达行情方向；蓝色表示研究优先级，不代表买入建议。</p>
   </section>
   <div class="candidate-grid">{body_cards}</div>
@@ -546,6 +620,7 @@ def render_shortlist_html(payload: dict) -> str:
   </details>
 </main>
 <script id="shortlistExportData" type="application/json">{export_json}</script>
+<script>window.SHORTLIST_DATE={json.dumps(selected_date, ensure_ascii=False)};</script>
 </body>
 </html>
 """

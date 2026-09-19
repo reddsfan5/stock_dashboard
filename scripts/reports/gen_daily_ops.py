@@ -5,7 +5,7 @@
   1. python -m scripts.update_cache                 # 或 --only stocks,etfs,...
   2. 管线已含 watchlist_track；也可单独：
        python -m scripts.update_cache --only watchlist_track
-  3. python -m scripts.reports.gen_daily_ops        # 清单 + 板块快照 + 短名单理由卡
+  3. python -m scripts.reports.gen_daily_ops        # 清单 + 板块快照 + 每日精选
      或单独：python -m scripts.reports.gen_shortlist
   4. 打开 http://127.0.0.1:8765/daily_ops.html 或工作台入口
 
@@ -139,7 +139,6 @@ th{{color:var(--muted)}}.num{{text-align:right;font-variant-numeric:tabular-nums
     <a class="primary" href="/trading_trainer.html">进入交易训练</a>
     <a href="/watchlist.html">观察池</a>
     <a href="/market_news.html">市场资讯</a>
-    <a href="/symbol.html">标的上下文</a>
     <a href="/index.html">全部导航</a>
   </div>
 </div>
@@ -148,7 +147,7 @@ th{{color:var(--muted)}}.num{{text-align:right;font-variant-numeric:tabular-nums
     <h2>今日检查清单</h2>
     <h3>核心节奏</h3>
     <div class="checklist">
-      <a class="item priority" href="/shortlist.html"><div class="step">1</div><div><b>短名单理由卡</b><span>多维拼装的 10～20 只候选：为何入选 / 主要风险</span></div></a>
+      <a class="item priority" href="/shortlist.html"><div class="step">1</div><div><b>每日精选</b><span>多维拼装的 10～20 只精选标的：为何入选 / 主要风险</span></div></a>
       <a class="item priority" href="/dashboard.html"><div class="step">2</div><div><b>选股仪表盘</b><span>查看当日形态命中，感兴趣的代码点进标的上下文</span></div></a>
       <a class="item priority" href="/watchlist.html"><div class="step">3</div><div><b>观察池 / 次日跟踪</b><span>确认待买与次日收益；板块强度可在下方快照核对</span></div></a>
       <a class="item priority" href="/trading_trainer.html"><div class="step">4</div><div><b>T+1 训练</b><span>对假设状态为「训练中」的标的做无剧透演练</span></div></a>
@@ -156,7 +155,7 @@ th{{color:var(--muted)}}.num{{text-align:right;font-variant-numeric:tabular-nums
     <h3>记录与复核</h3>
     <div class="checklist">
       <a class="item" href="/stock_journal.html"><div class="icon">📓</div><div><b>选股日记</b><span>把结论推进到「已笔记」，并挂到案例时间线</span></div></a>
-      <a class="item" href="/symbol.html"><div class="icon">📎</div><div><b>标的上下文</b><span>一页汇总选股命中、观察池、训练、日记与假设</span></div></a>
+      <a class="item" href="/shortlist.html"><div class="icon">🧭</div><div><b>从精选进入标的研究</b><span>在每日精选、仪表盘或观察池中点击具体代码，打开对应的标的上下文</span></div></a>
       <a class="item" href="/market_news.html"><div class="icon">📰</div><div><b>市场资讯</b><span>收盘后核对重要消息是否改变判断</span></div></a>
     </div>
   </div>
@@ -239,12 +238,14 @@ def generate(*, skip_sector: bool = False, top_n: int = 15) -> Path:
             sector = None
     generated_at = _now_label()
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    try:
-        from scripts.reports.gen_shortlist import main as gen_shortlist_main
-        # 板块快照刚刷新过则跳过重复拉取
-        gen_shortlist_main(["--skip-sector-refresh"])
-    except Exception as exc:
-        print(f"⚠ 短名单理由卡未生成: {exc}")
+    from scripts.reports.gen_shortlist import main as gen_shortlist_main
+
+    # 短名单是每日更新的必达产物：生成页面的同时会将当日
+    # 完整候选快照原子写入 SQLite。失败必须向上抛出，避免更新
+    # 管线显示成功但历史候选悄悄缺一天。
+    result = gen_shortlist_main(["--skip-sector-refresh"])
+    if result not in (None, 0):
+        raise RuntimeError(f"每日精选生成失败，退出码 {result}")
 
     OUT_HTML.write_text(
         build_html(status=status, sector=sector, generated_at=generated_at),

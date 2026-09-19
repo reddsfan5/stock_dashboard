@@ -12,6 +12,7 @@ from data.training_sessions import TrainingSessionRepository
 from data.watchlist import WatchlistRepository
 from scripts.services.symbol_context import (
     SymbolContextService,
+    build_html,
     load_screen_hits,
 )
 
@@ -28,6 +29,20 @@ class LoadScreenHitsTest(unittest.TestCase):
             self.assertEqual([m["module"] for m in hits["modules"]], ["continuity"])
             empty = load_screen_hits("sh999999", dashboard_path=path)
             self.assertEqual(empty["modules"], [])
+
+
+class SymbolContextPageTest(unittest.TestCase):
+    def test_profile_precedes_decision_and_research_sections(self):
+        html = build_html()
+        profile = html.index('id="classificationPanel"')
+        decision = html.index('id="screenHits"')
+        journal = html.index('id="journalBlock"')
+        hypothesis = html.index('id="hypoBlock"')
+        self.assertLess(profile, decision)
+        self.assertLess(decision, journal)
+        self.assertLess(journal, hypothesis)
+        self.assertIn('id="contextVerdict"', html)
+        self.assertIn('id="contextSummary"', html)
 
 
 class SymbolContextServiceTest(unittest.TestCase):
@@ -52,6 +67,7 @@ class SymbolContextServiceTest(unittest.TestCase):
     def test_context_aggregates_stores(self):
         self.watch.add(code="sh600519", name="贵州茅台", thesis="观察", screen_date="2026-09-01")
         run = self.train.create_run(
+            user_id=1,
             session_token="tok-1",
             code="sh600519",
             name="贵州茅台",
@@ -68,8 +84,12 @@ class SymbolContextServiceTest(unittest.TestCase):
             price=1800,
             reason="试仓",
         )
-        case = self.journal.create_case(code="sh600519", title="茅台案例", thesis="假设")
-        self.hypo.create(code="sh600519", title="缓涨", status="hypothesis")
+        case = self.journal.create_case(
+            user_id=1, code="sh600519", title="茅台案例", thesis="假设"
+        )
+        self.hypo.create(
+            user_id=1, code="sh600519", title="缓涨", status="hypothesis"
+        )
 
         with mock.patch(
             "scripts.services.symbol_context.load_screen_hits",
@@ -78,7 +98,7 @@ class SymbolContextServiceTest(unittest.TestCase):
             "scripts.services.symbol_context.load_screen_to_trade_note",
             return_value={"available": False, "message": "暂无", "recent_trades": [], "trade_count": 0},
         ):
-            ctx = self.svc.context("sh600519")
+            ctx = self.svc.context("sh600519", user_id=1)
 
         self.assertEqual(ctx["name"], "贵州茅台")
         self.assertEqual(ctx["watchlist"]["count"], 1)
@@ -90,9 +110,12 @@ class SymbolContextServiceTest(unittest.TestCase):
 
     def test_hypothesis_api_helpers(self):
         created = self.svc.create_hypothesis(
-            {"code": "sz000001", "title": "测试", "thesis": "论点", "status": "hypothesis"}
+            {"code": "sz000001", "title": "测试", "thesis": "论点", "status": "hypothesis"},
+            user_id=1,
         )
-        updated = self.svc.update_hypothesis({"id": created["id"], "status": "training"})
+        updated = self.svc.update_hypothesis(
+            {"id": created["id"], "status": "training"}, user_id=1
+        )
         self.assertEqual(updated["status"], "training")
 
 
