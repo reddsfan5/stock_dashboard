@@ -47,3 +47,25 @@
 .classification-cloud-actions span{color:var(--app-muted);font-size:10px}
 @media(max-width:700px){.classification-cloud-heading{align-items:flex-start;flex-direction:column;gap:8px}.classification-tag-cloud{padding:11px;gap:7px}.classification-cloud-tier-3{font-size:14px}}
 @media(prefers-reduced-motion:reduce){.classification-cloud-tag{transition:none}}
+
+/* —— 同花顺题材区块（标的上下文资料卡） —— */
+.classification-block{margin:16px 0 4px;padding:14px 14px 12px;border:1px solid var(--app-border);border-radius:14px;background:color-mix(in srgb,var(--app-surface-2) 55%,var(--app-surface))}
+.classification-block-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px}
+.classification-block-head h3{margin:0 0 4px;display:inline-flex;align-items:center;gap:8px;font-size:14px}
+.classification-block-head .meta{margin:0;line-height:1.5}
+.classification-count{display:inline-flex;align-items:center;justify-content:center;min-width:1.5em;height:1.35em;padding:0 7px;border-radius:999px;background:color-mix(in srgb,var(--app-accent) 16%,transparent);color:var(--app-accent);font-size:11px;font-weight:700;font-variant-numeric:tabular-nums}
+.classification-block-sw{border-color:color-mix(in srgb,#5b8def 22%,var(--app-border));background:color-mix(in srgb,#5b8def 5%,var(--app-surface))}
+.classification-block-ths{border-color:color-mix(in srgb,#e67e22 28%,var(--app-border));background:linear-gradient(165deg,color-mix(in srgb,#e67e22 8%,var(--app-surface)) 0%,var(--app-surface) 72%);box-shadow:inset 3px 0 0 color-mix(in srgb,#e67e22 70%,transparent)}
+.classification-block-em{background:color-mix(in srgb,var(--app-surface-2) 72%,var(--app-surface))}
+.classification-ths-chips{display:flex;flex-wrap:wrap;gap:8px}
+.classification-ths-chip{display:inline-flex;align-items:center;gap:6px;max-width:100%;padding:7px 12px;border:1px solid color-mix(in srgb,#e67e22 28%,var(--app-border));border-radius:999px;background:color-mix(in srgb,var(--app-surface) 88%,#e67e22);color:var(--app-text);font-size:12px;font-weight:650;line-height:1.2;text-decoration:none;white-space:nowrap;transition:border-color .16s ease,transform .16s ease,background .16s ease,box-shadow .16s ease}
+.classification-ths-chip-dot{width:6px;height:6px;border-radius:50%;background:#e67e22;opacity:.85;flex:0 0 auto}
+.classification-ths-chip:hover{transform:translateY(-1px);border-color:#e67e22;color:#c05c0c;background:color-mix(in srgb,#e67e22 10%,var(--app-surface));box-shadow:0 4px 12px color-mix(in srgb,#e67e22 18%,transparent)}
+.classification-ths-empty{margin:2px 0 0;padding:12px 14px;border:1px dashed color-mix(in srgb,#e67e22 35%,var(--app-border));border-radius:10px;color:var(--app-muted);font-size:12px;line-height:1.55;background:color-mix(in srgb,var(--app-surface) 80%,transparent)}
+@media(max-width:700px){
+  .classification-block{padding:12px}
+  .classification-ths-chip{padding:6px 10px;font-size:11px}
+}
+@media(prefers-reduced-motion:reduce){
+  .classification-ths-chip{transition:none}
+}
