@@ -1,5 +1,9 @@
 import tempfile
 import unittest
+import shutil
+import subprocess
+import json
+import re
 from pathlib import Path
 from unittest.mock import patch
 
@@ -186,6 +190,35 @@ class DailyKlineRepositoryTest(unittest.TestCase):
         self.assertIn("createIntradayReplay", html)
         self.assertIn("尚未播放", html)
         self.assertNotIn("__INTRADAY_REPLAY_", html)
+
+    def test_generated_page_inline_scripts_have_valid_syntax(self):
+        if not shutil.which("node"):
+            self.skipTest("Node.js is needed to parse browser scripts")
+        scripts = re.findall(
+            r"<script(?:\s[^>]*)?>([\s\S]*?)</script>", build_html()
+        )
+        self.assertGreater(len(scripts), 0)
+        parser = (
+            'const vm=require("vm");let source="";'
+            'process.stdin.setEncoding("utf8");'
+            'process.stdin.on("data",chunk=>source+=chunk);'
+            'process.stdin.on("end",()=>{'
+            'JSON.parse(source).forEach((script,i)=>'
+            'new vm.Script(script,{filename:`inline-${i}.js`}));'
+            '});'
+        )
+        result = subprocess.run(
+            ["node", "-e", parser], input=json.dumps(scripts), text=True,
+            capture_output=True, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_daily_chart_uses_a_fixed_information_bar(self):
+        html = build_html()
+        self.assertIn('id="dailyHoverBar"', html)
+        self.assertIn('id="hoverInterval"', html)
+        self.assertIn("showEchartsTipContent:false", html)
+        self.assertIn("tooltip:{trigger:'axis',showContent:false", html)
 
 
 if __name__ == "__main__":

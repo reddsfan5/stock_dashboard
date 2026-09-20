@@ -44,7 +44,7 @@
         tooltip: {
           trigger: 'axis',
           triggerOn: 'mousemove|click',
-          showContent: true
+          showContent: showContent
         },
         axisPointer: {
           show: true,
@@ -151,7 +151,7 @@
       var patch = tooltipOption({
         scrubbing: scrubbing,
         axisPointerType: axisPointerType,
-        showContent: scrubbing ? showEchartsTipContent : !isCoarse()
+        showContent: showEchartsTipContent
       });
       try {
         chart.setOption(patch, false);
