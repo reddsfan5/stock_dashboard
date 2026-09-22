@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>市场资讯</title>
+<title>市场资讯中心</title>
 <link rel="stylesheet" href="/assets/app.css">
 <script src="/assets/training-context.js"></script>
 <style>
@@ -29,6 +29,15 @@
 }
 .mn-badge strong{color:var(--app-text);font-variant-numeric:tabular-nums}
 .mn-badge a{font-weight:650}
+.mn-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-block-end:var(--app-space-3)}
+.mn-stat{padding:11px 12px;border:1px solid var(--app-border);border-radius:10px;background:var(--app-surface)}
+.mn-stat small{display:block;color:var(--app-muted);font-size:10px;font-weight:700}
+.mn-stat b{display:block;margin-top:3px;font-size:18px;font-variant-numeric:tabular-nums}
+.mn-stat span{font-size:10px;color:var(--app-muted)}
+.mn-view-tabs{display:inline-flex;gap:3px;padding:3px;border:1px solid var(--app-border);border-radius:9px;background:var(--app-surface-2)}
+.mn-view-tabs button{border:0;background:transparent;color:var(--app-muted);height:30px;padding:0 13px;border-radius:7px;font:inherit;font-size:12px;font-weight:750;cursor:pointer}
+.mn-view-tabs button.is-on{background:var(--app-surface);color:var(--app-accent);box-shadow:0 1px 3px rgba(15,23,42,.1)}
+.mn-source-note{display:flex;align-items:center;gap:6px;color:var(--app-muted);font-size:11px}
 
 .mn-controls{
   position:sticky;top:calc(var(--app-nav-h) + var(--app-clock-h,0px) + 2px);z-index:20;
@@ -112,6 +121,20 @@
 .mn-phase-pre_open{border-block-start:3px solid #d88400}
 .mn-phase-midday{border-block-start:3px solid var(--app-up)}
 .mn-phase-close{border-block-start:3px solid var(--app-accent)}
+.mn-events{display:grid;gap:10px}
+.mn-event{display:grid;grid-template-columns:88px minmax(0,1fr);gap:13px;padding:14px;background:var(--app-surface);border:1px solid var(--app-border);border-radius:var(--app-radius);box-shadow:var(--app-shadow)}
+.mn-event-rail{border-right:1px solid var(--app-border);padding-right:12px;color:var(--app-muted);font-size:11px}
+.mn-event-rail time{display:block;color:var(--app-text);font-size:18px;font-weight:800;font-variant-numeric:tabular-nums}
+.mn-event-rail span{display:block;margin-top:5px}
+.mn-event-head{display:flex;align-items:flex-start;gap:8px;justify-content:space-between}
+.mn-event h3{margin:0;font-size:15px;line-height:1.45}
+.mn-event p{margin:7px 0 0;color:var(--app-muted);font-size:12px;line-height:1.6}
+.mn-verify{flex:0 0 auto;padding:3px 8px;border-radius:999px;font-size:10px;font-weight:800;background:var(--app-surface-2);color:var(--app-muted)}
+.mn-verify.verified,.mn-verify.corroborated{background:color-mix(in srgb,var(--app-up) 12%,var(--app-surface));color:var(--app-up)}
+.mn-verify.cross_reported{background:var(--app-accent-soft);color:var(--app-accent)}
+.mn-verify.research{background:color-mix(in srgb,var(--app-warn) 12%,var(--app-surface));color:var(--app-warn)}
+.mn-platforms{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px}.mn-platform{padding:2px 7px;border-radius:999px;background:var(--app-surface-2);color:var(--app-muted);font-size:10px;font-weight:700}
+.mn-sources-detail{margin-top:10px;border-top:1px dashed var(--app-border);padding-top:8px}.mn-sources-detail summary{cursor:pointer;color:var(--app-accent);font-size:11px;font-weight:700}.mn-source-row{display:flex;gap:8px;align-items:flex-start;padding:7px 0;border-bottom:1px solid var(--app-border);font-size:11px}.mn-source-row:last-child{border:0}.mn-source-row time{color:var(--app-muted);font-variant-numeric:tabular-nums}.mn-source-row a{color:var(--app-text);font-weight:650;text-decoration:none}
 
 .mn-feed{padding:12px}
 .mn-feed.is-masonry{
@@ -212,8 +235,11 @@
 .mn-tools > summary{display:none;list-style:none;cursor:pointer}
 .mn-tools > summary::-webkit-details-marker{display:none}
 .mn-tools-summary-text{min-inline-size:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mn-tools-toggle{display:none}
+.mn-filter-done{display:none}
 @media (min-width:641px){
   .mn-tools{display:contents}
+  .mn-filter-panel{display:contents}
 }
 @media (max-width:640px){
   .mn-page{padding:8px 8px 12px}
@@ -226,18 +252,33 @@
     gap:6px;padding:8px;margin-block-end:8px;
     border-radius:10px;
   }
+  .mn-summary{display:none}
   .mn-tools > summary{
     display:flex;align-items:center;justify-content:space-between;gap:8px;
-    height:32px;padding:0 10px;margin-block-end:0;
-    border:1px solid var(--app-border);border-radius:8px;
+    min-height:40px;padding:7px 10px;margin-block-end:0;
+    border:1px solid var(--app-border);border-radius:10px;
     background:var(--app-surface-2);color:var(--app-text);
     font-size:12px;font-weight:650;
   }
-  .mn-tools > summary::after{
-    content:"筛选";flex:none;font-size:11px;font-weight:700;color:var(--app-accent);
+  .mn-tools-toggle{
+    display:inline-flex;align-items:center;flex:none;
+    height:26px;padding:0 10px;border-radius:999px;
+    background:var(--app-accent-soft);color:var(--app-accent);
+    font-size:11px;font-weight:750;
   }
-  .mn-tools[open] > summary::after{content:"收起"}
+  .mn-tools[open] .mn-tools-toggle{background:var(--app-surface);border:1px solid var(--app-border);color:var(--app-text)}
   .mn-tools[open] > summary{margin-block-end:8px}
+  .mn-filter-panel{display:grid;gap:8px}
+  .mn-chips{
+    flex-wrap:nowrap;overflow-x:auto;overscroll-behavior-x:contain;
+    -webkit-overflow-scrolling:touch;scrollbar-width:thin;padding-block-end:2px;
+  }
+  .mn-chip{flex:0 0 auto}
+  .mn-filter-done{
+    display:block;width:100%;height:36px;margin-block-start:2px;
+    border:0;border-radius:9px;cursor:pointer;font:inherit;font-size:13px;font-weight:750;
+    background:var(--app-accent);color:#fff;
+  }
   .mn-controls-row{gap:6px}
   .mn-field{flex:1 1 calc(50% - 6px);gap:3px}
   .mn-field:has(input[type=search]){flex:1 1 100%}
@@ -270,6 +311,9 @@
   .mn-aside{margin-block-start:4px}
   .mn-journal-head{padding:10px 12px}
   .mn-journal-head p{display:none}
+  .mn-summary{grid-template-columns:1fr 1fr;gap:6px}.mn-stat{padding:8px 9px}.mn-stat b{font-size:15px}
+  .mn-event{grid-template-columns:1fr;padding:10px}.mn-event-rail{display:flex;gap:8px;align-items:center;border-right:0;border-bottom:1px solid var(--app-border);padding:0 0 8px}.mn-event-rail time{font-size:14px}.mn-event-rail span{margin:0}
+  .mn-event-head{display:block}.mn-verify{display:inline-block;margin-bottom:6px}.mn-source-note{display:none}
 }
 @media (prefers-reduced-motion:reduce){
   .mn-card{transition:none}
@@ -287,37 +331,52 @@
 <main class="mn-page">
   <header class="mn-hero">
     <div>
-      <h1>市场资讯</h1>
-      <p>按可见时刻回放市场级重要消息；训练时保留截止时刻，避免剧透。</p>
+      <h1>市场资讯中心</h1>
+      <p>同一事件合并多家来源，区分官方确认、媒体报道与社区线索；训练时严格保留截止时刻。</p>
     </div>
     <div class="mn-badges">
+      <a class="btn" id="briefLink" href="/market_brief.html">盘前 / 收盘简报</a>
       <span class="mn-badge">范围 <strong id="scope">—</strong></span>
       <span class="mn-badge">缓存 <strong id="cache">—</strong></span>
-      <span class="mn-badge">来源 <a id="source" target="_blank" rel="noopener">同花顺 7×24</a></span>
+      <span class="mn-badge">来源 <strong id="source">—</strong></span>
     </div>
   </header>
 
+  <section class="mn-summary" id="summary" aria-label="资讯概览"></section>
+
   <section class="mn-controls" aria-label="筛选与时间">
     <details class="mn-tools" id="mnTools">
-      <summary><span class="mn-tools-summary-text" id="toolsSummary">筛选与时间</span></summary>
-      <div class="mn-controls-row">
-        <div class="mn-field"><label for="marketDate">行情日期</label><input id="marketDate" type="date"></div>
-        <div class="mn-field"><label for="asOf">截至时刻</label><input id="asOf" type="time" step="60"></div>
-        <div class="mn-field"><label for="q">关键词</label><input id="q" type="search" placeholder="标题 / 摘要 / 标签" autocomplete="off"></div>
-        <div class="mn-actions">
-          <button class="btn btn-primary" type="button" id="load">按时点查看</button>
-          <button class="btn" type="button" id="fullDay">查看全天</button>
-          <button class="btn" type="button" id="refresh">刷新同花顺</button>
+      <summary>
+        <span class="mn-tools-summary-text" id="toolsSummary">筛选与时间</span>
+        <span class="mn-tools-toggle" id="toolsToggle" aria-hidden="true">筛选</span>
+      </summary>
+      <div class="mn-filter-panel">
+        <div class="mn-controls-row">
+          <div class="mn-view-tabs" role="tablist" aria-label="资讯视图">
+            <button type="button" id="viewEvents" class="is-on">事件聚合</button>
+            <button type="button" id="viewFeed">实时流</button>
+          </div>
+          <div class="mn-field"><label for="marketDate">行情日期</label><input id="marketDate" type="date"></div>
+          <div class="mn-field"><label for="asOf">截至时刻</label><input id="asOf" type="time" step="60"></div>
+          <div class="mn-field"><label for="q">关键词</label><input id="q" type="search" placeholder="标题 / 摘要 / 标签" autocomplete="off"></div>
+          <div class="mn-actions">
+            <button class="btn btn-primary" type="button" id="load">按时点查看</button>
+            <button class="btn" type="button" id="fullDay">查看全天</button>
+            <button class="btn" type="button" id="refresh">刷新同花顺</button>
+          </div>
+          <div class="mn-seg" role="group" aria-label="布局">
+            <button type="button" id="viewMasonry" class="is-on">瀑布</button>
+            <button type="button" id="viewList">列表</button>
+          </div>
         </div>
-        <div class="mn-seg" role="group" aria-label="布局">
-          <button type="button" id="viewMasonry" class="is-on">瀑布</button>
-          <button type="button" id="viewList">列表</button>
-        </div>
+        <p class="mn-hint">早盘 = 09:30 前 · 午间 = 09:30–12:59 · 收盘 = 13:00 后。无剧透训练请保留截止时刻。</p>
+        <div class="mn-chips" id="phaseChips" role="tablist" aria-label="时段"></div>
+        <div class="mn-chips" id="sourceChips" role="tablist" aria-label="来源"></div>
+        <div class="mn-chips" id="tagChips" hidden></div>
+        <div class="mn-source-note">来源等级：官方确认 ＞ 权威印证 ＞ 多源报道 ＞ 单源报道 ＞ 社区研究线索。多源不等于事实，仍应打开原文核对。</div>
+        <button type="button" class="mn-filter-done" id="mnFilterDone">看资讯</button>
       </div>
-      <p class="mn-hint">早盘 = 09:30 前 · 午间 = 09:30–12:59 · 收盘 = 13:00 后。无剧透训练请保留截止时刻。</p>
     </details>
-    <div class="mn-chips" id="phaseChips" role="tablist" aria-label="时段"></div>
-    <div class="mn-chips" id="tagChips" hidden></div>
   </section>
 
   <div class="mn-notice" id="notice" hidden></div>
@@ -373,7 +432,7 @@
 
 <script>
 const $=id=>document.getElementById(id);
-let payload=null,pickedId=null,phaseFilter='all',tagFilter='',viewMode='masonry';
+let payload=null,pickedId=null,phaseFilter='all',tagFilter='',sourceFilter='',viewMode='masonry',displayMode='events';
 const phases=['pre_open','midday','close'];
 const labels={pre_open:'早盘',midday:'午间',close:'收盘'};
 const phaseHints={pre_open:'开盘前已知',midday:'上午盘中与午休',close:'午后与收盘后'};
@@ -396,10 +455,23 @@ function filteredItems(){
   const q=($('q').value||'').trim().toLowerCase();
   return payload.items.filter(x=>{
     if(phaseFilter!=='all' && x.phase!==phaseFilter)return false;
+    if(sourceFilter && x.platform_key!==sourceFilter)return false;
     if(tagFilter && !(x.tags||[]).includes(tagFilter))return false;
     if(!q)return true;
     const hay=[x.title,x.digest,...(x.tags||[])].join(' ').toLowerCase();
     return hay.includes(q);
+  });
+}
+
+function filteredEvents(){
+  if(!payload)return [];
+  const q=($('q').value||'').trim().toLowerCase();
+  return (payload.events||[]).filter(x=>{
+    if(phaseFilter!=='all' && x.phase!==phaseFilter)return false;
+    if(sourceFilter && !(x.platforms||[]).some(p=>p.key===sourceFilter))return false;
+    if(tagFilter && !(x.tags||[]).includes(tagFilter))return false;
+    if(!q)return true;
+    return [x.title,x.digest,x.original_source,...(x.tags||[])].join(' ').toLowerCase().includes(q);
   });
 }
 
@@ -413,6 +485,10 @@ function renderChips(){
     ...phases.map(p=>chip(p,labels[p],counts[p],phaseFilter===p))
   ].join('');
 
+  const sources=payload?.source_summary||[];
+  $('sourceChips').innerHTML=`<button type="button" class="mn-chip${!sourceFilter?' is-on':''}" data-source="">来源·全部<span class="n">${sources.length}</span></button>`+
+    sources.map(x=>`<button type="button" class="mn-chip${sourceFilter===x.key?' is-on':''}" data-source="${esc(x.key)}">${esc(x.name)}<span class="n">${x.count}</span></button>`).join('');
+
   const tagMap=new Map();
   (payload?.items||[]).forEach(x=>{(x.tags||[]).forEach(t=>tagMap.set(t,(tagMap.get(t)||0)+1))});
   const tags=[...tagMap.entries()].sort((a,b)=>b[1]-a[1]).slice(0,10);
@@ -420,6 +496,16 @@ function renderChips(){
   $('tagChips').hidden=false;
   $('tagChips').innerHTML=`<button type="button" class="mn-chip${!tagFilter?' is-on':''}" data-tag="">标签·全部</button>`+
     tags.map(([t,n])=>`<button type="button" class="mn-chip${tagFilter===t?' is-on':''}" data-tag="${esc(t)}">${esc(t)}<span class="n">${n}</span></button>`).join('');
+}
+
+function renderSummary(){
+  const events=payload?.events||[],v=payload?.verification_counts||{},sources=payload?.source_summary||[];
+  const confirmed=(v.verified||0)+(v.corroborated||0)+(v.cross_reported||0);
+  $('summary').innerHTML=`
+    <div class="mn-stat"><small>可见事件</small><b>${events.length}</b><span>已合并重复报道</span></div>
+    <div class="mn-stat"><small>已确认 / 多源</small><b>${confirmed}</b><span>需继续核对原文</span></div>
+    <div class="mn-stat"><small>社区研究线索</small><b>${v.research||0}</b><span>不可直接视为事实</span></div>
+    <div class="mn-stat"><small>已覆盖平台</small><b>${sources.length}</b><span>${sources.map(x=>x.name).slice(0,3).join(' · ')||'等待导入'}</span></div>`;
 }
 
 function newsCard(x){
@@ -435,6 +521,19 @@ function newsCard(x){
   </article>`;
 }
 
+function eventCard(x){
+  const platforms=(x.platforms||[]).map(p=>`<span class="mn-platform">${esc(p.name)}</span>`).join('');
+  const tags=(x.tags||[]).slice(0,5).map(t=>`<span class="mn-tag">${esc(t)}</span>`).join('');
+  const rows=(x.items||[]).map(row=>`<div class="mn-source-row"><time>${esc((row.time||'').slice(0,5))}</time><div>${row.url?`<a href="${esc(row.url)}" target="_blank" rel="noopener">${esc(row.platform_name||row.source)}</a>`:`<b>${esc(row.platform_name||row.source)}</b>`}<div>${esc(row.title)}</div></div></div>`).join('');
+  return `<article class="mn-event app-reveal" id="${esc(x.event_id)}">
+    <div class="mn-event-rail"><time>${esc((x.time||'').slice(0,5))}</time><span>${esc(labels[x.phase]||x.phase)}</span><span>${x.source_count} 个平台</span></div>
+    <div><div class="mn-event-head"><div><span class="mn-verify ${esc(x.verification_status)}">${esc(x.verification_label)}</span><h3>${esc(x.title)}</h3></div></div>
+    ${x.digest?`<p>${esc(x.digest)}</p>`:''}<div class="mn-platforms">${platforms}${tags}</div>
+    <div class="mn-card-actions"><button type="button" class="mn-impact-btn" data-impact="${esc(x.primary_news_id)}">记录影响</button></div>
+    <details class="mn-sources-detail"><summary>查看 ${x.items?.length||0} 条来源记录</summary>${rows}</details></div>
+  </article>`;
+}
+
 function render(){
   if(!payload)return;
   const asof=payload.as_of?`截至 ${payload.as_of.slice(0,5)}（无剧透）`:'全天复盘';
@@ -443,12 +542,31 @@ function render(){
   const tools=$('toolsSummary');
   if(tools){
     const shortAsof=payload.as_of?`截至${payload.as_of.slice(0,5)}`:'全天';
-    tools.textContent=`${payload.market_date} · ${shortAsof} · ${payload.items.length}条`;
+    const phaseLabel=phaseFilter==='all'?'':(labels[phaseFilter]||'');
+    const sourceName=(payload.source_summary||[]).find(x=>x.key===sourceFilter)?.name||'';
+    const extras=[phaseLabel,sourceName,tagFilter].filter(Boolean);
+    const n=displayMode==='events'?filteredEvents().length:filteredItems().length;
+    tools.textContent=[payload.market_date,shortAsof,`${n}条`,...extras].join(' · ');
+  }
+  const toggle=$('toolsToggle');
+  if(toggle){
+    const d=$('mnTools');
+    toggle.textContent=d&&d.open?'收起':'筛选';
   }
   $('cache').textContent=payload.fetched_at?payload.fetched_at.replace('T',' ').slice(0,16):'尚无';
-  if(payload.source_url)$('source').href=payload.source_url;
+  $('source').textContent=`${(payload.source_summary||[]).length}个平台`;
+  $('briefLink').href=`/market_brief.html?date=${encodeURIComponent(payload.market_date)}`;
   if(payload.message)message(payload.message); else if(!$('notice').dataset.sticky)message('');
   renderChips();
+  renderSummary();
+
+  if(displayMode==='events'){
+    const events=filteredEvents();
+    $('timeline').innerHTML=events.length?`<div class="mn-events">${events.map(eventCard).join('')}</div>`:'<div class="app-empty">当前筛选下没有事件。试试清空关键词或切换来源。</div>';
+    if(window.StockAppShell&&StockAppShell.observeReveal)StockAppShell.observeReveal($('timeline'));
+    const focus=new URL(location.href).searchParams.get('event');if(focus)requestAnimationFrame(()=>document.getElementById(focus)?.scrollIntoView({block:'center'}));
+    return;
+  }
 
   const items=filteredItems();
   const grouped=Object.fromEntries(phases.map(p=>[p,[]]));
@@ -529,6 +647,7 @@ function setView(mode){
   $('viewList').classList.toggle('is-on',mode==='list');
   render();
 }
+function setDisplay(mode){displayMode=mode;$('viewEvents').classList.toggle('is-on',mode==='events');$('viewFeed').classList.toggle('is-on',mode==='feed');render()}
 
 $('load').onclick=()=>load(false);
 $('fullDay').onclick=()=>{$('asOf').value='';load(false)};
@@ -538,9 +657,12 @@ $('backdrop').onclick=closeImpact;
 $('saveImpact').onclick=saveImpact;
 $('viewMasonry').onclick=()=>setView('masonry');
 $('viewList').onclick=()=>setView('list');
+$('viewEvents').onclick=()=>setDisplay('events');
+$('viewFeed').onclick=()=>setDisplay('feed');
 $('q').oninput=()=>{if(payload)render()};
 $('phaseChips').onclick=e=>{const b=e.target.closest('[data-phase]');if(!b)return;phaseFilter=b.dataset.phase;render()};
 $('tagChips').onclick=e=>{const b=e.target.closest('[data-tag]');if(!b)return;tagFilter=b.dataset.tag||'';render()};
+$('sourceChips').onclick=e=>{const b=e.target.closest('[data-source]');if(!b)return;sourceFilter=b.dataset.source||'';render()};
 $('timeline').onclick=e=>{const b=e.target.closest('[data-impact]');if(b)openImpact(b.dataset.impact)};
 $('impacts').onclick=async e=>{
   const b=e.target.closest('[data-delete]');
@@ -558,8 +680,22 @@ $('asOf').value=(u.searchParams.get('as_of')||'').slice(0,5);
 (function syncToolsOpen(){
   const d=$('mnTools'); if(!d)return;
   const wide=window.matchMedia('(min-width:641px)');
-  const apply=()=>{d.open=wide.matches};
+  const key='mn-news-filters-open';
+  const apply=()=>{
+    if(wide.matches){d.open=true;return;}
+    const saved=sessionStorage.getItem(key);
+    d.open=saved==='1';
+  };
+  const syncToggle=()=>{
+    const toggle=$('toolsToggle');
+    if(toggle)toggle.textContent=d.open?'收起':'筛选';
+    if(!wide.matches)sessionStorage.setItem(key,d.open?'1':'0');
+  };
   apply();
+  syncToggle();
+  d.addEventListener('toggle',syncToggle);
+  const done=$('mnFilterDone');
+  if(done)done.onclick=()=>{d.open=false};
   if(wide.addEventListener)wide.addEventListener('change',apply); else wide.addListener(apply);
 })();
 load(false);
