@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>市场简报</title>
+<link rel="stylesheet" href="/assets/app.css">
+<style>
+:root{--mb-blue:var(--app-accent,#2563eb);--mb-up:var(--app-up,#df3f4b);--mb-down:var(--app-down,#159467);--mb-amber:#b7791f;--mb-purple:#7555c7}
+*{box-sizing:border-box}.mb-page{max-width:1500px;margin:auto;padding:16px 20px 48px}.mb-hero{display:flex;justify-content:space-between;gap:20px;align-items:flex-end;margin-bottom:12px}.mb-hero h1{font-size:26px;margin:0 0 2px}.mb-hero p{margin:0;color:var(--app-muted);font-size:13px}.mb-links{display:flex;gap:8px}.mb-links a{color:var(--mb-blue);text-decoration:none;border:1px solid var(--app-border);border-radius:8px;padding:7px 10px;background:var(--app-surface)}
+.mb-controls{position:sticky;top:calc(var(--app-nav-h,48px) + var(--app-clock-h,0px) + 2px);z-index:12;display:flex;align-items:center;gap:9px;margin-bottom:12px;padding:9px 12px;border:1px solid var(--app-border);border-radius:12px;background:color-mix(in srgb,var(--app-surface) 94%,transparent);box-shadow:0 5px 18px rgba(27,39,63,.05);backdrop-filter:blur(12px)}.mb-controls input,.mb-controls select,.mb-controls button{height:36px;border:1px solid var(--app-border);border-radius:8px;background:var(--app-surface);padding:0 10px}.mb-controls button{cursor:pointer}.mb-kind-tabs{display:flex;gap:4px;padding:3px;border-radius:9px;background:var(--app-soft,#f1f4f8)}.mb-kind-tabs button{border:0;background:transparent;height:30px}.mb-kind-tabs button.is-on{background:var(--app-surface);color:var(--mb-blue);box-shadow:0 1px 3px rgba(15,23,42,.12)}.mb-date-meta{margin-left:auto;color:var(--app-muted);font-size:12px}
+.mb-status{display:grid;grid-template-columns:minmax(260px,1.55fr) repeat(4,minmax(130px,.65fr));border:1px solid var(--app-border);border-radius:14px;background:var(--app-surface);overflow:hidden;margin-bottom:12px}.mb-status-main{padding:16px 18px}.mb-kicker{font-size:11px;color:var(--mb-blue);font-weight:750;letter-spacing:.06em}.mb-status h2{margin:4px 0 5px;font-size:21px;line-height:1.35}.mb-status-main p{margin:0;color:var(--app-muted)}.mb-status-cell{padding:15px;border-left:1px solid var(--app-border)}.mb-label{display:block;color:var(--app-muted);font-size:11px;margin-bottom:4px}.mb-value{font-weight:750;font-size:17px;font-variant-numeric:tabular-nums}.mb-value.up{color:var(--mb-up)}.mb-value.down{color:var(--mb-down)}.mb-state{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:3px 8px;background:var(--app-soft,#f2f4f7);font-size:11px}.mb-state:before{content:"";width:7px;height:7px;border-radius:50%;background:var(--app-muted)}.mb-state.complete:before{background:var(--mb-blue)}.mb-state.partial:before{background:var(--mb-amber)}.mb-state.failed:before{background:var(--mb-down)}
+.mb-grid{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(320px,.75fr);gap:12px}.mb-card{min-width:0;border:1px solid var(--app-border);border-radius:13px;background:var(--app-surface);overflow:hidden}.mb-card-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;border-bottom:1px solid var(--app-border)}.mb-card-head h2{font-size:16px;margin:0}.mb-card-head span{font-size:11px;color:var(--app-muted)}.mb-card-body{padding:13px 14px}.mb-full{grid-column:1/-1}.mb-chart{height:290px}.mb-chart.small{height:230px}.mb-metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.mb-metric{padding:10px 11px;border:1px solid var(--app-border);border-radius:10px;background:var(--app-soft,#f7f8fa)}.mb-metric b{display:block;margin-top:4px;font-size:18px;font-variant-numeric:tabular-nums}.mb-metric small{color:var(--app-muted)}
+.mb-list{display:grid;gap:8px}.mb-list-item{padding:10px 11px;border-left:3px solid var(--mb-blue);border-radius:0 9px 9px 0;background:var(--app-soft,#f7f8fa)}.mb-list-item.up{border-color:var(--mb-up)}.mb-list-item.down{border-color:var(--mb-down)}.mb-list-item.warn{border-color:var(--mb-amber)}.mb-list-item b{display:block;margin-bottom:3px}.mb-list-item p{margin:0;color:var(--app-muted);font-size:12px}.mb-news{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.mb-news article{position:relative;padding:12px 12px 12px 46px;border:1px solid var(--app-border);border-radius:10px}.mb-news-rank{position:absolute;inset:12px auto auto 12px;width:25px;height:25px;display:grid;place-items:center;border-radius:7px;background:var(--app-accent-soft,#edf3ff);color:var(--mb-blue);font-size:11px;font-weight:800;font-variant-numeric:tabular-nums}.mb-news-meta{display:flex;flex-wrap:wrap;gap:6px;align-items:center;color:var(--app-muted);font-size:10px}.mb-news-meta .mb-fact{color:var(--mb-blue);font-weight:750}.mb-news h3{font-size:14px;margin:6px 0 5px;line-height:1.45}.mb-news p{color:var(--app-muted);font-size:12px;margin:0;line-height:1.55}.mb-news-impact{margin-top:7px!important;padding-top:7px;border-top:1px dashed var(--app-border);color:var(--app-text)!important}.mb-news-impact b{color:var(--app-muted);font-size:11px}.mb-tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}.mb-tag{border-radius:999px;padding:2px 7px;background:var(--app-soft,#eef2f7);font-size:10px;color:var(--app-muted)}
+.mb-attribution{display:grid;gap:9px}.mb-cause{display:grid;grid-template-columns:minmax(190px,.72fr) minmax(0,1.5fr);gap:12px;padding:12px;border:1px solid var(--app-border);border-radius:10px}.mb-cause-head{border-right:1px solid var(--app-border);padding-right:12px}.mb-cause-head b{display:block;line-height:1.45}.mb-cause-head small{display:block;color:var(--app-muted);margin-top:5px}.mb-cause-body{display:grid;gap:6px;font-size:12px}.mb-cause-line{display:grid;grid-template-columns:68px 1fr;gap:8px}.mb-cause-line span:first-child{color:var(--app-muted)}.mb-cause-result{display:inline-flex;width:max-content;padding:2px 7px;border-radius:999px;background:var(--app-soft,#eef2f7);font-size:10px;font-weight:750}.mb-cause-result.verified{color:var(--mb-up)}.mb-cause-result.partial{color:var(--mb-amber)}.mb-cause-result.invalidated{color:var(--mb-down)}
+.mb-chain{display:flex;align-items:center;gap:7px;overflow:auto;padding-bottom:3px}.mb-chain span{flex:0 0 auto;padding:8px 10px;border:1px solid var(--app-border);border-radius:9px;background:var(--app-soft,#f7f8fa);font-weight:650}.mb-chain i{color:var(--mb-blue);font-style:normal}.mb-chain+.mb-chain{margin-top:8px}.mb-sectors{display:flex;flex-wrap:wrap;gap:7px}.mb-sector{display:inline-flex;align-items:center;gap:6px;padding:7px 9px;border:1px solid var(--app-border);border-radius:9px}.mb-sector b{font-size:12px}.mb-sector.up{border-color:color-mix(in srgb,var(--mb-up) 35%,var(--app-border));background:color-mix(in srgb,var(--mb-up) 7%,var(--app-surface))}.mb-sector.down{border-color:color-mix(in srgb,var(--mb-down) 35%,var(--app-border));background:color-mix(in srgb,var(--mb-down) 7%,var(--app-surface))}
+.mb-review{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.mb-review article{border:1px solid var(--app-border);border-radius:10px;padding:11px}.mb-review .verified{border-top:3px solid var(--mb-up)}.mb-review .partial{border-top:3px solid var(--mb-amber)}.mb-review .invalidated{border-top:3px solid var(--mb-down)}.mb-review-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:7px}.mb-review h3{font-size:13px;margin:0;line-height:1.45}.mb-review-state{flex:0 0 auto;border-radius:999px;padding:2px 7px;background:var(--app-soft,#eef2f7);font-size:10px;font-weight:750}.mb-review .verified .mb-review-state{color:var(--mb-up)}.mb-review .partial .mb-review-state{color:var(--mb-amber)}.mb-review .invalidated .mb-review-state{color:var(--mb-down)}.mb-review-line{display:grid;grid-template-columns:62px 1fr;gap:7px;padding-top:6px;font-size:11px;line-height:1.5}.mb-review-line span:first-child{color:var(--app-muted)}.mb-review-line+.mb-review-line{border-top:1px dashed var(--app-border);margin-top:6px}.mb-sources{display:grid;gap:7px}.mb-source{display:flex;gap:9px;align-items:flex-start;padding-bottom:7px;border-bottom:1px solid var(--app-border)}.mb-source:last-child{border-bottom:0}.mb-source a{color:var(--app-text);text-decoration:none;font-weight:650}.mb-source small{display:block;color:var(--app-muted)}
+.mb-empty,.mb-error{padding:42px 20px;text-align:center;border:1px dashed var(--app-border);border-radius:13px;background:var(--app-surface);color:var(--app-muted)}.mb-error{color:var(--mb-down)}.mb-loading{position:fixed;inset:0;z-index:50;display:grid;place-items:center;background:rgba(245,247,250,.48)}.mb-loading span{padding:10px 14px;border-radius:9px;background:#172033;color:#fff}.mb-footnote{margin:12px 2px 0;color:var(--app-muted);font-size:11px}
+@media(max-width:1050px){.mb-status{grid-template-columns:repeat(4,1fr)}.mb-status-main{grid-column:1/-1}.mb-status-cell:first-of-type{border-left:0}.mb-grid{grid-template-columns:1fr}.mb-full{grid-column:auto}}
+
+.mb-chrome > summary{display:none;list-style:none}
+.mb-chrome > summary::-webkit-details-marker{display:none}
+.mb-chrome-toggle{display:none}
+.mb-chrome-done{display:none}
+@media(min-width:701px){
+  .mb-chrome{display:contents}
+  .mb-chrome-panel{display:contents}
+}
+@media(max-width:700px){
+  .mb-chrome{
+    position:sticky;top:calc(var(--app-nav-h,48px) + var(--app-clock-h,0px) + 2px);z-index:12;
+    margin-bottom:10px;
+  }
+  .mb-chrome > summary{
+    display:flex;align-items:center;justify-content:space-between;gap:8px;
+    min-height:42px;padding:8px 10px;
+    border:1px solid var(--app-border);border-radius:11px;
+    background:color-mix(in srgb,var(--app-surface) 94%,transparent);
+    box-shadow:0 4px 14px rgba(27,39,63,.06);backdrop-filter:blur(10px);
+    cursor:pointer;font-size:12px;font-weight:650;
+  }
+  .mb-chrome-summary-text{
+    min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--app-text);
+  }
+  .mb-chrome-toggle{
+    display:inline-flex;align-items:center;flex:none;
+    height:26px;padding:0 10px;border-radius:999px;
+    background:var(--app-accent-soft,#edf3ff);color:var(--mb-blue);
+    font-size:11px;font-weight:750;
+  }
+  .mb-chrome[open] .mb-chrome-toggle{
+    background:var(--app-surface);border:1px solid var(--app-border);color:var(--app-text);
+  }
+  .mb-chrome-panel{
+    display:grid;gap:8px;margin-top:8px;padding:10px;
+    border:1px solid var(--app-border);border-radius:12px;background:var(--app-surface);
+  }
+  .mb-chrome .mb-hero{margin:0}
+  .mb-chrome .mb-controls{
+    position:static;margin:0;padding:0;border:0;box-shadow:none;background:transparent;backdrop-filter:none;
+  }
+  .mb-chrome-done{
+    display:block;width:100%;height:36px;border:0;border-radius:9px;cursor:pointer;
+    font:inherit;font-size:13px;font-weight:750;background:var(--mb-blue);color:#fff;
+  }
+}
+@media(max-width:700px){.mb-page{padding:10px 9px 82px}.mb-hero{align-items:flex-start}.mb-hero h1{font-size:20px}.mb-hero p{font-size:11px}.mb-links a{padding:6px 8px;font-size:11px}.mb-controls{top:47px;flex-wrap:wrap;padding:8px}.mb-controls input{flex:1}.mb-kind-tabs{width:100%;order:3}.mb-kind-tabs button{flex:1}.mb-date-meta{margin-left:0;font-size:10px}.mb-status{grid-template-columns:1fr 1fr}.mb-status-main{padding:13px}.mb-status h2{font-size:18px}.mb-status-cell{padding:10px}.mb-status-cell:nth-of-type(odd){border-left:0}.mb-value{font-size:15px}.mb-metrics{grid-template-columns:1fr 1fr}.mb-news{grid-template-columns:1fr}.mb-review{grid-template-columns:1fr}.mb-cause{grid-template-columns:1fr}.mb-cause-head{border-right:0;border-bottom:1px solid var(--app-border);padding:0 0 9px}.mb-chart{height:250px}.mb-chart.small{height:220px}.mb-card-body{padding:10px}.mb-source{font-size:12px}}
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+<div id="app-shell" data-active="brief"></div>
+<main class="mb-page">
+  <details class="mb-chrome" id="mbChrome">
+    <summary>
+      <span class="mb-chrome-summary-text" id="chromeSummary">市场简报</span>
+      <span class="mb-chrome-toggle" id="chromeToggle" aria-hidden="true">切换</span>
+    </summary>
+    <div class="mb-chrome-panel">
+      <header class="mb-hero"><div><h1>市场简报</h1><p>盘前先建立情境，收盘再验证风格；事实、判断和待验证条件分开呈现。</p></div><div class="mb-links"><a href="/market_news.html">原始资讯</a><a href="/daily_ops.html">每日操盘</a></div></header>
+      <section class="mb-controls" aria-label="简报日期与类型">
+        <button type="button" id="prevDate" aria-label="上一份简报">‹</button><input id="briefDate" type="date"><button type="button" id="nextDate" aria-label="下一份简报">›</button>
+        <div class="mb-kind-tabs"><button type="button" data-kind="morning" class="is-on">08:00 盘前</button><button type="button" data-kind="close_style">19:15 收盘</button></div>
+        <select id="revisionSelect" aria-label="简报修订版本"><option value="">最新版本</option></select>
+        <span class="mb-date-meta" id="dateMeta">读取中…</span>
+      </section>
+      <button type="button" class="mb-chrome-done" id="mbChromeDone">看简报</button>
+    </div>
+  </details>
+  <div id="content"></div>
+  <p class="mb-footnote">简报用于研究与复盘，不构成投资建议；“判断”必须结合价格和成交验证。</p>
+</main>
+<div class="mb-loading" id="loading" hidden><span>正在读取市场简报…</span></div>
+<script src="vendor/echarts.min.js"></script>
+<script src="/assets/app-shell.js"></script>
+<script>
+const $=id=>document.getElementById(id);let allDates=[],selectedKind='morning',payload=null,charts=[];
+const kindLabel={morning:'08:00 盘前',close_style:'19:15 收盘'},statusLabel={complete:'已完成',partial:'数据待补齐',generating:'生成中',failed:'生成失败'};
+function syncChromeSummary(extra){
+  const date=$('briefDate')?.value||'';
+  const kind=kindLabel[selectedKind]||'';
+  const bits=[date,kind];
+  if(extra)bits.push(extra);
+  const summary=$('chromeSummary');
+  if(summary)summary.textContent=bits.filter(Boolean).join(' · ');
+  const toggle=$('chromeToggle');
+  const chrome=$('mbChrome');
+  if(toggle&&chrome)toggle.textContent=chrome.open?'收起':'切换';
+}
+function collapseChromeSoon(){
+  const chrome=$('mbChrome');
+  const wide=window.matchMedia('(min-width:701px)');
+  if(!chrome||wide.matches)return;
+  chrome.open=false;
+  syncChromeSummary();
+}
+
+function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function tone(v){const s=String(v??'').toLowerCase();if(['up','bullish','positive','利多','偏多'].includes(s))return'up';if(['down','bearish','negative','利空','偏空'].includes(s))return'down';if(['warn','warning','风险'].includes(s))return'warn';return''}
+function num(v,d=2){const n=Number(v);return Number.isFinite(n)?n.toFixed(d):'—'}
+async function api(path){const r=await fetch(path,{cache:'no-store'});let x={};try{x=await r.json()}catch(e){}if(!r.ok)throw new Error(x.error||`HTTP ${r.status}`);return x}
+function destroyCharts(){charts.forEach(x=>x.dispose());charts=[]}
+function list(items,empty='暂无内容'){return Array.isArray(items)&&items.length?`<div class="mb-list">${items.map(x=>{const row=typeof x==='string'?{title:x}:x||{};return`<div class="mb-list-item ${tone(row.tone||row.stance||row.result)}"><b>${esc(row.title||row.label||row.statement||'—')}</b>${row.detail||row.note||row.reason?`<p>${esc(row.detail||row.note||row.reason)}</p>`:''}</div>`}).join('')}</div>`:`<div class="mb-empty">${empty}</div>`}
+function metrics(items){return `<div class="mb-metrics">${(items||[]).slice(0,12).map(x=>`<div class="mb-metric"><small>${esc(x.label||x.key||'指标')}</small><b class="${tone(x.tone||(Number(x.change_pct)>0?'up':Number(x.change_pct)<0?'down':''))}">${esc(x.value??'—')}${x.unit?` <small>${esc(x.unit)}</small>`:''}</b>${x.change_pct!=null?`<small>${Number(x.change_pct)>=0?'+':''}${num(x.change_pct)}%</small>`:''}</div>`).join('')}</div>`}
+function news(items){const rows=Array.isArray(items)?items.slice(0,8):[];return rows.length?`<div class="mb-news">${rows.map((x,i)=>`<article><span class="mb-news-rank">${String(i+1).padStart(2,'0')}</span><div class="mb-news-meta"><span class="mb-fact">${esc(x.verification_label||'已确认事实')}</span><span>${esc(x.publisher||x.source||'')}</span><span>${esc(x.published_at||'')}</span></div><h3>${esc(x.title)}</h3><p>${esc(x.digest||x.fact||'')}</p>${x.why_important?`<p class="mb-news-impact"><b>为何重要：</b>${esc(x.why_important)}</p>`:''}${x.impact?`<p class="mb-news-impact"><b>影响判断：</b>${esc(x.impact)}</p>`:''}<div class="mb-tags">${[...(x.sectors||[]),...(x.tags||[])].slice(0,7).map(t=>`<span class="mb-tag">${esc(t)}</span>`).join('')}${x.event_id?`<a class="mb-tag" href="/market_news.html?date=${encodeURIComponent((x.published_at||payload?.brief_date||'').slice(0,10))}&event=${encodeURIComponent(x.event_id)}">查看来源链</a>`:''}</div></article>`).join('')}</div>`:'<div class="mb-empty">暂无重要资讯；完整简报应提供 8 条</div>'}
+function chains(rows){return Array.isArray(rows)&&rows.length?rows.map(row=>`<div class="mb-chain">${(Array.isArray(row)?row:(row.steps||[])).map((x,i)=>`${i?'<i>→</i>':''}<span>${esc(x)}</span>`).join('')}</div>`).join(''):'<div class="mb-empty">暂无传导链</div>'}
+function sectors(rows){return Array.isArray(rows)&&rows.length?`<div class="mb-sectors">${rows.map(x=>`<span class="mb-sector ${tone(x.direction||x.tone)}"><b>${esc(x.name||x.label)}</b><span>${esc(x.reason||x.detail||'')}</span></span>`).join('')}</div>`:'<div class="mb-empty">暂无板块影响数据</div>'}
+function sources(rows){return Array.isArray(rows)&&rows.length?`<div class="mb-sources">${rows.map((x,i)=>`<div class="mb-source"><b>${i+1}</b><div>${x.url?`<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.title||x.publisher||'来源')}</a>`:`<strong>${esc(x.title||x.publisher||'来源')}</strong>`}<small>${esc([x.publisher,x.published_at].filter(Boolean).join(' · '))}</small></div></div>`).join('')}</div>`:'<div class="mb-empty">暂无来源记录</div>'}
+function card(title,body,meta='',cls=''){return `<section class="mb-card ${cls}"><header class="mb-card-head"><h2>${esc(title)}</h2><span>${esc(meta)}</span></header><div class="mb-card-body">${body}</div></section>`}
+function renderReview(rows){if(!Array.isArray(rows)||!rows.length)return'';const labels={verified:'已验证',partial:'部分验证',invalidated:'已证伪'};return card('晨间判断复盘',`<div class="mb-review">${rows.map(x=>{const result=x.result||'partial';return`<article class="${esc(result)}"><div class="mb-review-head"><h3>${esc(x.statement||x.title)}</h3><span class="mb-review-state">${esc(x.result_label||labels[result]||'待验证')}</span></div><div class="mb-review-line"><span>盘面证据</span><b>${esc(x.evidence||x.note||x.detail||'—')}</b></div><div class="mb-review-line"><span>偏差来源</span><span>${esc(x.bias||x.miss_reason||'无明显偏差')}</span></div><div class="mb-review-line"><span>次日修正</span><span>${esc(x.correction||x.next_adjustment||'继续观察原判断的确认与失效条件')}</span></div></article>`}).join('')}</div>`,'判断 → 证据 → 偏差 → 修正','mb-full')}
+function attribution(rows){if(!Array.isArray(rows)||!rows.length)return'<div class="mb-empty">暂无可验证的资讯归因</div>';return`<div class="mb-attribution">${rows.map(x=>`<article class="mb-cause"><div class="mb-cause-head"><span class="mb-cause-result ${esc(x.result||'partial')}">${esc(x.result_label||({verified:'证据较强',partial:'部分解释',invalidated:'不支持'}[x.result]||'待验证'))}</span><b>${esc(x.title||x.event||'资讯事件')}</b><small>${esc(x.publisher||x.source||'')}</small></div><div class="mb-cause-body"><div class="mb-cause-line"><span>传导逻辑</span><b>${esc(x.mechanism||x.logic||'—')}</b></div><div class="mb-cause-line"><span>盘面证据</span><span>${esc(x.market_evidence||x.evidence||'—')}</span></div><div class="mb-cause-line"><span>归因结论</span><span>${esc(x.conclusion||x.note||'—')}</span></div></div></article>`).join('')}</div>`}
+function renderBrief(x){destroyCharts();const s=x.summary||{},sec=x.sections||{},state=x.status||'partial';$('dateMeta').textContent=`${kindLabel[x.kind]} · 修订 v${x.revision||1} · ${statusLabel[state]||state}`;syncChromeSummary(`修订 v${x.revision||1}`);const main=`
+  <section class="mb-status"><div class="mb-status-main"><span class="mb-kicker">${x.kind==='morning'?'盘前情境':'收盘验证'}</span><h2>${esc(s.headline||'本期简报尚未填写核心结论')}</h2><p>${esc(s.narrative||s.core_view||'')}</p></div><div class="mb-status-cell"><span class="mb-label">市场状态</span><span class="mb-value">${esc(s.market_state||'—')}</span></div><div class="mb-status-cell"><span class="mb-label">主导风格</span><span class="mb-value">${esc(s.dominant_style||'—')}</span></div><div class="mb-status-cell"><span class="mb-label">风险温度</span><span class="mb-value">${esc(s.risk_level||'—')}</span></div><div class="mb-status-cell"><span class="mb-label">数据状态</span><span class="mb-state ${esc(state)}">${esc(statusLabel[state]||state)}</span></div></section>`;
+  let body=`<div class="mb-grid">${card('关键指标',metrics(x.metrics),'价格与宽度','mb-full')}`;
+  if(x.kind==='morning'){
+    body+=card('今日核心矛盾',list(sec.core_conflicts),'事实与变量');
+    body+=card('大类资产表现','<div class="mb-chart small" id="assetChart"></div>','隔夜与最新可用');
+    body+=card('盘前最重要的 8 条资讯',news(sec.news),`${Math.min((sec.news||[]).length,8)}/8 · 截至北京时间 08:00`,'mb-full');
+    body+=card('影响板块',sectors(sec.sector_impacts),'利多 / 利空 / 双向','mb-full');
+    body+=card('宏观传导链',chains(sec.transmission_chains),'从事件到A股','mb-full');
+    body+=card('开盘前观察',list(sec.watch_variables),'待验证条件');
+    body+=card('风险条件',list(sec.risk_conditions),'失效与尾部风险');
+  }else{
+    body+=card('风格坐标','<div class="mb-chart" id="quadrantChart"></div>','成长 ↔ 价值 · 小盘 ↔ 大盘');
+    body+=card('板块强弱','<div class="mb-chart" id="sectorChart"></div>','当日相对强弱');
+    body+=card('五日风格迁移','<div class="mb-chart" id="historyChart"></div>','趋势而非单点','mb-full');
+    body+=card('当日最重要的 8 条资讯',news(sec.news),`${Math.min((sec.news||[]).length,8)}/8 · 事实与来源`,'mb-full');
+    body+=card('资讯驱动与行情归因',attribution(sec.news_attribution),'资讯 → 逻辑 → 盘面证据 → 结论','mb-full');
+    body+=card('结论证据',list(sec.evidence),'已确认事实');
+    body+=card('次日确认条件',list(sec.confirmations),'待验证条件');
+    body+=card('失效与风险',list(sec.invalidations||sec.risk_conditions),'降低结论等级的信号','mb-full');
+  }
+  body+=renderReview(sec.morning_review);
+  body+=card('信息来源',sources(x.sources),`数据截至 ${x.data_as_of||'—'}`,'mb-full');
+  if((x.warnings||[]).length)body+=card('数据提醒',list(x.warnings),'缺失与限制','mb-full');
+  body+='</div>';$('content').innerHTML=main+body;requestAnimationFrame(()=>renderCharts(x));
+}
+function baseChart(){return{animation:false,textStyle:{fontFamily:'-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif'},tooltip:{trigger:'axis',confine:true},grid:{left:52,right:20,top:24,bottom:42}}}
+function chart(id,option){const el=$(id);if(!el)return;const instance=echarts.init(el);instance.setOption(option);charts.push(instance)}
+function renderCharts(x){const data=x.charts||{},red='#df3f4b',green='#159467',blue='#2563eb',purple='#7555c7',muted='#758096',line='#dfe5ee';
+  if($('assetChart')){const rows=data.asset_performance||[];chart('assetChart',{...baseChart(),tooltip:{trigger:'axis',axisPointer:{type:'shadow'}},xAxis:{type:'category',data:rows.map(r=>r.name||r.label),axisLabel:{interval:0,rotate:rows.length>6?25:0,color:muted}},yAxis:{type:'value',axisLabel:{formatter:'{value}%'},splitLine:{lineStyle:{color:line,type:'dashed'}}},series:[{type:'bar',data:rows.map(r=>({value:r.change_pct??r.value,itemStyle:{color:Number(r.change_pct??r.value)>=0?red:green}})),barMaxWidth:34}]})}
+  if($('quadrantChart')){const rows=data.style_quadrant||[];chart('quadrantChart',{...baseChart(),tooltip:{trigger:'item',formatter:p=>`${esc(p.name)}<br>成长/价值 ${num(p.value[0])}<br>小盘/大盘 ${num(p.value[1])}`},xAxis:{min:-100,max:100,name:'价值 ← → 成长',splitLine:{lineStyle:{color:line}}},yAxis:{min:-100,max:100,name:'大盘 ← → 小盘',splitLine:{lineStyle:{color:line}}},series:[{type:'scatter',data:rows.map(r=>({name:r.name,value:[r.x,r.y,r.size||20],symbolSize:Math.max(16,Math.min(48,r.size||24)),itemStyle:{color:r.tone==='down'?green:r.tone==='up'?red:blue}})),label:{show:true,formatter:'{b}',position:'top'}}]})}
+  if($('sectorChart')){const rows=(data.sector_strength||[]).slice().sort((a,b)=>(a.value??a.change_pct)-(b.value??b.change_pct));chart('sectorChart',{...baseChart(),grid:{left:78,right:35,top:15,bottom:20},tooltip:{trigger:'axis',axisPointer:{type:'shadow'}},xAxis:{type:'value',axisLabel:{formatter:'{value}%'},splitLine:{lineStyle:{color:line,type:'dashed'}}},yAxis:{type:'category',data:rows.map(r=>r.name),axisLabel:{color:muted}},series:[{type:'bar',data:rows.map(r=>{const v=r.value??r.change_pct;return{value:v,itemStyle:{color:Number(v)>=0?red:green}}}),barMaxWidth:18}]})}
+  if($('historyChart')){const rows=data.style_history||[],dates=rows.map(r=>r.date?.slice(5)||'');chart('historyChart',{...baseChart(),legend:{top:0,data:['成长','价值','小盘','大盘']},xAxis:{type:'category',data:dates,boundaryGap:false},yAxis:{type:'value',axisLabel:{formatter:'{value}'},splitLine:{lineStyle:{color:line,type:'dashed'}}},series:[['成长','growth',red],['价值','value',blue],['小盘','small',purple],['大盘','large',green]].map(([name,key,color])=>({name,type:'line',data:rows.map(r=>r[key]),showSymbol:true,symbolSize:5,lineStyle:{width:2,color},itemStyle:{color}}))})}
+}
+function updateRevisionSelect(item){const select=$('revisionSelect'),rows=(payload?.revisions||[]).filter(x=>x.kind===item.kind);select.innerHTML='<option value="">最新版本</option>'+rows.map(x=>`<option value="${x.revision}">v${x.revision} · ${esc(statusLabel[x.status]||x.status)} · ${esc(String(x.generated_at||'').slice(5,16).replace('T',' '))}</option>`).join('');select.value=String(item.revision||'')===String(rows[0]?.revision||'')?'':String(item.revision||'')}
+function chooseKind(preferred){const item=(payload?.items||[]).find(x=>x.kind===preferred)||(payload?.items||[])[0];if(!item){$('content').innerHTML='<div class="mb-empty">当天暂无可显示简报</div>';return}selectedKind=item.kind;document.querySelectorAll('[data-kind]').forEach(b=>b.classList.toggle('is-on',b.dataset.kind===selectedKind));updateRevisionSelect(item);renderBrief(item)}
+async function loadDay(date,revision=''){$('loading').hidden=false;destroyCharts();try{let path='/api/market-brief/day?date='+encodeURIComponent(date);if(revision)path+='&kind='+encodeURIComponent(selectedKind)+'&revision='+encodeURIComponent(revision);payload=await api(path);$('briefDate').value=payload.brief_date;chooseKind(selectedKind);syncUrl()}catch(e){payload=null;$('dateMeta').textContent='暂无简报';$('content').innerHTML=`<div class="mb-empty"><b>${esc(date)} 暂无市场简报</b><br>定时任务完成后会自动出现在这里。<br><small>${esc(e.message)}</small></div>`}finally{$('loading').hidden=true}}
+function syncUrl(){const u=new URL(location.href);u.searchParams.set('date',$('briefDate').value);u.searchParams.set('kind',selectedKind);history.replaceState(null,'',u)}
+function move(step){const i=allDates.indexOf($('briefDate').value),next=allDates[i+step];if(next)loadDay(next)}
+async function init(){const u=new URL(location.href);selectedKind=u.searchParams.get('kind')==='close_style'?'close_style':'morning';try{const result=await api('/api/market-brief/dates');allDates=(result.dates||[]).map(x=>x.brief_date);const requested=u.searchParams.get('date'),target=requested||allDates[0]||new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'});$('briefDate').value=target;await loadDay(target)}catch(e){$('content').innerHTML=`<div class="mb-error">市场简报暂不可用：${esc(e.message)}</div>`}}
+document.querySelectorAll('[data-kind]').forEach(b=>b.onclick=()=>{selectedKind=b.dataset.kind;loadDay($('briefDate').value)});$('revisionSelect').onchange=e=>loadDay($('briefDate').value,e.target.value);$('briefDate').onchange=e=>loadDay(e.target.value);$('prevDate').onclick=()=>move(1);$('nextDate').onclick=()=>move(-1);window.addEventListener('resize',()=>charts.forEach(x=>x.resize()));window.addEventListener('stockapp:theme',()=>payload&&chooseKind(selectedKind));init();
+(function setupChrome(){
+  const chrome=$('mbChrome'); if(!chrome)return;
+  const wide=window.matchMedia('(min-width:701px)');
+  const key='mb-brief-chrome-open';
+  const apply=()=>{
+    if(wide.matches){chrome.open=true;syncChromeSummary();return;}
+    chrome.open=sessionStorage.getItem(key)==='1';
+    syncChromeSummary();
+  };
+  chrome.addEventListener('toggle',()=>{
+    if(!wide.matches)sessionStorage.setItem(key,chrome.open?'1':'0');
+    syncChromeSummary();
+  });
+  $('mbChromeDone')?.addEventListener('click',()=>{chrome.open=false});
+  const wrap=(fn)=>function(...args){const r=fn&&fn.apply(this,args);collapseChromeSoon();return r};
+  document.querySelectorAll('[data-kind]').forEach(b=>{const prev=b.onclick; if(prev)b.onclick=wrap(prev);});
+  [['briefDate','onchange'],['prevDate','onclick'],['nextDate','onclick'],['revisionSelect','onchange']].forEach(([id,ev])=>{
+    const el=$(id); if(!el||!el[ev])return; el[ev]=wrap(el[ev]);
+  });
+  apply();
+  if(wide.addEventListener)wide.addEventListener('change',apply); else wide.addListener(apply);
+})();
+</script>
+</body>
+</html>
