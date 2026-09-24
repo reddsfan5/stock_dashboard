@@ -7,14 +7,19 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
 from data.market_briefs import MarketBriefRepository
 from data.market_context import build_market_context
 from data.market_news import MarketNewsRepository
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+SECTOR_SNAPSHOT_PATH = REPO_ROOT / "cache" / "sector_strength_snapshot.json"
 
 SHANGHAI_TZ = ZoneInfo("Asia/Shanghai")
 
@@ -214,6 +219,213 @@ def _risk_level(news_items: list[dict], context: dict) -> str:
     if any(k in text for k in soft):
         return "中低"
     return "中等"
+
+
+
+def _clip(value: float, lo: float = -90.0, hi: float = 90.0) -> float:
+    return max(lo, min(hi, float(value)))
+
+
+def _bubble_size(change_pct: Optional[float]) -> float:
+    if change_pct is None:
+        return 22.0
+    return round(max(16.0, min(48.0, 22.0 + abs(float(change_pct)) * 8.0)), 1)
+
+
+def _tone_from_change(change_pct: Optional[float]) -> str:
+    if change_pct is None:
+        return "neutral"
+    if float(change_pct) > 0.15:
+        return "up"
+    if float(change_pct) < -0.15:
+        return "down"
+    return "neutral"
+
+
+def _asset_performance(context: dict) -> list[dict]:
+    rows: list[dict] = []
+    for card in list(context.get("a_share") or []) + list(context.get("overseas") or []):
+        change = card.get("change_pct")
+        if change is None:
+            continue
+        as_of = " ".join(
+            str(x).strip()
+            for x in (card.get("bar_date"), card.get("time") or card.get("status_label"))
+            if x
+        ).strip()
+        rows.append({
+            "name": card.get("name") or card.get("code") or "指数",
+            "change_pct": round(float(change), 4),
+            "as_of": as_of or None,
+            "source": card.get("source") or "本地",
+        })
+    return rows
+
+
+def _sector_strength(brief_date: str) -> list[dict]:
+    if not SECTOR_SNAPSHOT_PATH.exists():
+        return []
+    try:
+        payload = json.loads(SECTOR_SNAPSHOT_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    strong = list(payload.get("sectors") or [])
+    weak = list(payload.get("weak_sectors") or [])
+    rows: list[dict] = []
+    seen: set[str] = set()
+    for item in strong[:5] + weak[:3]:
+        name = str(item.get("sector") or "").strip()
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        try:
+            value = float(item.get("avg_change_pct"))
+        except (TypeError, ValueError):
+            continue
+        rows.append({"name": name, "value": round(value, 3)})
+    # 快照日期可能略旧；有数据就用，页面只展示相对强弱
+    return rows
+
+
+def _index_close_series(codes: list[str], end_date: str, lookback: int = 8) -> dict[str, Any]:
+    try:
+        from data.index import IndexData
+        import pandas as pd
+    except Exception:
+        return {}
+    try:
+        cache = IndexData().cache
+    except Exception:
+        return {}
+    if cache is None or getattr(cache, "empty", True):
+        return {}
+    end = pd.Timestamp(end_date)
+    out: dict[str, Any] = {}
+    for code in codes:
+        sub = cache[cache["代码"].astype(str) == code].copy()
+        if sub.empty:
+            continue
+        sub["日期"] = pd.to_datetime(sub["日期"])
+        sub = sub[sub["日期"] <= end].sort_values("日期").tail(int(lookback))
+        if len(sub) < 2:
+            continue
+        out[code] = sub.set_index("日期")["收盘"].astype(float)
+    return out
+
+
+def _last_day_pct(series) -> Optional[float]:
+    if series is None or len(series) < 2:
+        return None
+    prev, last = float(series.iloc[-2]), float(series.iloc[-1])
+    if prev == 0:
+        return None
+    return (last / prev - 1.0) * 100.0
+
+
+def _style_quadrant(closes: dict) -> list[dict]:
+    cyb = _last_day_pct(closes.get("sz399006"))
+    hs300 = _last_day_pct(closes.get("sh000300"))
+    sh = _last_day_pct(closes.get("sh000001"))
+    kc = _last_day_pct(closes.get("sh000688"))
+    if cyb is None and hs300 is None:
+        return []
+    growth_edge = (cyb or 0.0) - (hs300 or 0.0)
+    small_edge = (cyb or 0.0) - (sh if sh is not None else (hs300 or 0.0))
+    rows = [
+        {
+            "name": "成长",
+            "x": round(_clip(growth_edge * 25.0 + 35.0), 1),
+            "y": round(_clip(small_edge * 18.0 + 25.0), 1),
+            "size": _bubble_size(cyb),
+            "tone": _tone_from_change(cyb),
+        },
+        {
+            "name": "价值",
+            "x": round(_clip(-growth_edge * 25.0 - 30.0), 1),
+            "y": round(_clip(-(sh if sh is not None else hs300 or 0.0) * 12.0 - 20.0), 1),
+            "size": _bubble_size(hs300),
+            "tone": _tone_from_change(hs300),
+        },
+        {
+            "name": "小盘",
+            "x": round(_clip(growth_edge * 12.0 + 10.0), 1),
+            "y": round(_clip(45.0 + small_edge * 15.0), 1),
+            "size": _bubble_size(cyb),
+            "tone": _tone_from_change(cyb),
+        },
+        {
+            "name": "大盘",
+            "x": round(_clip(-25.0 - (hs300 or 0.0) * 8.0), 1),
+            "y": round(_clip(-40.0 - (sh if sh is not None else hs300 or 0.0) * 10.0), 1),
+            "size": _bubble_size(sh if sh is not None else hs300),
+            "tone": _tone_from_change(sh if sh is not None else hs300),
+        },
+    ]
+    if kc is not None and hs300 is not None:
+        rows.append({
+            "name": "科创",
+            "x": round(_clip(55.0 + (kc - hs300) * 18.0), 1),
+            "y": round(_clip(12.0 + kc * 10.0), 1),
+            "size": _bubble_size(kc),
+            "tone": _tone_from_change(kc),
+        })
+    return rows
+
+
+def _style_history(closes: dict) -> list[dict]:
+    import pandas as pd
+
+    series_map = {
+        "growth": closes.get("sz399006"),
+        "value": closes.get("sh000300"),
+        "small": closes.get("sz399006"),
+        "large": closes.get("sh000001") if closes.get("sh000001") is not None else closes.get("sh000300"),
+    }
+    if not any(v is not None and len(v) >= 2 for v in series_map.values()):
+        return []
+    # 对齐最近 5 个交易日
+    frames = []
+    for key, series in series_map.items():
+        if series is None or len(series) < 2:
+            continue
+        base = float(series.iloc[0])
+        if base == 0:
+            continue
+        cum = ((series / base) - 1.0) * 100.0
+        frames.append(cum.rename(key))
+    if not frames:
+        return []
+    aligned = pd.concat(frames, axis=1).dropna(how="all").tail(5)
+    rows: list[dict] = []
+    for ts, row in aligned.iterrows():
+        item = {"date": pd.Timestamp(ts).strftime("%Y-%m-%d")}
+        for key in ("growth", "value", "small", "large"):
+            val = row.get(key) if hasattr(row, "get") else row[key] if key in row.index else None
+            if val is None or (isinstance(val, float) and val != val):
+                item[key] = None
+            else:
+                item[key] = round(float(val), 2)
+        rows.append(item)
+    return rows
+
+
+def _build_charts(kind: str, brief_date: str, context: dict) -> dict:
+    """按页面字段拼装 charts：晨报偏大类资产，收盘偏风格/板块。"""
+    charts: dict[str, list] = {
+        "asset_performance": _asset_performance(context),
+    }
+    closes = _index_close_series(
+        ["sz399006", "sh000300", "sh000001", "sh000688"],
+        brief_date,
+        lookback=8,
+    )
+    if kind == "close_style" or kind == "morning":
+        # 收盘页主看这三张；晨报也写入，方便后续扩展，页面按 kind 取用
+        charts["sector_strength"] = _sector_strength(brief_date)
+        charts["style_quadrant"] = _style_quadrant(closes)
+        charts["style_history"] = _style_history(closes)
+    # 去掉空列表，避免页面画空白轴
+    return {k: v for k, v in charts.items() if v}
 
 
 def build_brief(
@@ -416,7 +628,7 @@ def build_brief(
         "summary": summary,
         "metrics": metrics,
         "sections": sections,
-        "charts": {},
+        "charts": _build_charts(kind, brief_date, context),
         "sources": [
             {
                 "publisher": s.get("publisher") or "",

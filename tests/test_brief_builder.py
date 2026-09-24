@@ -121,5 +121,39 @@ class BuildBriefTests(unittest.TestCase):
         self.assertEqual(clean["status"], "complete")
 
 
+    def test_charts_filled_from_context(self):
+        fake_day = {"events": [
+            {
+                "event_id": "e1",
+                "title": "央行开展逆回购",
+                "digest": "流动性投放",
+                "importance": 6,
+                "verification_status": "reported",
+                "verification_label": "单源报道",
+                "source_count": 1,
+                "platforms": [{"name": "测试", "url": "https://example.test/x", "published_at": "2026-09-23T15:00:00+08:00"}],
+                "tags": ["金融"],
+                "first_published_at": "2026-09-23T15:00:00+08:00",
+                "original_source": "测试",
+            }
+        ]}
+        repo = MagicMock()
+        repo.day.return_value = fake_day
+        context = {
+            "a_share": [{"name": "上证指数", "change_pct": 0.5, "price": 3900, "bar_date": "2026-09-23", "time": "15:00", "source": "test"}],
+            "overseas": [{"name": "恒生指数", "change_pct": -0.8, "bar_date": "2026-09-23", "time": "15:00", "source": "test"}],
+        }
+        with patch("data.brief_builder.build_market_context", return_value=context), \
+             patch("data.brief_builder._index_close_series", return_value={}), \
+             patch("data.brief_builder._sector_strength", return_value=[{"name": "电子", "value": 1.2}]):
+            payload = build_brief(kind="close_style", brief_date="2026-09-23", news_repo=repo)
+        charts = payload.get("charts") or {}
+        self.assertIn("asset_performance", charts)
+        self.assertEqual(charts["asset_performance"][0]["name"], "上证指数")
+        self.assertIn("sector_strength", charts)
+        clean = MarketBriefRepository.validate(payload, kind="close_style")
+        self.assertIn("asset_performance", clean.get("charts") or {})
+
+
 if __name__ == "__main__":
     unittest.main()
