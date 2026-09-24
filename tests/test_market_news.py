@@ -67,6 +67,7 @@ class MarketNewsRepositoryTest(unittest.TestCase):
     def test_impact_record_is_persistent_and_soft_deletable(self):
         self.repo.day("2026-08-25")
         impact = self.repo.add_impact(
+            user_id=1,
             news_id="n2",
             market_date="2026-08-25",
             decision_time="12:05",
@@ -76,17 +77,18 @@ class MarketNewsRepositoryTest(unittest.TestCase):
             note="午间政策信息促使我把标的加入观察，但仍等待量价确认。",
         )
         self.assertEqual(impact["code"], "sh520500")
-        self.assertEqual(len(self.repo.impacts(market_date="2026-08-25")), 1)
-        self.repo.delete_impact(impact["id"])
-        self.assertEqual(self.repo.impacts(market_date="2026-08-25"), [])
+        self.assertEqual(len(self.repo.impacts(user_id=1, market_date="2026-08-25")), 1)
+        self.repo.delete_impact(impact["id"], user_id=1)
+        self.assertEqual(self.repo.impacts(user_id=1, market_date="2026-08-25"), [])
         self.assertEqual(
-            len(self.repo.impacts(market_date="2026-08-25", include_deleted=True)), 1
+            len(self.repo.impacts(user_id=1, market_date="2026-08-25", include_deleted=True)), 1
         )
 
     def test_rejects_impact_for_different_market_date(self):
         self.repo.day("2026-08-25")
         with self.assertRaisesRegex(ValueError, "发布日期一致"):
             self.repo.add_impact(
+                user_id=1,
                 news_id="n1", market_date="2026-08-26", action="watch",
                 stance="uncertain", note="日期不一致",
             )
@@ -95,9 +97,54 @@ class MarketNewsRepositoryTest(unittest.TestCase):
         self.repo.day("2026-08-25")
         with self.assertRaisesRegex(ValueError, "不能早于资讯发布时间"):
             self.repo.add_impact(
+                user_id=1,
                 news_id="n2", market_date="2026-08-25", decision_time="10:00",
                 action="watch", stance="uncertain", note="不应允许时间穿越",
             )
+
+    def test_multi_source_events_are_grouped_without_future_corroboration(self):
+        self.repo.day("2026-08-25")
+        self.repo.ingest([
+            {
+                "id": "east-1",
+                "title": "央行宣布下调存款准备金率",
+                "digest": "官方发布后，多家财经媒体跟进报道。",
+                "url": "https://example.test/east-1",
+                "published_at": "2026-08-25T10:30:00+08:00",
+                "tags": ["央行", "流动性"],
+            }
+        ], source_key="eastmoney")
+        self.repo.ingest([
+            {
+                "id": "official-1",
+                "title": "央行宣布下调存款准备金率",
+                "digest": "官方公告。",
+                "url": "https://example.test/official-1",
+                "published_at": "2026-08-25T14:00:00+08:00",
+                "original_source": "中国人民银行",
+            }
+        ], source_key="official")
+
+        morning = self.repo.cached_day("2026-08-25", as_of="11:00")
+        event = next(row for row in morning["events"] if "准备金率" in row["title"])
+        self.assertEqual(event["source_count"], 1)
+        self.assertEqual(event["verification_status"], "reported")
+
+        full = self.repo.cached_day("2026-08-25")
+        event = next(row for row in full["events"] if "准备金率" in row["title"])
+        self.assertEqual(event["source_count"], 2)
+        self.assertEqual(event["verification_status"], "verified")
+        self.assertEqual({x["key"] for x in event["platforms"]}, {"eastmoney", "official"})
+
+    def test_ingest_rejects_unknown_source_and_unsafe_url(self):
+        with self.assertRaisesRegex(ValueError, "未知资讯来源"):
+            self.repo.ingest([], source_key="private-api")
+        with self.assertRaisesRegex(ValueError, "http/https"):
+            self.repo.ingest([{
+                "title": "测试资讯",
+                "published_at": "2026-08-25T08:00:00",
+                "url": "file:///tmp/secret",
+            }], source_key="eastmoney")
 
 
 class MarketNewsPageTest(unittest.TestCase):
@@ -106,6 +153,8 @@ class MarketNewsPageTest(unittest.TestCase):
         self.assertIn("无剧透", html)
         self.assertIn("/api/news/day", html)
         self.assertIn("/api/news/impact", html)
+        self.assertIn("事件聚合", html)
+        self.assertIn("来源等级", html)
 
 
 if __name__ == "__main__":
