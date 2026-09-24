@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from data.brief_builder import build_brief, _score_event, _pick_events
+from data.brief_builder import build_brief, _score_event, _pick_events, is_sensitive_event
 from data.market_briefs import MarketBriefRepository
 
 
@@ -25,6 +25,31 @@ class ScoreTests(unittest.TestCase):
         ]
         picked = _pick_events(events, limit=8)
         self.assertEqual(len(picked), 2)
+
+    def test_sensitive_events_are_skipped(self):
+        events = [
+            {
+                "title": "某地发生恐怖袭击",
+                "digest": "详情省略",
+                "importance": 99,
+                "verification_status": "verified",
+                "source_count": 5,
+                "platforms": [],
+            },
+            {
+                "title": "央行开展逆回购",
+                "digest": "流动性投放",
+                "importance": 6,
+                "verification_status": "reported",
+                "source_count": 1,
+                "platforms": [],
+            },
+        ]
+        self.assertTrue(is_sensitive_event(events[0]))
+        self.assertFalse(is_sensitive_event(events[1]))
+        picked = _pick_events(events, limit=8)
+        self.assertEqual(len(picked), 1)
+        self.assertIn("逆回购", picked[0]["title"])
 
 
 class BuildBriefTests(unittest.TestCase):

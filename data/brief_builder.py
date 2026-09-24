@@ -39,6 +39,23 @@ STYLE_HINTS = (
     ("地产", ("地产", "房地产", "物业")),
 )
 
+# 入选简报前的敏感话题过滤（标题/摘要命中任一即跳过）。
+# 只服务本地页面内容克制，不碰登录墙、不调用大模型；词表可按需增补。
+SENSITIVE_KEYWORDS = (
+    # 政治与意识形态
+    "政变", "颠覆", "颜色革命", "港独", "台独", "藏独", "疆独",
+    "法轮功", "六四", "天安门", "反共", "反党",
+    # 暴力恐怖与恶性治安（避免简报渲染血腥社会案）
+    "恐怖袭击", "自杀式袭击", "爆炸案", "枪击案", "灭门", "碎尸",
+    "强奸", "性侵", "虐童",
+    # 极端人身伤亡表述（纯事故行情相关如飞机失事仍可能出现，见白名单思路：宁缺勿滥）
+    "万人死亡", "大屠杀", "种族清洗",
+    # 明显不符合市场简报的色情/赌博诱导
+    "色情", "黄赌毒", "裸聊", "赌场开户",
+)
+
+# 行情常见词不应误伤：军工/国防、制裁（贸易制裁常出现）、加息等不在黑名单。
+
 
 def _today() -> str:
     return datetime.now(SHANGHAI_TZ).date().isoformat()
@@ -110,11 +127,24 @@ def _event_to_news_item(event: dict) -> dict:
     }
 
 
+def _event_text(event: dict) -> str:
+    tags = " ".join(str(t) for t in (event.get("tags") or []))
+    return f"{event.get('title') or ''} {event.get('digest') or ''} {tags}"
+
+
+def is_sensitive_event(event: dict) -> bool:
+    """标题/摘要/标签是否命中敏感词表。"""
+    text = _event_text(event)
+    return any(k in text for k in SENSITIVE_KEYWORDS)
+
+
 def _pick_events(events: list[dict], limit: int = 8) -> list[dict]:
     ranked = sorted(events, key=_score_event, reverse=True)
     picked: list[dict] = []
     seen = set()
     for event in ranked:
+        if is_sensitive_event(event):
+            continue
         title = re.sub(r"\s+", "", str(event.get("title") or ""))[:40]
         if not title or title in seen:
             continue
@@ -207,11 +237,17 @@ def build_brief(
             pass
     payload_news = news_repo.day(brief_date, as_of=clock)
     events = list(payload_news.get("events") or [])
+    skipped_sensitive = sum(1 for e in events if is_sensitive_event(e))
     picked = _pick_events(events, limit=8)
     news_items = [_event_to_news_item(e) for e in picked]
 
     warnings: list[dict] = []
     status = "complete"
+    if skipped_sensitive:
+        warnings.append({
+            "title": "已跳过敏感话题",
+            "detail": f"规则过滤掉 {skipped_sensitive} 条命中敏感词的事件，不进入简报正文。",
+        })
     if len(news_items) < 8:
         status = "partial"
         warnings.append({
