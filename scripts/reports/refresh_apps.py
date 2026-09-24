@@ -33,6 +33,7 @@ def main() -> int:
         ("T+1 训练", "scripts.services.trading_trainer"),
         ("选股日记", "scripts.services.stock_journal"),
         ("市场资讯", "scripts.services.market_news"),
+        ("市场简报", "scripts.services.market_brief"),
         ("观察池", "scripts.services.watchlist"),
         ("标的上下文", "scripts.services.symbol_context"),
     )

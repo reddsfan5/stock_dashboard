@@ -10,7 +10,7 @@
     python -m scripts.serve restart web --no-lan   # 仅本机
     python -m scripts.serve stop all
 
-minute、grid、trainer、journal、news、watchlist 是业务入口，共用一个 Web 进程；reports 是为了兼容
+minute、grid、trainer、journal、news、brief、watchlist 是业务入口，共用一个 Web 进程；reports 是为了兼容
 旧索引地址而保留的纯静态服务。每日数据更新是计划任务，不是常驻服务。
 """
 
@@ -44,6 +44,7 @@ PAGE_PATHS = {
     "trainer": "/trading_trainer.html",
     "journal": "/stock_journal.html",
     "news": "/market_news.html",
+    "brief": "/market_brief.html",
     "watchlist": "/watchlist.html",
     "watchlist_monitor": "/watchlist_monitor.html",
     "shortlist_monitor": "/shortlist_monitor.html",
@@ -56,6 +57,7 @@ TARGET_ALIASES = {
     "trainer": "web",
     "journal": "web",
     "news": "web",
+    "brief": "web",
     "watchlist": "web",
     "watchlist_monitor": "web",
     "shortlist_monitor": "web",
@@ -94,7 +96,7 @@ def web_is_healthy():
         and payload.get("status") == "ok"
         and payload.get("service") == "stock-interactive-web"
         and set(payload.get("features", [])) >= {
-            "minute", "grid", "trainer", "journal", "news", "market_context",
+            "minute", "grid", "trainer", "journal", "news", "market_brief", "market_context",
             "training_loop", "watchlist", "symbol_context", "hypotheses",
         }
     )
@@ -318,6 +320,7 @@ def start_web(requested_target="web", replace_conflicts=False, lan=True):
     print("  训练：  http://127.0.0.1:{}/trading_trainer.html".format(WEB_PORT))
     print("  日记：  http://127.0.0.1:{}/stock_journal.html".format(WEB_PORT))
     print("  资讯：  http://127.0.0.1:{}/market_news.html".format(WEB_PORT))
+    print("  简报：  http://127.0.0.1:{}/market_brief.html".format(WEB_PORT))
     print("  观察池：http://127.0.0.1:{}/watchlist.html".format(WEB_PORT))
     print("  观察池收益：http://127.0.0.1:{}/watchlist_monitor.html".format(WEB_PORT))
     print("  短名单收益：http://127.0.0.1:{}/shortlist_monitor.html".format(WEB_PORT))

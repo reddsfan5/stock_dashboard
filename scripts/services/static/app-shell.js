@@ -10,6 +10,7 @@
     {key:'dashboard',href:'/dashboard.html',label:'选股仪表盘',icon:'▦',group:'日常看盘'},
     {key:'watchlist',href:'/watchlist.html',label:'观察池',icon:'☆',group:'日常看盘'},
     {key:'minute',href:'/minute_view.html',label:'分时查询',icon:'⌁',group:'日常看盘'},
+    {key:'brief',href:'/market_brief.html',label:'市场简报',icon:'◩',group:'日常看盘'},
     {key:'news',href:'/market_news.html',label:'市场资讯',icon:'≡',group:'日常看盘'},
     {key:'trainer',href:'/trading_trainer.html',label:'交易训练',icon:'▷',group:'交易训练'},
     {key:'grid',href:'/grid_simulator.html',label:'网格回放',icon:'⊞',group:'交易训练'},

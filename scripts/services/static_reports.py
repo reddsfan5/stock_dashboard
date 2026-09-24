@@ -26,7 +26,7 @@ class ReportHandler(SimpleHTTPRequestHandler):
         if route in ('/dashboard.html', '/trading_trainer.html', '/watchlist.html', '/watchlist_monitor.html',
                      '/symbol.html', '/minute_view.html', '/grid_simulator.html',
                      '/stock_journal.html', '/market_news.html', '/shortlist.html',
-                     '/shortlist_monitor.html'):
+                     '/shortlist_monitor.html', '/market_brief.html'):
             # A report entry is only a compatibility link; interactive pages and
             # their write APIs must have the same origin on both desktop and LAN.
             host = self.headers.get('Host', '127.0.0.1').split(':')[0]
