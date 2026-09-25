@@ -49,7 +49,7 @@ tr.click{cursor:pointer}
 .hx-warn{border-left:3px solid #b7791f;padding:8px 10px;background:color-mix(in srgb,#b7791f 8%,var(--hx-card));border-radius:0 8px 8px 0;font-size:12px;line-height:1.6}
 .cell2{display:block;font-size:10px;color:var(--hx-muted)}
 @media(max-width:900px){.hx-grid{grid-template-columns:1fr}}
-@media(max-width:700px){.hx-page{padding:10px 10px 40px}.hx-hero h1{font-size:20px}.hx-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.hx-chart{height:300px}.hx-card{padding:12px}.hx-bar{gap:6px}}
+@media(max-width:700px){.hx-page{padding:10px 10px 40px}.hx-hero h1{font-size:20px}.hx-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.hx-chart{height:300px}.hx-card{padding:12px}/* 手机：切换条压成一行，避免吸顶时遮住图表 */.hx-bar{flex-wrap:nowrap;gap:6px;padding:6px}.hx-chip{padding:6px 10px;font-size:12px}.hx-seg button{padding:6px 7px;font-size:11px}.hx-exy{display:none}}
 </style>
 </head>
 <body>
@@ -115,9 +115,10 @@ function chips(){
     h+='<button class="hx-chip'+(g===S.g?' active':'')+'" data-g="'+esc(g)+'" role="tab">'+esc(g)+'<small>'+n+'</small></button>'});
   $('hx-chips').innerHTML=h;
   var vh='';Object.keys(D.variants).forEach(function(k){
-    var label=D.variants[k]+(k==='ex'?'（'+ex.join('、')+'）':'');
-    vh+='<button data-v="'+k+'" class="'+(k===S.v?'active':'')+'">'+esc(label)+'</button>'});
+    var yrs=k==='ex'?'<span class="hx-exy">（'+esc(ex.join('、'))+'）</span>':'';
+    vh+='<button data-v="'+k+'" class="'+(k===S.v?'active':'')+'" title="'+(k==='ex'?'剔除 '+esc(ex.join('、')):'')+'">'+esc(D.variants[k])+yrs+'</button>'});
   $('hx-variant').innerHTML=vh;
+  var act=document.querySelector('.hx-chip.active');if(act&&act.scrollIntoView)act.scrollIntoView({block:'nearest',inline:'nearest'});
 }
 document.addEventListener('click',function(e){
   var c=e.target.closest('[data-g]');if(c){S.g=c.getAttribute('data-g');render();return}
