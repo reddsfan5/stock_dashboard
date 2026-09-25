@@ -134,6 +134,51 @@ class HolidayEventTest(unittest.TestCase):
         self.assertIn("candlestick", html)
         self.assertIn("markArea", html)
 
+    def test_ticker_is_computed_from_payload(self):
+        # 行情条 / 倒计时全部由 current / upcoming / bands / kline 计算：目标 = 最近一个还没到 T0 的休市，
+        # 合并休市取最后一个存在的分组（中秋+国庆 → 国庆）；代理指数近10日相对强弱自动进入行情条
+        from backtest.holiday_report import ticker_payload
+        cur = [
+            {"项目": "沪深300", "指标": "节前10日%", "当前值": -2.4, "样本数": 11, "历史节前中位数": -1.03, "历史分位%": 27.27, "基准分位%": 20.6},
+            {"项目": "沪深300", "指标": "节前量比", "当前值": 0.94, "样本数": 11, "历史节前中位数": 0.83, "历史分位%": 81.8, "基准分位%": 46.0},
+            {"项目": "中证1000−沪深300", "指标": "节前5日%", "当前值": 0.75, "样本数": 11, "历史节前中位数": -0.4, "历史分位%": 81.8, "基准分位%": 60.0},
+            {"项目": "中证1000−沪深300", "指标": "节前10日%", "当前值": 2.17, "样本数": 11, "历史节前中位数": -1.37, "历史分位%": 90.9, "基准分位%": 75.0},
+        ]
+        payload = {
+            "meta": {"index_name": "沪深300", "upcoming": [
+                {"节日": "2026中秋", "T0": "2026-09-24", "T1": "2026-09-28", "状态": "节前已知，未复牌", "距T0交易日": 0},
+                {"节日": "2026中秋+国庆", "T0": "2026-09-30", "T1": "2026-10-08", "状态": "未到", "距T0交易日": 3}]},
+            "groups": ["全部", "中秋", "国庆", "合并"],
+            "holidays": [{"name": "中秋", "color": "#8b5cf6"}, {"name": "国庆", "color": "#e11d48"}],
+            "merged_color": "#14b8a6",
+            "bands": [{"t0": "2026-09-24", "kind": "中秋", "tags": ["中秋"], "days": 3},
+                      {"t0": "2026-09-30", "kind": he.MERGED, "tags": ["中秋", "国庆"], "days": 8}],
+            "kline": {"d": ["2026-09-23", "2026-09-24", "2026-09-28"], "o": [4548.0, 4499.86, None],
+                      "h": [4548.0, 4500.2, None], "l": [4513.0, 4439.14, None], "c": [4517.0, 4439.14, None]},
+            "current": {"国庆": {"all": cur, "ex": cur[:1]}},
+        }
+        t = ticker_payload(payload)
+        self.assertEqual(t["group"], "国庆")
+        self.assertEqual((t["countdown"]["name"], t["countdown"]["gap"], t["countdown"]["days"]), ("2026中秋+国庆", 3, 8))
+        self.assertEqual(t["countdown"]["color"], "#14b8a6")
+        self.assertEqual(len(t["schedule"]), 2)
+        self.assertEqual([i["label"] for i in t["items"]["all"]], ["近10日", "量比", "中证1000−300"])
+        self.assertEqual(t["items"]["all"][2]["unit"], "pp")
+        self.assertTrue(t["items"]["all"][1]["vol"])
+        self.assertEqual(len(t["items"]["ex"]), 1)
+        self.assertEqual(t["quote"]["date"], "2026-09-24")
+        self.assertAlmostEqual(t["quote"]["chg"], (4439.14 / 4517 - 1) * 100, places=3)
+        html = build_holiday_page(payload)
+        raw = re.search(r'<script id="holiday-data" type="application/json">(.*?)</script>', html, re.S).group(1)
+        self.assertEqual(json.loads(raw.replace("<\\/", "</"))["ticker"]["group"], "国庆")
+        self.assertIn('id="hx-ticker"', html)
+        self.assertIn("holidayTheme", html)                                   # 本页深色优先
+
+    def test_ticker_tolerates_minimal_payload(self):
+        from backtest.holiday_report import ticker_payload
+        t = ticker_payload({"meta": {}, "groups": ["全部"]})
+        self.assertEqual((t["group"], t["countdown"], t["quote"], t["items"]), ("全部", None, None, {}))
+
 
 if __name__ == "__main__":
     unittest.main()
