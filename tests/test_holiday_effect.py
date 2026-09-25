@@ -179,6 +179,21 @@ class HolidayEventTest(unittest.TestCase):
         t = ticker_payload({"meta": {}, "groups": ["全部"]})
         self.assertEqual((t["group"], t["countdown"], t["quote"], t["items"]), ("全部", None, None, {}))
 
+    def test_kline_is_inspectable_per_candle(self):
+        # 日 K 逐根查看：信息条 + 点击选中 + 方向键；手机双指缩放 / 横向平移走共享 chart-touch.js（显式开启）
+        html = build_holiday_page({"meta": {}, "groups": ["全部"]})
+        for needle in ('id="hx-ktip"', "selectK(", "ArrowLeft", 'tabindex="0"', "pinchZoom:true", "panX:true",
+                       "minSpan:20", 'data-z="120"'):
+            self.assertIn(needle, html)
+
+    def test_chart_touch_never_puts_cross_on_top_level_axis_pointer(self):
+        # 顶层 axisPointer.type='cross' 会让 ECharts 悬停抛错（整张图悬停、滚轮缩放失效）
+        from pathlib import Path
+        js = (Path(__file__).resolve().parents[1] / "scripts/services/static/chart-touch.js").read_text(encoding="utf-8")
+        self.assertIn("axisPointerType === 'cross' ? 'line' : axisPointerType", js)
+        self.assertIn("pinchZoom", js)
+        self.assertIn("panX", js)
+
 
 if __name__ == "__main__":
     unittest.main()

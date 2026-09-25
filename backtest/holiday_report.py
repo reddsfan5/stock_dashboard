@@ -183,7 +183,10 @@ body{overflow-x:hidden}
 .hx-ktools{display:flex;gap:4px;flex-wrap:wrap;align-items:center}
 .hx-btn{border:1px solid var(--hx-line);background:var(--hx-soft);color:var(--hx-text2);border-radius:5px;height:26px;padding:0 9px;font-size:11.5px;font-family:var(--hx-mono);cursor:pointer}
 .hx-btn:hover{border-color:var(--hx-blue)}.hx-btn.on{background:var(--hx-blue);border-color:var(--hx-blue);color:var(--hx-card);font-weight:650}
-.hx-ktip{min-height:32px;display:flex;align-items:center;gap:6px 12px;flex-wrap:wrap;padding:5px 12px;background:var(--hx-strip);border-bottom:1px solid var(--hx-line2);font-size:11.5px;font-family:var(--hx-mono);font-variant-numeric:tabular-nums}
+.hx-ktip{min-height:38px;display:flex;align-items:center;gap:6px 14px;flex-wrap:wrap;padding:7px 12px;background:var(--hx-strip);border-bottom:1px solid var(--hx-line2);font-size:12.5px;font-family:var(--hx-mono);font-variant-numeric:tabular-nums}
+.hx-ktip .kdate{font-size:13px}.hx-ktip .kmode{font-family:inherit;font-size:10.5px;font-weight:700;padding:1px 6px;border-radius:4px;border:1px solid var(--hx-line);color:var(--hx-muted)}
+.hx-ktip .k-hover,.hx-ktip .k-scrub{border-color:var(--hx-blue);color:var(--hx-blue)}.hx-ktip .k-sel{border-color:#facc15;color:#ca8a04}
+#hx-kline:focus{outline:none}#hx-kline:focus-visible{outline:2px solid var(--hx-blue);outline-offset:-2px}
 .hx-ktip b{font-size:12px}.hx-ktip .hol{font-weight:700;padding:1px 7px;border-radius:4px;color:#fff;font-size:10.5px;font-family:inherit}
 .hx-focus{font-size:11px;color:var(--hx-muted);margin:0;padding:6px 12px 0}
 .hx-kchart{width:100%;height:540px}
@@ -255,7 +258,7 @@ details.hx-fold:not([open])>summary{border-bottom:0}
   /* 手机：分组条压成一行，吸顶时不遮图 */
   .hx-bar{gap:6px;padding:5px}.hx-chip{padding:0 8px;font-size:12px;height:27px}.hx-seg button{padding:0 7px;font-size:11px;height:27px}.hx-exy{display:none}
   .hx-kchart{height:420px}.hx-chart{height:290px}
-  .hx-ktip{font-size:10.5px;gap:4px 9px;padding:5px 8px}
+  .hx-ktip{font-size:11.5px;gap:4px 10px;padding:6px 8px}.hx-ktip .kdate{font-size:12px}
   .hx-ph{padding:7px 10px}.hx-pos{padding:2px 10px 4px}.note{padding:6px 10px 8px}
   .hx-cd .big{font-size:40px}
 }
@@ -273,10 +276,10 @@ details.hx-fold:not([open])>summary{border-bottom:0}
   <div class="hx-grid">
     <section class="hx-panel hx-kcard" id="hx-kcard">
       <div class="hx-ph"><h2 id="hx-ktitle">沪深300 日 K · 休市色带</h2>
-        <div class="hx-ktools"><button class="hx-btn on" data-z="250">近1年</button><button class="hx-btn" data-z="750">近3年</button><button class="hx-btn" data-z="all">全部</button><button class="hx-btn" data-z="now" title="跳到即将到来的休市">当前</button></div></div>
+        <div class="hx-ktools"><button class="hx-btn" data-z="60">近3月</button><button class="hx-btn" data-z="120">近半年</button><button class="hx-btn" data-z="250">近1年</button><button class="hx-btn" data-z="750">近3年</button><button class="hx-btn" data-z="all">全部</button><button class="hx-btn" data-z="now" title="跳到即将到来的休市">当前</button></div></div>
       <div class="hx-ktip" id="hx-ktip"></div>
-      <p class="hx-focus" id="hx-focus">点击下方“事件明细”任一行，在日 K 上定位到该次休市（T-20 ~ T+30）。</p>
-      <div class="hx-kchart" id="hx-kline"></div>
+      <p class="hx-focus"><span id="hx-khint"></span> <span id="hx-focus">点击下方“事件明细”任一行，可在日 K 上定位到该次休市。</span></p>
+      <div class="hx-kchart" id="hx-kline" tabindex="0" role="img" aria-label="日K线：悬停或点击查看每日详情，选中后可用左右方向键逐日移动"></div>
       <div class="hx-kleg" id="hx-kleg"></div>
       <p class="note">色带 = 休市前最后交易日 T0 到复牌首日 T1，只显示当前分组的休市。红涨绿跌，MA5 / MA20；成交量单位万手。手机上下滑动页面，长按日 K 显示十字光标与信息条。</p>
     </section>
@@ -540,22 +543,52 @@ function renderRS(){
   c.setOption(tipPatch('hx-rs','shadow'),false);
 }
 
-/* ---------- 主指数日 K ---------- */
+/* ---------- 主指数日 K：逐根查看 ----------
+   桌面：悬停 = 十字光标 + 浮层 + 信息条；点击 = 选中该日（黄色竖线），←/→ 逐日移动（超出视窗自动平移）；滚轮缩放、拖动平移、底部滑块。
+   手机：轻点 = 选中该日；长按拖动 = 逐根滑看，松手后停在最后一根；双指捏合缩放（至少 20 根）、单指左右拖动平移（chart-touch.js 的 pinchZoom / panX）；上下滑动照常滚动页面。
+   信息条常驻图上方：悬停/滑看时显示当前根，否则显示选中日，默认最新交易日。 */
 var K=D.kline||{d:[],o:[],h:[],l:[],c:[],v:[]},KI={};K.d.forEach(function(d,i){KI[d]=i});
 var KN=K.d.length,KLAST=KI[K.last]!=null?KI[K.last]:KN-1;
 var OHLC=K.d.map(function(_,i){return K.o[i]==null?'-':[K.o[i],K.c[i],K.l[i],K.h[i]]});
 function ma(n){var out=[],s=0;for(var i=0;i<KN;i++){var c=K.c[i];if(c==null){out.push('-');continue}s+=c;if(i>=n)s-=K.c[i-n]||0;out.push(i>=n-1&&K.c[i-n+1]!=null?+(s/n).toFixed(2):'-')}return out}
 var MA5=ma(5),MA20=ma(20);
 var HOLMAP={};D.bands.forEach(function(b){HOLMAP[b.t0]=(HOLMAP[b.t0]||[]).concat([b.year+b.label+' T0']);HOLMAP[b.t1]=(HOLMAP[b.t1]||[]).concat([b.year+b.label+' T1'])});
-var kzoom=null;
-function ktip(i){
-  if(i==null||i<0||i>=KN)i=KLAST;
+var kzoom=null,KSEL=null,kHover=null,kScrubIdx=null,kScrubEnd=0;
+function kDefault(){return narrow()?60:120}
+function holTag(d){if(!HOLMAP[d])return'';return'<span class="hol" style="background:'+bandColor(D.bands.filter(function(b){return b.t0===d||b.t1===d})[0])+'">'+esc(HOLMAP[d].join(' / '))+'</span>'}
+function kFields(i){
+  var pc=i>0?K.c[i-1]:null,chg=pc?(K.c[i]/pc-1)*100:null,amp=pc?(K.h[i]-K.l[i])/pc*100:null;
+  return{chg:chg,amp:amp,vol:K.v[i]==null?'—':(K.v[i]/1e4).toFixed(2)+'亿手',ma5:MA5[i]==='-'?'—':MA5[i],ma20:MA20[i]==='-'?'—':MA20[i]};
+}
+function ktip(i,mode){
   if(!KN){$('hx-ktip').innerHTML='<span class="dim">无日 K 数据</span>';return}
-  var d=K.d[i],hol=HOLMAP[d]?'<span class="hol" style="background:'+bandColor(D.bands.filter(function(b){return b.t0===d||b.t1===d})[0])+'">'+esc(HOLMAP[d].join(' / '))+'</span>':'';
-  if(K.c[i]==null){$('hx-ktip').innerHTML='<b>'+esc(d)+'</b><span class="dim">未来交易日（休市日历）</span>'+hol;return}
-  var pc=i>0?K.c[i-1]:null,chg=pc?(K.c[i]/pc-1)*100:null;
-  $('hx-ktip').innerHTML='<span class="dim">'+esc(d)+'</span><span>开 <b>'+K.o[i].toFixed(2)+'</b></span><span>高 <b>'+K.h[i].toFixed(2)+'</b></span><span>低 <b>'+K.l[i].toFixed(2)+'</b></span><span>收 <b class="'+cls(chg)+'">'+K.c[i].toFixed(2)+'</b></span><span class="'+cls(chg)+'">'+num(chg)+'%</span><span class="dim">量 '+(K.v[i]==null?'—':(K.v[i]/1e4).toFixed(2)+'亿手')+'</span>'+
-    '<span style="color:#f59e0b">MA5 '+(MA5[i]==='-'?'—':MA5[i])+'</span><span style="color:'+tk().accent+'">MA20 '+(MA20[i]==='-'?'—':MA20[i])+'</span>'+hol;
+  if(i==null||i<0||i>=KN){i=KSEL!=null?KSEL:KLAST;mode=KSEL!=null?'sel':'last'}
+  var tag={hover:'悬停',scrub:'滑看',sel:'已选',last:'最新'}[mode||'hover'];
+  var d=K.d[i],wk='日一二三四五六'.charAt(new Date(d+'T00:00:00').getDay());
+  var head='<span class="kmode k-'+(mode||'hover')+'">'+tag+'</span><b class="kdate">'+esc(d)+' 周'+wk+'</b>';
+  if(K.c[i]==null){$('hx-ktip').innerHTML=head+'<span class="dim">未来交易日（休市日历）</span>'+holTag(d);return}
+  var f=kFields(i);
+  $('hx-ktip').innerHTML=head+'<span>开 <b>'+K.o[i].toFixed(2)+'</b></span><span>高 <b>'+K.h[i].toFixed(2)+'</b></span><span>低 <b>'+K.l[i].toFixed(2)+'</b></span><span>收 <b class="'+cls(f.chg)+'">'+K.c[i].toFixed(2)+'</b></span>'+
+    '<span class="'+cls(f.chg)+'"><b>'+num(f.chg)+'%</b></span><span class="dim">振幅 '+num(f.amp,2,false)+'%</span><span class="dim">量 '+f.vol+'</span>'+
+    '<span style="color:#f59e0b">MA5 '+f.ma5+'</span><span style="color:'+tk().accent+'">MA20 '+f.ma20+'</span>'+holTag(d);
+}
+function kTipHtml(i){
+  if(i==null||K.c[i]==null)return esc(K.d[i]||'')+'<br>未来交易日';
+  var f=kFields(i),r=function(a,b,c){return'<div style="display:flex;justify-content:space-between;gap:14px"><span style="opacity:.7">'+a+'</span><b'+(c?' style="color:'+c+'"':'')+'>'+b+'</b></div>'};
+  var t=tk(),col=f.chg>0?t.up:(f.chg<0?t.down:null);
+  return'<div style="font-family:var(--hx-mono);font-size:12px;min-width:150px"><div style="font-weight:700;margin-bottom:3px">'+esc(K.d[i])+'</div>'+r('开',K.o[i].toFixed(2))+r('高',K.h[i].toFixed(2))+r('低',K.l[i].toFixed(2))+r('收',K.c[i].toFixed(2),col)+r('涨跌',num(f.chg)+'%',col)+r('振幅',num(f.amp,2,false)+'%')+r('量',f.vol)+r('MA5',f.ma5,'#f59e0b')+r('MA20',f.ma20,t.accent)+(HOLMAP[K.d[i]]?'<div style="margin-top:3px;color:#f59e0b">'+esc(HOLMAP[K.d[i]].join(' / '))+'</div>':'')+'</div>';
+}
+function selMark(){return KSEL==null?[]:[{xAxis:K.d[KSEL],label:{show:false}}]}
+function selectK(i,opts){
+  opts=opts||{};if(i==null||!KN)return;
+  i=Math.max(0,Math.min(KLAST,i));KSEL=i;
+  var c=charts['hx-kline'];
+  if(c){
+    if(opts.pan&&kzoom&&(i<kzoom[0]||i>kzoom[1])){var w=kzoom[1]-kzoom[0];var a=i<kzoom[0]?i:i-w;kzoom=[Math.max(0,a),Math.min(KN-1,Math.max(0,a)+w)];c.dispatchAction({type:'dataZoom',startValue:kzoom[0],endValue:kzoom[1]});markZoomBtn(null)}
+    c.setOption({series:[{id:'ksel',markLine:{data:selMark()}}]});
+    if(opts.tip&&!coarse())c.dispatchAction({type:'showTip',seriesIndex:0,dataIndex:i});
+  }
+  ktip(i,'sel');
 }
 function visibleBands(){return D.bands.filter(function(b){return KI[b.t0]!=null&&inGroup(b,S.g,S.v)})}
 function kSpan(){if(!kzoom)return KN;return kzoom[1]-kzoom[0]}
@@ -570,37 +603,58 @@ function focusMarks(){
   var line=[{xAxis:b.t0,label:{formatter:'T0',color:'#f59e0b',position:'insideStartTop'}}];if(KI[b.t1]!=null)line.push({xAxis:b.t1,label:{formatter:'T1',color:'#f59e0b',position:'insideStartBottom'}});
   return{area:[[{xAxis:K.d[w0],itemStyle:{color:'rgba(245,158,11,.08)'},label:{show:false}},{xAxis:K.d[w1]}]],line:line};
 }
+function kIndexAt(c,x,y){
+  if(!c.containPixel({gridIndex:[0,1]},[x,y]))return null;
+  var p=c.convertFromPixel({gridIndex:0},[x,y]);var i=p&&Math.round(p[0]);return(i==null||!isFinite(i))?null:i;
+}
 function renderKline(keepZoom){
-  var c=mkChart('hx-kline',function(){return KN},{axisPointerType:'cross',showEchartsTipContent:false,onIndex:function(i){ktip(i)},onExit:function(){ktip(null)}});if(!c||!KN)return;
+  var c=mkChart('hx-kline',function(){return KN},{axisPointerType:'cross',showEchartsTipContent:false,pinchZoom:true,panX:true,minSpan:20,
+    onGestureEnd:function(){kScrubEnd=Date.now();markZoomBtn(null)},
+    onIndex:function(i){kScrubIdx=i;ktip(i,'scrub')},
+    onExit:function(){kScrubEnd=Date.now();if(kScrubIdx!=null){var i=kScrubIdx;kScrubIdx=null;selectK(i)}else ktip(null)}});
+  if(!c||!KN)return;
   var t=tk(),nw=narrow(),co=coarse(),ax=axisStyle(t),fm=focusMarks();
-  if(!kzoom)kzoom=[Math.max(0,KLAST-250),KN-1];
+  if(!kzoom){var n=kDefault();kzoom=[Math.max(0,KLAST-n),KN-1];markZoomBtn(String(n))}
   var showLabel=kSpan()<=900;
-  var legend=D.holidays.map(function(h){return'<span><i style="background:'+HCOLOR[h.name]+'"></i>'+esc(h.name)+'</span>'}).join('')+'<span><i style="background:'+HCOLOR['合并']+'"></i>合并休市</span><span><i style="background:rgba(245,158,11,.4)"></i>选中事件 T-10~T+20</span>';
+  var legend=D.holidays.map(function(h){return'<span><i style="background:'+HCOLOR[h.name]+'"></i>'+esc(h.name)+'</span>'}).join('')+'<span><i style="background:'+HCOLOR['合并']+'"></i>合并休市</span><span><i style="background:rgba(245,158,11,.4)"></i>选中事件 T-10~T+20</span><span><i style="background:#facc15;width:3px"></i>选中日</span>';
   $('hx-kleg').innerHTML=legend;
   $('hx-ktitle').textContent=D.meta.index_name+' 日K · '+short(S.g)+'休市色带（'+visibleBands().length+'）';
+  $('hx-khint').textContent=co?'轻点选中一根 K 线；长按后左右拖动逐根查看，松手停在该日；双指捏合缩放、单指左右拖动平移；上下滑动照常滚动页面。':'悬停逐根查看 · 点击选中后用 ← / → 逐日移动 · 滚轮缩放、按住拖动平移、底部滑块调范围。';
   c.setOption({backgroundColor:'transparent',animation:false,
     axisPointer:{link:[{xAxisIndex:'all'}],label:{show:false},lineStyle:{color:t.muted}},
     grid:[{left:nw?44:56,right:nw?8:14,top:12,height:nw?'62%':'65%'},{left:nw?44:56,right:nw?8:14,top:nw?'74%':'77%',height:nw?'12%':'12%'}],
     xAxis:[Object.assign({type:'category',data:K.d,gridIndex:0,boundaryGap:true},ax,{axisLabel:{show:false},splitLine:{show:false}}),
-           Object.assign({type:'category',data:K.d,gridIndex:1,boundaryGap:true},ax,{axisLabel:{color:t.muted,fontSize:10,formatter:function(v){return kSpan()<=160?v.slice(2):v.slice(0,7)}},splitLine:{show:false}})],
+           Object.assign({type:'category',data:K.d,gridIndex:1,boundaryGap:true},ax,{axisLabel:{color:t.muted,fontSize:10,formatter:function(v){return kSpan()<=160?v.slice(5):v.slice(0,7)}},splitLine:{show:false}})],
     yAxis:[Object.assign({scale:true,gridIndex:0,splitNumber:4,position:'left'},ax),Object.assign({gridIndex:1,splitNumber:2},ax,{axisLabel:{color:t.muted,fontSize:9,formatter:function(v){return(v/1e4).toFixed(1)+'亿'}}})],
-    dataZoom:[{type:'inside',xAxisIndex:[0,1],startValue:kzoom[0],endValue:kzoom[1],disabled:co,minValueSpan:20},
-              {type:'slider',xAxisIndex:[0,1],startValue:kzoom[0],endValue:kzoom[1],bottom:4,height:nw?16:18,showDetail:false,borderColor:t.line,backgroundColor:'transparent',fillerColor:t.dark?'rgba(96,165,250,.16)':'rgba(37,99,235,.10)',handleStyle:{color:t.soft,borderColor:t.muted},moveHandleStyle:{color:t.line},dataBackground:{lineStyle:{color:t.muted,opacity:.5},areaStyle:{color:t.muted,opacity:.12}},textStyle:{color:t.muted},minValueSpan:20}],
+    dataZoom:[{type:'inside',xAxisIndex:[0,1],startValue:kzoom[0],endValue:kzoom[1],disabled:co,minValueSpan:20,zoomOnMouseWheel:true,moveOnMouseMove:true,moveOnMouseWheel:false},
+              {type:'slider',xAxisIndex:[0,1],startValue:kzoom[0],endValue:kzoom[1],bottom:4,height:nw?18:18,showDetail:false,borderColor:t.line,backgroundColor:'transparent',fillerColor:t.dark?'rgba(96,165,250,.16)':'rgba(37,99,235,.10)',handleStyle:{color:t.soft,borderColor:t.muted},moveHandleStyle:{color:t.line},dataBackground:{lineStyle:{color:t.muted,opacity:.5},areaStyle:{color:t.muted,opacity:.12}},textStyle:{color:t.muted},minValueSpan:20}],
     series:[
-      {name:'日K',type:'candlestick',data:OHLC,xAxisIndex:0,yAxisIndex:0,barMaxWidth:12,itemStyle:{color:t.up,color0:t.down,borderColor:t.up,borderColor0:t.down},
+      {id:'k',name:'日K',type:'candlestick',data:OHLC,xAxisIndex:0,yAxisIndex:0,barMaxWidth:14,itemStyle:{color:t.up,color0:t.down,borderColor:t.up,borderColor0:t.down},
         markArea:{silent:true,data:bandAreas(showLabel).concat(fm.area)},
         markLine:{silent:true,symbol:'none',lineStyle:{color:'#f59e0b',type:'solid',width:1.4},label:{fontSize:10},data:fm.line}},
-      {name:'MA5',type:'line',data:MA5,xAxisIndex:0,yAxisIndex:0,smooth:true,symbol:'none',lineStyle:{width:1.1,color:'#f59e0b'}},
-      {name:'MA20',type:'line',data:MA20,xAxisIndex:0,yAxisIndex:0,smooth:true,symbol:'none',lineStyle:{width:1.1,color:t.accent}},
-      {name:'成交量',type:'bar',data:K.v,xAxisIndex:1,yAxisIndex:1,barMaxWidth:12,itemStyle:{opacity:.75,color:function(p){var i=p.dataIndex;return K.c[i]>=K.o[i]?t.up:t.down}}}
+      {id:'ma5',name:'MA5',type:'line',data:MA5,xAxisIndex:0,yAxisIndex:0,smooth:true,symbol:'none',lineStyle:{width:1.1,color:'#f59e0b'}},
+      {id:'ma20',name:'MA20',type:'line',data:MA20,xAxisIndex:0,yAxisIndex:0,smooth:true,symbol:'none',lineStyle:{width:1.1,color:t.accent}},
+      {id:'vol',name:'成交量',type:'bar',data:K.v,xAxisIndex:1,yAxisIndex:1,barMaxWidth:14,itemStyle:{opacity:.75,color:function(p){var i=p.dataIndex;return K.c[i]>=K.o[i]?t.up:t.down}}},
+      {id:'ksel',name:'选中日',type:'line',data:[],xAxisIndex:0,yAxisIndex:0,silent:true,tooltip:{show:false},
+        markLine:{silent:true,symbol:'none',animation:false,lineStyle:{color:'#facc15',type:'solid',width:1.6},data:selMark()}}
     ]},true);
-  c.setOption(tipPatch('hx-kline','cross',false),false);
+  c.setOption(tipPatch('hx-kline','cross',!co),false);
+  if(!co)c.setOption({tooltip:Object.assign({confine:true,padding:[6,9],formatter:function(ps){var p=(ps||[])[0];return p?kTipHtml(p.dataIndex):''},
+    axisPointer:{type:'cross',label:{show:true,fontSize:10,backgroundColor:t.dark?'#334155':'#475569',formatter:function(o){return o.axisDimension==='x'?String(o.value):(+o.value).toFixed(o.axisIndex?0:2)}},crossStyle:{color:t.muted}}},tipStyle(t))},false);
   if(!c.__hxBound){c.__hxBound=true;
-    c.on('updateAxisPointer',function(ev){var a=(ev.axesInfo||[])[0];if(a&&a.value!=null){var i=typeof a.value==='number'?a.value:KI[a.value];if(i!=null)ktip(i)}});
-    c.on('datazoom',function(){var o=c.getOption().dataZoom[0];if(o&&o.startValue!=null){var was=kSpan()<=900;kzoom=[o.startValue,o.endValue];var now=kSpan()<=900;if(was!==now)c.setOption({series:[{markArea:{data:bandAreas(now).concat(focusMarks().area)}}]})}});
-    c.getZr().on('globalout',function(){if(!(touch['hx-kline']&&touch['hx-kline'].isActive()))ktip(null)});
+    c.on('updateAxisPointer',function(ev){if(touch['hx-kline']&&touch['hx-kline'].isActive())return;var a=(ev.axesInfo||[])[0];if(a&&a.value!=null){var i=typeof a.value==='number'?a.value:KI[a.value];if(i!=null){kHover=i;ktip(i,'hover')}}});
+    c.on('datazoom',function(){var o=c.getOption().dataZoom[0];if(o&&o.startValue!=null){var was=kSpan()<=900;kzoom=[o.startValue,o.endValue];var now=kSpan()<=900;if(was!==now)c.setOption({series:[{id:'k',markArea:{data:bandAreas(now).concat(focusMarks().area)}}]})}});
+    c.getZr().on('globalout',function(){kHover=null;if(!(touch['hx-kline']&&touch['hx-kline'].isActive()))ktip(null)});
+    // 点击 / 轻点选中一根（长按滑看结束后的那次 click 忽略）
+    c.getZr().on('click',function(e){if(Date.now()-kScrubEnd<450)return;var i=kIndexAt(c,e.offsetX,e.offsetY);if(i!=null){selectK(i);if(!coarse())$('hx-kline').focus({preventScroll:true})}});
+    $('hx-kline').addEventListener('keydown',function(e){
+      if(e.key!=='ArrowLeft'&&e.key!=='ArrowRight'&&e.key!=='Home'&&e.key!=='End')return;e.preventDefault();
+      var base=KSEL!=null?KSEL:(kHover!=null?kHover:KLAST);
+      var i=e.key==='Home'?kzoom[0]:e.key==='End'?KLAST:base+(e.key==='ArrowRight'?1:-1)*(e.shiftKey?5:1);
+      selectK(i,{pan:true,tip:true});
+    });
   }
-  ktip(null);
+  if(KSEL!=null)ktip(KSEL,'sel');else ktip(null);
 }
 function setZoom(a,b){kzoom=[Math.max(0,a),Math.min(KN-1,b)];if(charts['hx-kline']){charts['hx-kline'].dispatchAction({type:'dataZoom',startValue:kzoom[0],endValue:kzoom[1]});renderKline(true)}}
 function markZoomBtn(z){document.querySelectorAll('[data-z]').forEach(function(b){b.classList.toggle('on',b.getAttribute('data-z')===z)})}
@@ -619,11 +673,11 @@ function focusEvent(t0){
   var i0=KI[b.t0],i1=KI[b.t1]!=null?KI[b.t1]:KN-1;
   $('hx-focus').innerHTML='已定位：<b>'+b.year+' '+esc(b.label)+'</b>　T0 '+esc(b.t0)+' → T1 '+esc(b.t1)+'（显示 T-20 ~ T+30，浅色底为 T-10 ~ T+20）';
   kzoom=[Math.max(0,i0-20),Math.min(KN-1,i1+30)];
+  KSEL=Math.min(i0,KLAST);
   renderEvents();renderKline(true);
   markZoomBtn(null);
   // 滚动时扣除吸顶导航 + 行情条 + 分组条的高度，避免 K 线被遮住
   window.scrollTo({top:$('hx-kcard').getBoundingClientRect().top+window.scrollY-stickyOffset(),behavior:matchMedia('(prefers-reduced-motion:reduce)').matches?'auto':'smooth'});
-  ktip(i0);
 }
 
 function renderFoot(){
