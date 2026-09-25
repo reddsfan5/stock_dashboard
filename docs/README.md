@@ -39,6 +39,7 @@
 | [19-选股日记](19-选股日记.md) | 动态日K标记、追加式决策时间线、查询与备份 | 选股与复盘使用者 |
 | [20-市场资讯复盘](20-市场资讯复盘.md) | 多来源事件聚合、可信等级、来源链、防剧透查看与消息影响记录 | 模拟交易与复盘使用者 |
 | [32-市场简报](32-市场简报.md) | 08:00 晨报、八条关键资讯、19:15 资讯归因与盘前/收盘闭环 | 每日市场复盘使用者 |
+| [33-节假日效应回测](33-节假日效应回测.md) | 国庆/中秋休市前后沪深300表现、基准对照、风险偏好代理与当年位置 | 策略研究者 |
 | [21-系统胶合](21-系统胶合.md) | 标的上下文、每日清单、假设生命周期 | 日常串联使用者 |
 | [25-本地股票研究MCP](25-本地股票研究MCP.md) | Codex 本地只读行情/指标/资讯/选股接口、安全边界与验收 | 量化研究与系统维护者 |
 | [26-Tailscale外网访问](26-Tailscale外网访问.md) | Tailscale 组网、外网手机打开 8765、地址与排障 | 外出使用者与系统维护者 |
@@ -83,6 +84,7 @@ python -m scripts.backtest                      # 统计回测 12 策略
 python -m scripts.backtest --only overlap,rising --start 2024-01-01
 python -m scripts.run_all_strategies            # strategy_01..14 等研究页
 python -m scripts.research.backtest_market_proverbs
+python -m scripts.research.holiday_effect          # 国庆/中秋节假日效应
 python -m scripts.research.backtest_slow_rise
 
 # 模拟

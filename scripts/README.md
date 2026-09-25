@@ -34,6 +34,7 @@ python -m scripts.strategies.strategy_08_etf_momentum
 python -m scripts.simulations.sim_portfolio
 python -m scripts.research.weekday_stats
 python -m scripts.research.backtest_market_proverbs     # 市场口诀前七条事件回测
+python -m scripts.research.holiday_effect               # 国庆/中秋节假日效应（沪深300+风险偏好）
 python -m scripts.research.backtest_slow_rise           # 缓涨3～5日开盘买入、5日止盈回测
 python -m scripts.research.backtest_screen_to_trade     # 选股信号→次日买入持有（基线对照）
 python -m scripts.research.optimize_intraday_grid          # 520500 最近10日网格调参
