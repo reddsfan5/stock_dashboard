@@ -39,6 +39,7 @@ class HolidaySpec:
     anchors: Dict[int, str]      # 年份 → 锚点日期（该日必须处于休市空档内）
     official: Dict[int, str] = field(default_factory=dict)  # 官方休市区间，仅核对展示
     min_weekdays: int = 1        # 空档至少跳过的工作日数（元旦可短至 1 天）
+    color: str = ""              # 页面日 K 休市色带颜色（留空则页面按调色板自动分配）
 
 
 def fixed_date(month: int, day: int, years: Iterable[int]) -> Dict[int, str]:
@@ -75,16 +76,17 @@ NATIONAL_DAY_OFFICIAL = {
 }
 
 HOLIDAY_REGISTRY: List[HolidaySpec] = [
-    HolidaySpec("new_year", "元旦", fixed_date(1, 1, YEARS)),
-    HolidaySpec("spring", "春节", SPRING_FESTIVAL),
-    HolidaySpec("labor", "五一", fixed_date(5, 1, YEARS)),
-    HolidaySpec("mid_autumn", "中秋", MID_AUTUMN, MID_AUTUMN_OFFICIAL),
-    HolidaySpec("national", "国庆", fixed_date(10, 1, YEARS), NATIONAL_DAY_OFFICIAL),
+    HolidaySpec("new_year", "元旦", fixed_date(1, 1, YEARS), color="#0ea5e9"),
+    HolidaySpec("spring", "春节", SPRING_FESTIVAL, color="#f97316"),
+    HolidaySpec("labor", "五一", fixed_date(5, 1, YEARS), color="#eab308"),
+    HolidaySpec("mid_autumn", "中秋", MID_AUTUMN, MID_AUTUMN_OFFICIAL, color="#8b5cf6"),
+    HolidaySpec("national", "国庆", fixed_date(10, 1, YEARS), NATIONAL_DAY_OFFICIAL, color="#e11d48"),
     # 以后扩展示例（补齐各年锚点即可）：
     # HolidaySpec("qingming", "清明", {2015: "2015-04-05", ...}),
 ]
 
 MERGED = "合并"
+MERGED_COLOR = "#14b8a6"
 ALL_GROUP = "全部"
 LONG_GROUP = "长假(休市≥5天)"
 LONG_DAYS = 5

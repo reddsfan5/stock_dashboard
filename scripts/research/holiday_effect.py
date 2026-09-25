@@ -245,7 +245,7 @@ def build(frames, main: str, proxies, start_year: int, exclude_years, n_boot: in
 
     return {"events": ev_df, "notes": notes, "groups": groups, "summary": summary,
             "rs_summary": rs_summary, "paths": paths, "baseline_path": baseline, "live": live,
-            "metrics": m, "rs": rs, "sh": sh, "baseline": base, "in_sample": in_sample,
+            "metrics": m, "rs": rs, "sh": sh, "main_df": main_df, "baseline": base, "in_sample": in_sample,
             "last": last, "days": days}
 
 
@@ -465,6 +465,38 @@ def write_markdown(res, cur, mat, concl, meta, out_dir: Path):
     (out_dir / "holiday_effect_report.md").write_text("\n".join(L), encoding="utf-8")
 
 
+def kline_payload(main_df: pd.DataFrame, days: pd.DatetimeIndex, events: pd.DataFrame,
+                  start_year: int) -> dict:
+    """主指数日 K（紧凑数组）：起点前留约 3 个月给 MA20，末尾用交易日历补到即将到来休市的 T1 之后，
+    未来日期 OHLC 为空，方便在 K 线上提前看到休市色带。成交量单位：万手。"""
+    begin = pd.Timestamp(year=start_year - 1, month=10, day=1)
+    k = main_df[main_df["日期"] >= begin].sort_values("日期")
+    last = k["日期"].max()
+    t1s = pd.to_datetime(events["T1"]).max() if len(events) else last
+    future = [d for d in days if last < d <= t1s + pd.Timedelta(days=10)]
+    r2 = lambda x: None if pd.isna(x) else round(float(x), 2)  # noqa: E731
+    return {
+        "d": [x.strftime("%Y-%m-%d") for x in k["日期"]] + [x.strftime("%Y-%m-%d") for x in future],
+        "o": [r2(x) for x in k["开盘"]] + [None] * len(future),
+        "h": [r2(x) for x in k["最高"]] + [None] * len(future),
+        "l": [r2(x) for x in k["最低"]] + [None] * len(future),
+        "c": [r2(x) for x in k["收盘"]] + [None] * len(future),
+        "v": [None if pd.isna(x) else int(round(float(x) / 1e4)) for x in k["成交量(手)"]] + [None] * len(future),
+        "last": last.date().isoformat(),
+        "n_future": len(future),
+    }
+
+
+def bands_payload(events: pd.DataFrame) -> list:
+    """每次休市一条色带（T0..T1），合并休市单独着色。"""
+    out = []
+    for _, r in events.iterrows():
+        out.append({"year": int(r["年份"]), "label": r["节日"], "kind": r["类型"],
+                    "tags": r["节日"].split("+"), "t0": r["T0"], "t1": r["T1"], "status": r["状态"],
+                    "days": int(r["休市自然日"])})
+    return out
+
+
 def build_payload(res, cur, mat, concl, meta, exclude_years):
     ev = res["events"].copy()
     ev["标签"] = ev["节日"].str.split("+")
@@ -472,7 +504,10 @@ def build_payload(res, cur, mat, concl, meta, exclude_years):
     return {
         "meta": meta,
         "groups": res["groups"],
-        "holidays": [{"key": s.key, "name": s.name} for s in he.HOLIDAY_REGISTRY],
+        "holidays": [{"key": s.key, "name": s.name, "color": s.color} for s in he.HOLIDAY_REGISTRY],
+        "merged_color": he.MERGED_COLOR,
+        "bands": bands_payload(res["events"]),
+        "kline": kline_payload(res["main_df"], res["days"], res["events"], meta["start"]),
         "variants": {k: v for k, v in he.VARIANTS.items() if k == "all" or exclude_years},
         "events": records(ev),
         "summary": records(res["summary"]),

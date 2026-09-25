@@ -98,6 +98,42 @@ class HolidayEventTest(unittest.TestCase):
         self.assertIn("/assets/chart-touch.js", html)
         self.assertIn("不构成投资建议", html)
 
+    def test_kline_and_bands_are_embedded(self):
+        # 日 K 紧凑数组 + 每次休市一条 T0..T1 色带（含合并休市、休市天数），并随页面内嵌
+        from scripts.research.holiday_effect import bands_payload, kline_payload
+        days = _days()
+        hist = days[days <= "2023-09-27"]
+        n = len(hist)
+        main = pd.DataFrame({"日期": hist, "开盘": np.arange(n) + 100.0, "最高": np.arange(n) + 102.0,
+                             "最低": np.arange(n) + 99.0, "收盘": np.arange(n) + 101.0,
+                             "成交量(手)": np.full(n, 1234567.0)})
+        ev = pd.DataFrame([
+            {"年份": 2022, "节日": "国庆", "类型": "国庆", "T0": "2022-09-30", "T1": "2022-10-10",
+             "状态": "完整", "休市自然日": 9},
+            {"年份": 2023, "节日": "中秋+国庆", "类型": he.MERGED, "T0": "2023-09-28", "T1": "2023-10-09",
+             "状态": "未到", "休市自然日": 10},
+        ])
+        k = kline_payload(main, days, ev, 2023)
+        self.assertEqual(k["last"], "2023-09-27")
+        self.assertEqual(k["d"][0], "2022-10-10")                      # 起点前一年 10-01 之后首个交易日
+        self.assertEqual(len({len(k[c]) for c in "dohlcv"}), 1)
+        self.assertIn("2023-10-09", k["d"])                            # 未来日期补到 T1 之后
+        self.assertIsNone(k["c"][-1])
+        self.assertEqual(k["v"][0], 123)                               # 万手
+        bands = bands_payload(ev)
+        self.assertEqual([b["tags"] for b in bands], [["国庆"], ["中秋", "国庆"]])
+        self.assertEqual((bands[1]["t0"], bands[1]["t1"], bands[1]["days"]), ("2023-09-28", "2023-10-09", 10))
+        html = build_holiday_page({"meta": {}, "groups": ["全部"], "kline": k, "bands": bands,
+                                   "holidays": [{"key": "national", "name": "国庆", "color": "#e11d48"}],
+                                   "merged_color": he.MERGED_COLOR})
+        raw = re.search(r'<script id="holiday-data" type="application/json">(.*?)</script>', html, re.S).group(1)
+        data = json.loads(raw.replace("<\\/", "</"))
+        self.assertEqual(data["kline"]["d"], k["d"])
+        self.assertEqual(len(data["bands"]), 2)
+        self.assertIn('id="hx-kline"', html)
+        self.assertIn("candlestick", html)
+        self.assertIn("markArea", html)
+
 
 if __name__ == "__main__":
     unittest.main()
