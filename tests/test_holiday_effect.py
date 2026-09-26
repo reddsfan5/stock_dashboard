@@ -377,5 +377,30 @@ class HolidayEventTest(unittest.TestCase):
         # 不传清单也能渲染（单标的页面）
         self.assertIn('<script id="holiday-targets" type="application/json">{}</script>', build_holiday_page(p1))
 
+    # ---------- 事件检索（年份 × 节日网格 / ?event= 深链 / 单次事件详情） ----------
+    def test_page_has_event_picker_and_detail(self):
+        from backtest.holiday_report import TEMPLATE
+        for needle in ('id="hx-evpick"', 'id="hx-evgrid"', 'id="hx-evq"', 'list="hx-evlist"', 'id="hx-evcard"',
+                       "function renderEvPick", "function renderEvDetail", "function selectEvent", "function clearEvent",
+                       "function parseEv", "function evWindowMarks", "searchParams.set('event'", "searchParams.delete('event')",
+                       "get('event')", "'节前5日'", "'节后20日'", "'休市'", "异常年", "只显示已有字段"):
+            self.assertIn(needle, TEMPLATE)
+        # 事件 slug 使用节日注册表 key（稳定、与标的无关）；别名含中文名与拼音
+        self.assertIn("'国庆':'guoqing'", TEMPLATE)
+        keys = [h.key for h in he.HOLIDAY_REGISTRY]
+        self.assertEqual(len(set(keys)), len(keys))
+        self.assertTrue(all(re.fullmatch(r"[a-z_]+", k) for k in keys))
+
+    def test_event_year_tag_is_unique(self):
+        """事件检索按 (年份, 节日标签) 定位：合并休市两个标签各指向同一事件，但同一 (年份, 标签) 不重复。"""
+        evs = he.identify_events(_days(), 2022, 2023, registry=REG)
+        seen = {}
+        for e in evs:
+            for t in e.tags:
+                key = (e.year, t)
+                self.assertNotIn(key, seen)
+                seen[key] = e.t0
+        self.assertEqual(seen[(2023, "中秋")], seen[(2023, "国庆")])   # 2023 中秋+国庆 合并
+
 if __name__ == "__main__":
     unittest.main()

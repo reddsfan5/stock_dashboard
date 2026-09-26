@@ -552,6 +552,48 @@ details.hx-fold:not([open])>summary{border-bottom:0}
 .hx-cmpc b{display:block;font-family:var(--hx-mono);font-size:16px}
 .hx-cmpc small{display:block;font-size:11px;color:var(--hx-muted);margin-top:2px;white-space:nowrap}
 .hx-cmpc em{font-style:normal;font-family:var(--hx-mono)}
+/* ---- 事件检索 / 事件详情 ---- */
+.hx-evpair{display:grid;gap:var(--hx-gap);grid-template-columns:minmax(0,1fr)}
+@media(min-width:1001px){.hx-evpair{grid-template-columns:minmax(0,5fr) minmax(0,7fr)}}
+.hx-evbar{display:flex;gap:6px;align-items:center;padding:10px 12px 0;flex-wrap:wrap}
+.hx-evbar input{flex:1 1 160px;min-width:0;height:30px;border:1px solid var(--hx-line);border-radius:6px;background:var(--hx-soft);color:var(--hx-text);padding:0 10px;font-size:13px}
+.hx-evbar input.bad{border-color:var(--hx-up)}
+.hx-linkbtn{border:1px solid var(--hx-line);background:transparent;color:var(--hx-text2);border-radius:5px;height:24px;padding:0 8px;font-size:11.5px;cursor:pointer}
+.hx-evbar .hx-linkbtn{height:30px}
+.hx-evgrid{padding:10px 12px 12px;overflow-x:auto}
+.hx-evt{display:grid;grid-template-columns:62px repeat(var(--n,5),minmax(46px,1fr));gap:3px}
+.hx-evh{font-size:11.5px;font-weight:650;color:var(--hx-text2);text-align:center;padding:2px 0;white-space:nowrap}
+.hx-evh i{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:3px;vertical-align:1px}
+.hx-evy{font-family:var(--hx-mono);font-size:12px;color:var(--hx-text2);display:flex;align-items:center;gap:3px}
+.hx-evy small{white-space:nowrap;font-size:9.5px;color:var(--hx-up);border:1px solid color-mix(in srgb,var(--hx-up) 45%,transparent);border-radius:3px;padding:0 2px}
+.hx-evc{position:relative;height:28px;border:1px solid var(--hx-line2);border-radius:4px;background:var(--hx-card);color:var(--hx-text);font-family:var(--hx-mono);font-size:11.5px;cursor:pointer;padding:0}
+.hx-evc.none{border-style:dashed;opacity:.35;cursor:default}
+.hx-evc.pend{background:var(--hx-soft)}
+.hx-evc b{font-weight:650}
+.hx-evc sup{position:absolute;top:1px;right:2px;font-size:8.5px;color:var(--hx-muted)}
+.hx-evc.on{outline:2px solid var(--hx-blue);outline-offset:1px;z-index:1}
+.hx-evc:hover:not(.none){border-color:var(--hx-blue)}
+.hx-evempty{padding:14px 12px;color:var(--hx-muted);font-size:13px;margin:0}
+.hx-evchips{display:flex;flex-wrap:wrap;gap:5px;padding:10px 12px 2px}
+.hx-evchip{font-size:11.5px;border:1px solid var(--hx-line);border-radius:999px;padding:1px 8px;color:var(--hx-text2);font-family:var(--hx-mono)}
+.hx-evchip.warn{color:#f59e0b;border-color:rgba(245,158,11,.5)}.hx-evchip.mg{color:#a78bfa;border-color:rgba(167,139,250,.5)}
+.hx-evrows{display:grid;grid-template-columns:minmax(0,1fr);gap:0 18px;padding:4px 12px}
+@media(min-width:760px){.hx-evrows{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.hx-evr{display:grid;grid-template-columns:auto 1fr;grid-template-areas:"k v" "h r" "s s";gap:1px 8px;padding:7px 0;border-top:1px solid var(--hx-line2)}
+.hx-evr .k{grid-area:k;font-size:12.5px;font-weight:600;color:var(--hx-text2)}
+.hx-evr>b{grid-area:v;justify-self:end;font-family:var(--hx-mono);font-size:15px}
+.hx-evr .h{grid-area:h;font-size:11px;color:var(--hx-muted);font-family:var(--hx-mono)}
+.hx-evr .r{grid-area:r;justify-self:end;font-size:11px;color:var(--hx-muted)}
+.hx-evr .r b{color:var(--hx-text)}
+.hx-evs{grid-area:s;position:relative;height:10px;margin-top:3px;background:color-mix(in srgb,var(--hx-line) 45%,transparent);border-radius:5px}
+.hx-evs i{position:absolute;top:2px;width:6px;height:6px;margin-left:-3px;border-radius:50%;background:var(--hx-muted);opacity:.55}
+.hx-evs i.z{top:0;width:1px;height:10px;margin-left:0;border-radius:0;opacity:.5}
+.hx-evs i.me{top:0;width:10px;height:10px;margin-left:-5px;opacity:1;background:var(--hx-text);box-shadow:0 0 0 2px var(--hx-card)}
+.hx-evs i.me.up{background:var(--hx-up)}.hx-evs i.me.down{background:var(--hx-down)}
+.hx-evx{font-size:11.5px;color:var(--hx-muted);padding:6px 12px;font-family:var(--hx-mono)}
+.hx-evx b{font-weight:650}
+.hx-evrs{width:100%}
+#hx-evcard .tw{padding:0 12px}
 </style>
 </head>
 <body>
@@ -572,7 +614,7 @@ details.hx-fold:not([open])>summary{border-bottom:0}
       <div class="hx-ph"><h2 id="hx-ktitle">日 K · 休市色带</h2>
         <div class="hx-ktools"><button class="hx-btn" data-z="60">近3月</button><button class="hx-btn" data-z="120">近半年</button><button class="hx-btn" data-z="250">近1年</button><button class="hx-btn" data-z="750">近3年</button><button class="hx-btn" data-z="all">全部</button><button class="hx-btn" data-z="now" title="跳到即将到来的休市">当前</button></div></div>
       <div class="hx-ktip" id="hx-ktip"></div>
-      <p class="hx-focus"><span id="hx-khint"></span> <span id="hx-focus">点击下方“事件明细”任一行，可在日 K 上定位到该次休市。</span></p>
+      <p class="hx-focus"><span id="hx-khint"></span> <span id="hx-focus">点击下方“事件明细”任一行或“事件检索”网格，可在日 K 上定位到该次休市。</span></p>
       <div class="hx-kchart" id="hx-kline" tabindex="0" role="img" aria-label="日K线：悬停或点击查看每日详情，选中后可用左右方向键逐日移动"></div>
       <div class="hx-kleg" id="hx-kleg"></div>
       <p class="note">色带 = 休市前最后交易日 T0 到复牌首日 T1，只显示当前分组的休市。红涨绿跌，MA5 / MA20；成交量单位万手。手机上下滑动页面，长按日 K 显示十字光标与信息条。</p>
@@ -586,6 +628,17 @@ details.hx-fold:not([open])>summary{border-bottom:0}
       <div class="hx-ph"><h2>休市日程</h2><span class="hx-sub">交易日倒计时</span></div>
       <div id="hx-sched"></div>
     </section>
+    <div class="hx-evpair hx-wide">
+      <section class="hx-panel" id="hx-evpick">
+        <div class="hx-ph"><h2>事件检索</h2><span class="hx-sub">格内 = 节后5日%（红涨绿跌）· 点格定位</span></div>
+        <div class="hx-evbar"><input id="hx-evq" type="search" list="hx-evlist" placeholder="输入或选择，如 2018 国庆" autocomplete="off" aria-label="检索某年某节日"><datalist id="hx-evlist"></datalist><button type="button" class="hx-linkbtn" id="hx-evclear" data-evclear hidden>清除</button></div>
+        <div class="hx-evgrid" id="hx-evgrid"></div>
+      </section>
+      <section class="hx-panel" id="hx-evcard">
+        <div class="hx-ph"><h2 id="hx-evd-title">事件详情</h2><span class="hx-sub">单次事件 vs 同节日历史</span></div>
+        <div id="hx-evd"></div>
+      </section>
+    </div>
     <section class="hx-panel hx-wide"><div class="hx-ph"><h2 id="hx-mtitle">总览热力矩阵</h2><span class="hx-legend">跌 <i></i> 涨 <i class="v"></i> 缩量</span></div>
       <div class="tw" id="hx-matrix"></div>
       <p class="note">单元格：均值（大字）/ 胜率（小字）；颜色按列内最大绝对值缩放。点击行切换分组。节日分组含带该标签的合并休市；RS = 代理指数收益 − 主指数（百分点），胜率 = 跑赢占比；量比胜率 = 缩量(&lt;1)占比。</p></section>
@@ -634,7 +687,7 @@ details.hx-fold:not([open])>summary{border-bottom:0}
 'use strict';
 var D=JSON.parse(document.getElementById('holiday-data').textContent);
 var TK=D.ticker||{};
-var S={g:D.groups.indexOf(TK.group)>=0?TK.group:D.groups[0],v:'all',focus:null};
+var S={g:D.groups.indexOf(TK.group)>=0?TK.group:D.groups[0],v:'all',focus:null,ev:null};
 var $=function(id){return document.getElementById(id)};
 var esc=function(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})};
 function num(v,nd,sign){if(v==null||!isFinite(v))return'—';nd=nd==null?2:nd;var t=(+v).toFixed(nd);return(sign!==false&&v>0?'+':'')+t}
@@ -944,6 +997,7 @@ function bandAreas(showLabel){
     return[{name:String(b.year).slice(2)+(b.kind==='合并'?b.tags.join(''):b.label),xAxis:b.t0,itemStyle:{color:col,opacity:.24},label:{show:showLabel,color:col,fontSize:10,fontWeight:700,position:'insideTop',distance:2}},{xAxis:t1}]});
 }
 function focusMarks(){
+  var em=evWindowMarks();if(em)return em;
   if(!S.focus)return{area:[],line:[]};
   var b=D.bands.filter(function(x){return x.t0===S.focus})[0];if(!b)return{area:[],line:[]};
   var i0=KI[b.t0],w0=Math.max(0,i0-10),w1=Math.min(KN-1,i0+20);
@@ -1016,6 +1070,7 @@ function stickyOffset(){
   var top=parseFloat(getComputedStyle(bar).top);return(isFinite(top)?top:0)+bar.offsetHeight+8;
 }
 function focusEvent(t0){
+  var ev=D.events.filter(function(e){return e['T0']===t0})[0];if(ev){selectEvent(ev['年份'],evMainTag(ev));return}
   S.focus=t0;var b=D.bands.filter(function(x){return x.t0===t0})[0];if(!b||KI[b.t0]==null)return;
   var i0=KI[b.t0],i1=KI[b.t1]!=null?KI[b.t1]:KN-1;
   $('hx-focus').innerHTML='已定位：<b>'+b.year+' '+esc(b.label)+'</b>　T0 '+esc(b.t0)+' → T1 '+esc(b.t1)+'（显示 T-20 ~ T+30，浅色底为 T-10 ~ T+20）';
@@ -1106,7 +1161,7 @@ function findTarget(k){if(!k)return null;k=String(k).trim().toLowerCase();if(/\.
   return TG.targets.filter(function(t){return[t.slug,t.code,t.name].map(function(x){return String(x||'').toLowerCase()}).indexOf(k)>=0})[0]||null}
 function renderTargets(){var box=$('hx-target');if(!box)return;box.hidden=TG.targets.length<2;
   box.innerHTML=TG.targets.map(function(t){var on=t.slug===TSLUG;return'<button type="button" role="tab" data-target="'+esc(t.slug)+'" aria-selected="'+on+'"'+(on?' class="active"':'')+' title="'+esc(t.code)+'">'+esc(t.name)+'</button>'}).join('')}
-function syncUrl(){try{var u=new URL(location.href);u.searchParams.set('target',TSLUG);history.replaceState(history.state,'',u.pathname+u.search+u.hash)}catch(_){}}
+function syncUrl(){try{var u=new URL(location.href);u.searchParams.set('target',TSLUG);if(S.ev)u.searchParams.set('event',evSlug(S.ev.y,S.ev.tag));else u.searchParams.delete('event');history.replaceState(history.state,'',u.pathname+u.search+u.hash)}catch(_){}}
 function renderHead(){
   $('hx-sub').textContent=D.meta.index_name+' · '+D.meta.sample+' · 休市 '+D.events.length+' 次 / 完整 '+D.events.filter(function(e){return e['状态']==='完整'}).length+' · 节日注册表 × 交易日历空档识别';
   $('hx-gen').textContent='生成 '+String(D.meta.generated||'').slice(5);
@@ -1121,8 +1176,9 @@ function applyTarget(P,slug){
   kzoom=null;KSEL=null;kHover=null;kScrubIdx=null;
   if(zd&&KI[zd[0]]!=null&&KI[zd[1]]!=null)kzoom=[KI[zd[0]],KI[zd[1]]];     // 保留同一日期区间的缩放
   if(sd&&KI[sd]!=null)KSEL=KI[sd];                                          // 保留选中日
+  if(S.ev&&!findEv(S.ev.y,S.ev.tag))S.ev=null;
   S.focus=focus&&D.bands.some(function(b){return b.t0===focus})?focus:null;
-  if(!S.focus)$('hx-focus').textContent='点击下方“事件明细”任一行，可在日 K 上定位到该次休市。';
+  if(!S.focus)$('hx-focus').textContent='点击下方“事件明细”任一行或“事件检索”网格，可在日 K 上定位到该次休市。';
   renderTargets();renderHead();renderFoot();renderDigest();render();
   if(kzoom)markZoomBtn(zbtn);
 }
@@ -1152,10 +1208,111 @@ function renderCmp(){
       h+=r&&r['样本数']?'<div class="hx-cmpc'+on+'"><b class="'+cls(r['均值'])+'">'+num(r['均值'])+'%</b><small>中位 <em class="'+cls(r['中位数'])+'">'+num(r['中位数'])+'</em> · 胜率 <em class="'+winCls(r['胜率%'])+'">'+num(r['胜率%'],0,false)+'%</em></small><small>n='+r['样本数']+'</small></div>':'<div class="hx-cmpc dim'+on+'">—</div>'})});
   $('hx-cmp').innerHTML=h+'</div></div>';
 }
+/* ---------- 事件检索：年份 × 节日网格 + 搜索；选中后日K跳到 T-20 ~ T+20 并展示单次事件详情 ---------- */
+var EV_ALIAS={'元旦':'yuandan','春节':'chunjie','五一':'wuyi','劳动节':'wuyi','中秋':'zhongqiu','国庆':'guoqing','端午':'duanwu','清明':'qingming'};
+function hKey(name){for(var i=0;i<D.holidays.length;i++)if(D.holidays[i].name===name)return D.holidays[i].key||name;return name}
+function evSlug(y,tag){return y+'-'+hKey(tag)}
+function evMainTag(e){var tags=e['标签']||[];return tags.indexOf(e['类型'])>=0?e['类型']:(tags[tags.length-1]||e['节日'])}
+function findEv(y,tag){y=+y;for(var i=0;i<D.events.length;i++){var e=D.events[i];if(+e['年份']===y&&(e['标签']||[]).indexOf(tag)>=0)return e}return null}
+function parseEv(s){                       // 2018-national / 2018-国庆 / 2018国庆 / 2018 guoqing / 2018-10（按 T0 月份不支持，返回 null）
+  if(!s)return null;s=String(s).trim().toLowerCase();var m=s.match(/^(\d{4})\s*[-_ ·]?\s*(.+)$/);if(!m)return null;var y=+m[1],k=m[2].trim();
+  for(var i=0;i<D.holidays.length;i++){var h=D.holidays[i],al=[h.name,h.key,EV_ALIAS[h.name]].map(function(x){return String(x||'').toLowerCase()});
+    if(al.indexOf(k)>=0)return findEv(y,h.name)?{y:y,tag:h.name}:null}
+  return null;
+}
+function evValues(tag,m){return D.events.filter(function(e){return e['状态']==='完整'&&(e['标签']||[]).indexOf(tag)>=0&&e[m]!=null}).map(function(e){return{v:e[m],y:e['年份']}})}
+function median(a){if(!a.length)return null;var s=a.slice().sort(function(x,y){return x-y}),n=s.length;return n%2?s[(n-1)/2]:(s[n/2-1]+s[n/2])/2}
+function evCellBg(v){if(v==null)return'';var a=Math.min(1,Math.abs(v)/5)*.55+.08;return'background:'+(v>0?'rgba(229,72,77,':'rgba(21,149,104,')+a.toFixed(3)+')'}
+function renderEvPick(){
+  var box=$('hx-evgrid');if(!box)return;
+  var hs=D.holidays.map(function(h){return h.name}),yrs={};D.events.forEach(function(e){yrs[e['年份']]=1});
+  var ys=Object.keys(yrs).map(Number).sort(function(a,b){return b-a}),opts=[];
+  var h='<div class="hx-evt" style="--n:'+hs.length+'"><div class="hx-evh">年份</div>'+hs.map(function(n){return'<div class="hx-evh"><i style="background:'+HCOLOR[n]+'"></i>'+esc(n)+'</div>'}).join('');
+  ys.forEach(function(y){var exy=ex.indexOf(y)>=0;
+    h+='<div class="hx-evy'+(exy?' exy':'')+'" title="'+(exy?'“剔除异常年”口径排除该年':'')+'">'+y+(exy?'<small>异常</small>':'')+'</div>';
+    hs.forEach(function(n){var e=findEv(y,n);if(!e){h+='<div class="hx-evc none"></div>';return}
+      var on=S.ev&&S.ev.y===y&&S.ev.tag===n,v=e['节后5日%'],done=e['状态']==='完整',mg=e['类型']==='合并';
+      opts.push(y+' '+n);
+      h+='<button type="button" class="hx-evc'+(on?' on':'')+(done?'':' pend')+'" data-evpick="'+esc(evSlug(y,n))+'" style="'+(done?evCellBg(v):'')+'" title="'+esc(y+' '+n+(mg?'（'+e['节日']+'合并休市）':'')+' · T0 '+e['T0']+' → T1 '+e['T1']+(done?' · 节后5日 '+num(v)+'%':' · '+e['状态']))+'">'+
+        (done?'<b>'+num(v,1)+'</b>':'<b class="dim">'+(e['状态']==='未到'?'未到':'待复牌')+'</b>')+(mg?'<sup>合</sup>':'')+'</button>'});
+  });
+  box.innerHTML=h+'</div>';
+  $('hx-evlist').innerHTML=opts.map(function(o){return'<option value="'+esc(o)+'">'}).join('');
+  var inp=$('hx-evq');if(inp&&document.activeElement!==inp)inp.value=S.ev?S.ev.y+' '+S.ev.tag:'';
+  $('hx-evclear').hidden=!S.ev;
+}
+function evStrip(vals,v){                    // 同节日分布条：灰点 = 历年，亮点 = 本次
+  if(v==null||vals.length<2)return'';var xs=vals.map(function(o){return o.v}),lo=Math.min.apply(null,xs.concat([v,0])),hi=Math.max.apply(null,xs.concat([v,0])),sp=hi-lo||1;
+  var p=function(x){return((x-lo)/sp*100).toFixed(1)+'%'};
+  return'<div class="hx-evs"><i class="z" style="left:'+p(0)+'"></i>'+vals.map(function(o){return'<i style="left:'+p(o.v)+'" title="'+o.y+'：'+num(o.v)+'"></i>'}).join('')+'<i class="me '+cls(v)+'" style="left:'+p(v)+'"></i></div>';
+}
+function renderEvDetail(){
+  var sec=$('hx-evcard');if(!sec)return;
+  var e=S.ev?findEv(S.ev.y,S.ev.tag):null;
+  if(!e){$('hx-evd').innerHTML='<p class="hx-evempty">在左侧网格点任一格，或在上方输入“2018 国庆”，日 K 会跳到该次休市前后约 T-20 ~ T+20，并在这里显示单次事件的全部指标与同节日历史排名。</p>';$('hx-evd-title').textContent='事件详情';return}
+  var tag=S.ev.tag,y=S.ev.y,done=e['状态']==='完整',exy=ex.indexOf(y)>=0,idx=D.meta.index_name;
+  $('hx-evd-title').textContent=y+' '+tag+' · '+idx;
+  var chips='<span class="hx-evchip">'+esc(e['T0'])+' → '+esc(e['T1'])+'</span><span class="hx-evchip">休市 '+esc(e['休市自然日'])+' 天</span>'+
+    (e['类型']==='合并'?'<span class="hx-evchip mg">'+esc(e['节日'])+' 合并休市</span>':'')+
+    (done?'':'<span class="hx-evchip warn">'+esc(e['状态'])+' · 只显示已有字段</span>')+
+    (exy?'<span class="hx-evchip warn">异常年：“剔除异常年”口径排除</span>':'');
+  var M=[['节前5日%','节前5日'],['T0当日%','T0 当日'],['T1跳空%','复牌跳空'],['T1当日%','复牌当日'],['节后5日%','节后5日'],['节后10日%','节后10日'],['节后20日%','节后20日'],['节前量比','节前量比']];
+  var rows=M.map(function(m){var v=e[m[0]],vol=m[0]==='节前量比',vals=evValues(tag,m[0]),xs=vals.map(function(o){return o.v});
+    var mean=xs.length?xs.reduce(function(a,b){return a+b},0)/xs.length:null,med=median(xs);
+    var rk=v==null?null:1+xs.filter(function(x){return x>v}).length,pct=v==null||!xs.length?null:Math.round(xs.filter(function(x){return x<=v}).length/xs.length*100);
+    var vc=vol?(v==null?'dim':(v<1?'down':'up')):cls(v),u=vol?'':'%';
+    return'<div class="hx-evr"><span class="k">'+m[1]+'</span><b class="'+vc+'">'+(v==null?'—':num(v,2,!vol)+u)+'</b>'+
+      '<span class="h">同节日 均值 '+num(mean,2,!vol)+u+' · 中位 '+num(med,2,!vol)+u+'</span>'+
+      '<span class="r">'+(rk==null?'<span class="dim">—</span>':'第 <b>'+rk+'</b>/'+xs.length+(vol?' 大':' 高')+' · '+pct+' 分位')+'</span>'+evStrip(vals,v)+'</div>'}).join('');
+  var ext=e['窗口最大涨幅%']==null?'':'<div class="hx-evx">窗口最大涨幅 <b class="'+cls(e['窗口最大涨幅%'])+'">'+num(e['窗口最大涨幅%'])+'%</b> · 最大回撤 <b class="'+cls(e['窗口最大回撤%'])+'">'+num(e['窗口最大回撤%'])+'%</b> · 节后10日最高 '+num(e['节后10日最高%'])+'% / 最低 '+num(e['节后10日最低%'])+'%</div>';
+  var RW=[['节前5日%','节前5日'],['T1跳空%','复牌跳空'],['节后5日%','节后5日'],['节后20日%','节后20日']];
+  var rs='<div class="tw"><table class="hx-evrs"><thead><tr><th>相对 '+esc(idx)+'（pp）</th>'+RW.map(function(w){return'<th class="num">'+w[1]+'</th>'}).join('')+'</tr></thead><tbody>'+
+    (D.meta.proxies||[]).map(function(p){return'<tr><td>'+esc(p.name)+'</td>'+RW.map(function(w){return td(e['RS_'+p.name+'_'+w[0]])}).join('')+'</tr>'}).join('')+'</tbody></table></div>';
+  $('hx-evd').innerHTML='<div class="hx-evchips">'+chips+'</div><div class="hx-evrows">'+rows+'</div>'+ext+rs+
+    '<p class="note">排名 / 分位 / 均值 / 中位：同节日（含带该标签的合并休市）全部年份的完整事件，含本次；“第 1”= 最高。RS = 代理指数 − '+esc(idx)+'（百分点），缺失 = 该指数当时尚未发布。</p>';
+}
+function evWindowMarks(){                     // 选中事件：节前5日 / 休市 / 节后20日 三段底色 + T0 / T1 竖线
+  var e=S.ev?findEv(S.ev.y,S.ev.tag):null;if(!e||KI[e['T0']]==null)return null;
+  var i0=KI[e['T0']],i1=KI[e['T1']]!=null?KI[e['T1']]:Math.min(KN-1,i0+1),a=[];
+  a.push([{name:'节前5日',xAxis:K.d[Math.max(0,i0-4)],itemStyle:{color:'rgba(96,165,250,.13)'},label:{show:true,color:'#60a5fa',fontSize:10,position:'insideBottom'}},{xAxis:K.d[i0]}]);
+  a.push([{name:'休市',xAxis:K.d[i0],itemStyle:{color:'rgba(245,158,11,.16)'},label:{show:true,color:'#f59e0b',fontSize:10,position:'insideBottom'}},{xAxis:K.d[i1]}]);
+  a.push([{name:'节后20日',xAxis:K.d[i1],itemStyle:{color:'rgba(168,85,247,.10)'},label:{show:true,color:'#a78bfa',fontSize:10,position:'insideBottom'}},{xAxis:K.d[Math.min(KN-1,i1+19)]}]);
+  var line=[{xAxis:e['T0'],label:{formatter:'T0',color:'#f59e0b',position:'insideStartTop'}}];if(KI[e['T1']]!=null)line.push({xAxis:e['T1'],label:{formatter:'复牌',color:'#f59e0b',position:'insideStartBottom'}});
+  return{area:a,line:line};
+}
+function selectEvent(y,tag,opts){
+  opts=opts||{};var e=findEv(y,tag);if(!e){clearEvent();return}
+  S.ev={y:+y,tag:tag};S.focus=e['T0'];
+  var i0=KI[e['T0']];
+  if(i0!=null){var i1=KI[e['T1']]!=null?KI[e['T1']]:null;
+    kzoom=[Math.max(0,i0-20),Math.min(KN-1,(i1!=null?i1:i0+1)+19)];
+    KSEL=i1!=null&&i1<=KLAST?i1:Math.min(i0,KLAST);}
+  $('hx-focus').innerHTML='已定位：<b>'+y+' '+esc(tag)+'</b>（'+esc(e['节日'])+'）T0 '+esc(e['T0'])+' → 复牌 '+esc(e['T1'])+' · 显示约 T-20 ~ T+20，蓝 = 节前5日、橙 = 休市、紫 = 节后20日 <button type="button" class="hx-linkbtn" data-evclear>清除</button>';
+  renderEvPick();renderEvDetail();renderEvents();renderKline(true);markZoomBtn(null);
+  if(KSEL!=null)ktip(KSEL,'sel');
+  if(opts.sync!==false)syncUrl();
+  var toK=function(bh){window.scrollTo({top:$('hx-kcard').getBoundingClientRect().top+window.scrollY-stickyOffset(),behavior:bh})};
+  if(opts.scroll!==false){toK(opts.instant||matchMedia('(prefers-reduced-motion:reduce)').matches?'auto':'smooth');
+    if(opts.instant)setTimeout(function(){toK('auto')},700);}   // 深链：首屏图表/行情条布局稳定后再对齐一次
+}
+function clearEvent(){
+  S.ev=null;S.focus=null;kzoom=null;
+  $('hx-focus').textContent='点击下方“事件明细”任一行或“事件检索”网格，可在日 K 上定位到该次休市。';
+  renderEvPick();renderEvDetail();renderEvents();renderKline(true);syncUrl();
+}
+function evFromInput(){var inp=$('hx-evq');if(!inp)return;var r=parseEv(inp.value);inp.classList.toggle('bad',!!inp.value.trim()&&!r);if(r)selectEvent(r.y,r.tag)}
+document.addEventListener('click',function(e){
+  var c=e.target.closest('[data-evpick]');if(c){var r=parseEv(c.getAttribute('data-evpick'));if(r){if(S.ev&&S.ev.y===r.y&&S.ev.tag===r.tag)clearEvent();else selectEvent(r.y,r.tag)}return}
+  if(e.target.closest('[data-evclear]'))clearEvent();
+});
+document.addEventListener('change',function(e){if(e.target&&e.target.id==='hx-evq')evFromInput()});
+document.addEventListener('keydown',function(e){if(e.target&&e.target.id==='hx-evq'&&e.key==='Enter'){e.preventDefault();evFromInput()}});
 function redrawCharts(){renderPath();renderRS();renderHol();renderYoy();renderKline(true)}
-function render(){chips();renderTicker();renderCurrent();renderSched();renderMatrix();renderPath();renderKline(true);renderRS();renderConcl();renderCmp();renderHol();renderYoy();renderStats();renderEvents()}
+function render(){chips();renderTicker();renderCurrent();renderSched();renderMatrix();renderPath();renderKline(true);renderRS();renderConcl();renderCmp();renderHol();renderYoy();renderStats();renderEvents();renderEvPick();renderEvDetail()}
 renderTargets();renderHead();renderFoot();renderDigest();render();
-(function(){var q=null;try{q=new URLSearchParams(location.search).get('target')}catch(_){}if(!q)return;var t=findTarget(q);if(t)switchTarget(t.slug)})();
+(function(){var q=null,qe=null;try{var sp=new URLSearchParams(location.search);q=sp.get('target');qe=sp.get('event')}catch(_){}
+  if(qe){var r=parseEv(qe);if(r)selectEvent(r.y,r.tag,{instant:true})}
+  if(!q)return;var t=findTarget(q);if(t)switchTarget(t.slug)})();
 function resizeAll(){Object.keys(charts).forEach(function(k){charts[k].resize()})}
 var rt;window.addEventListener('resize',function(){clearTimeout(rt);rt=setTimeout(function(){measureTicker();resizeAll();redrawCharts()},150)});
 if(window.ResizeObserver&&$('hx-kline')){var ro,rq;ro=new ResizeObserver(function(){clearTimeout(rq);rq=setTimeout(function(){if(charts['hx-kline'])charts['hx-kline'].resize()},60)});ro.observe($('hx-kline'))}
