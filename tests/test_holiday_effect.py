@@ -194,6 +194,98 @@ class HolidayEventTest(unittest.TestCase):
         self.assertIn("pinchZoom", js)
         self.assertIn("panX", js)
 
+    # ---------- 总体总结 digest / 结论可视化 ----------
+    @staticmethod
+    def _digest_payload():
+        def row(g, v, m, mean, med, win, bmean, bwin, p=None, n=11):
+            return {"分组": g, "口径": v, "指标": m, "样本数": n, "均值": mean, "中位数": med, "胜率%": win,
+                    "基准均值": bmean, "基准中位数": 0.0, "基准胜率%": bwin, "均值差": mean - bmean, "p值": p}
+        summ = []
+        for g, n in (("全部", 20), ("国庆", 11), ("五一", 9)):
+            k = 1.0 if g != "五一" else -1.0
+            summ += [row(g, "all", "节前5日%", 1.0, -0.1, 45, 0.1, 53, 0.03, n),   # 均值/中位方向相反
+                     row(g, "all", "T1跳空%", 0.3, 0.2, 70, -0.06, 45, 0.001, n),
+                     row(g, "all", "节后5日%", 0.8 * k, 0.9 * k, 60, 0.09, 53, 0.4, n),
+                     row(g, "all", "节后20日%", 0.6, 1.5, 57, 0.35, 51, 0.7, n),
+                     row(g, "all", "节前量比", 0.9, 0.88, 75, 1.0, 56, None, n),
+                     row(g, "ex", "节前5日%", 0.2, -0.1, 44, 0.1, 53, 0.9, n),
+                     row(g, "ex", "T1跳空%", -0.1, 0.1, 64, -0.06, 45, 0.3, n),
+                     row(g, "ex", "节后20日%", -0.4, 1.4, 57, 0.35, 51, 0.8, n)]
+        rs = [{"代码": "sh000852", "代理": "中证1000", "分组": "全部", "口径": "all", "指标": m, "样本数": 20,
+               "均值": v, "中位数": v, "胜率%": w, "基准均值": 0, "基准中位数": 0, "基准胜率%": 50, "均值差": v, "p值": 0.5}
+              for m, v, w in (("节前5日%", -0.55, 43), ("节后5日%", 0.77, 62), ("节后10日%", 0.59, 57))]
+        return {"meta": {"index_name": "沪深300", "generated": "2026-09-26 08:00", "sample": "2015-01-01 ~ 2026-09-24",
+                         "exclude_years": [2015, 2024], "proxies": [{"code": "sh000852", "name": "中证1000"}],
+                         "upcoming": [{"节日": "2026国庆", "T0": "2026-09-30", "T1": "2026-10-08", "状态": "未到", "距T0交易日": 3}]},
+                "groups": ["全部", "五一", "国庆"], "holidays": [{"name": "五一"}, {"name": "国庆"}],
+                "bands": [{"t0": "2026-09-30", "kind": "国庆", "tags": ["国庆"], "days": 8}],
+                "summary": summ, "rs_summary": rs, "current": {}}
+
+    def test_digest_numbers_come_from_summary(self):
+        from backtest.holiday_report import digest_payload, rs_verdict
+        d = digest_payload(self._digest_payload())
+        self.assertEqual(d["id"], "holiday_effect")
+        kp = {k["label"]: k for k in d["kpis"]}
+        self.assertEqual(kp["完整事件"]["value"], "20")
+        self.assertEqual(kp["复牌跳空胜率"]["value"], "70%")
+        self.assertIn("平时 45%", kp["复牌跳空胜率"]["sub"])
+        self.assertEqual(kp["节前缩量占比"]["value"], "75%")
+        self.assertEqual(kp["中证1000 节后5日"]["value"], "+0.77pp")
+        self.assertEqual(kp["距 2026国庆"]["value"], "3 交易日")
+        self.assertIn("节前普遍缩量", d["headline"])
+        self.assertIn("中证1000 节前去风险、节后再风险", d["headline"])
+        self.assertIn("剔除 2015/2024 后仍显著：无", d["headline"])       # 显著性要经得起剔除异常年
+        secs = {s["title"]: s["items"] for s in d["sections"]}
+        win = secs["收益窗口（全部事件 · 全部年份）"]
+        self.assertEqual(win[0]["tag"], "均值/中位背离")
+        hol = secs["各节日对比"]
+        self.assertIn("最强：国庆", hol[0]["text"])
+        self.assertIn("最弱：五一", hol[1]["text"])
+        self.assertIn("样本不足 10 次：五一", hol[2]["text"])
+        rob = secs["稳健性（剔除异常年）"]
+        self.assertTrue(any(i["tag"] == "方向翻转" and "节后20日" in i["text"] for i in rob))
+        self.assertEqual(rs_verdict({"均值": -0.5, "胜率%": 40}, {"均值": 0.7, "胜率%": 60}), ("节前去风险", "节后再风险"))
+        self.assertEqual(rs_verdict({"均值": 0.5, "胜率%": 40}, {"均值": -0.7, "胜率%": 30}), ("节前无一致方向", "节后继续偏防御"))
+
+    def test_digest_tolerates_minimal_payload(self):
+        from backtest.holiday_report import digest_payload
+        d = digest_payload({"meta": {}, "groups": ["全部"]})
+        self.assertEqual((d["kpis"], d["sections"]), ([], []))
+
+    def test_research_digest_markdown_json_and_index_card(self):
+        import tempfile
+        from pathlib import Path
+        from backtest import research_digest as rd
+        from backtest.holiday_report import digest_payload
+        d = digest_payload(self._digest_payload())
+        with tempfile.TemporaryDirectory() as tmp:
+            d["md_path"] = str(Path(tmp) / "summary.md")
+            out = rd.save(d, Path(tmp) / "digests")
+            self.assertTrue(out.exists())
+            md = Path(d["md_path"]).read_text(encoding="utf-8")
+            self.assertIn("# 节假日效应 · 总体总结", md)
+            self.assertIn("| 复牌跳空胜率 | 70% |", md)
+            self.assertIn("## 各节日对比（全部年份）", md)
+            (Path(tmp) / "digests" / "broken.json").write_text("{", encoding="utf-8")   # 损坏文件被跳过
+            other = {"id": "zz_other", "title": "另一个回测", "page": "/x.html", "order": 10, "kpis": []}
+            rd.save(other, Path(tmp) / "digests")
+            loaded = rd.load_all(Path(tmp) / "digests")
+            self.assertEqual([x["id"] for x in loaded], ["zz_other", "holiday_effect"])   # 按 order 排序
+            html = rd.index_section_html(loaded)
+            self.assertIn('href="/holiday_effect.html#summary"', html)
+            self.assertIn("研究结论速览", html)
+        self.assertEqual(rd.index_section_html([]), "")
+        with self.assertRaises(ValueError):
+            rd.validate({"id": "x"})
+
+    def test_page_has_visual_conclusions_and_summary_card(self):
+        html = build_holiday_page(self._digest_payload())
+        for needle in ('id="summary"', 'id="hx-sumkpis"', "holidaySummaryOpen", "function renderConcl",
+                       "hx-wbar", "hx-rg", "hx-vchip", "均值/中位背离", 'id="hx-hol"', 'id="hx-yoy"', "文字版结论"):
+            self.assertIn(needle, html)
+        raw = re.search(r'<script id="holiday-data" type="application/json">(.*?)</script>', html, re.S).group(1)
+        self.assertEqual(json.loads(raw.replace("<\\/", "</"))["digest"]["kpis"][0]["value"], "20")
+
 
 if __name__ == "__main__":
     unittest.main()

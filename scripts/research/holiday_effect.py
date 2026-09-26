@@ -23,6 +23,7 @@ $ python -m scripts.research.holiday_effect --no-html                 # 不生�
 ----
 页面：output/holiday_effect.html（http://127.0.0.1:8765/holiday_effect.html）
 明细：output/research/holiday_effect/ 下的 CSV / JSON / PNG / Markdown 报告
+总结：output/research/holiday_effect/holiday_summary.md（总体总结）+ output/research/digests/holiday_effect.json（摘要卡片数据，导航页自动收录）
 """
 
 from __future__ import annotations
@@ -41,7 +42,8 @@ PROJECT_DIR = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_DIR))
 
 from backtest import holiday_effect as he  # noqa: E402
-from backtest.holiday_report import build_holiday_page  # noqa: E402
+from backtest import research_digest  # noqa: E402
+from backtest.holiday_report import build_holiday_page, digest_payload, ticker_payload  # noqa: E402
 from data.index import IndexData, INDEXES  # noqa: E402
 from data.storage import atomic_write_parquet  # noqa: E402
 
@@ -437,6 +439,7 @@ def write_markdown(res, cur, mat, concl, meta, out_dir: Path):
          f"- 页面：{PAGE_URL}", "- 数据覆盖：" + "；".join(meta["coverage"])]
     if meta["notes"]:
         L.append("- 未形成事件：" + "；".join(meta["notes"]))
+    L.append("- 总体总结（自动生成）：holiday_summary.md")
     L.append("\n## 事件数\n")
     L.append(md_table(pd.DataFrame([{"分组": g, "全部事件": int(he.group_mask(ev, g).sum()),
                                      "完整事件": int((he.group_mask(ev, g) & (ev["状态"] == "完整")).sum())}
@@ -579,6 +582,9 @@ def main():
     pd.concat([df.assign(分组=g, 口径=v) for g, d in cur.items() for v, df in d.items()]).to_csv(
         out_dir / "holiday_current_state.csv", **kw)
     payload = build_payload(res, cur, mat, concl, meta, exclude_years)
+    payload["ticker"] = ticker_payload(payload)
+    payload["digest"] = digest_payload(payload)  # 总体总结：页面顶部卡片 + Markdown + 导航页“研究结论速览”
+    digest_json = research_digest.save(payload["digest"])
     (out_dir / "holiday_effect.json").write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
     plot(res, out_dir / "holiday_effect_paths.png", meta["index_name"])
     write_markdown(res, cur, mat, concl, meta, out_dir)
@@ -589,6 +595,7 @@ def main():
     for n in res["notes"]:
         print(f"  · {n}")
     print(f"✓ 明细输出：{out_dir}")
+    print(f"✓ 总体总结：{PROJECT_DIR / payload['digest']['md_path']}（卡片数据 {digest_json}）")
     if missing:
         print(f"⚠ 缺失指数：{missing}")
 

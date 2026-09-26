@@ -2,6 +2,7 @@
 """生成 output/index.html 导航页，按使用场景和访问频率组织入口。"""
 
 import os
+import sys
 from datetime import datetime
 
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -142,6 +143,18 @@ GROUPS = [
 ]
 
 
+def _digest_section() -> str:
+    """研究结论速览：收录 output/research/digests/*.json（各回测脚本调用 research_digest.save 写入）。"""
+    try:
+        if PROJECT_DIR not in sys.path:
+            sys.path.insert(0, PROJECT_DIR)
+        from backtest.research_digest import index_section_html
+        return index_section_html()
+    except Exception as exc:  # 摘要缺失或损坏不影响导航页
+        print(f"⚠ 研究结论速览跳过：{exc}")
+        return ""
+
+
 def generate():
     existing = {
         filename
@@ -155,6 +168,7 @@ def generate():
         if visible:
             visible_groups.append((group, visible))
 
+    digest_section = _digest_section()
     nav_links = "".join(
         f'<a href="#{group["id"]}" class="nav-link nav-{group["tone"]}">'
         f'{group["nav"]}<span>{len(visible)}</span></a>'
@@ -302,6 +316,7 @@ main{{max-width:1300px;margin:0 auto;padding:8px 32px 20px}}
     <div class="sub">{datetime.now().strftime('%Y-%m-%d %H:%M')} 更新 · 日常看盘与训练优先，长期研究和历史实验归档在后</div>
   </div>
 </header>
+{digest_section}
 <section class="ops-hero" aria-label="今日操盘">
   <div class="ops-hero-card app-reveal">
     <div class="ops-hero-kicker">今日操盘</div>

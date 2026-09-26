@@ -113,6 +113,204 @@ def ticker_payload(payload: dict) -> dict:
             "countdown": sched(target) if target else None, "schedule": [sched(u) for u in upcoming]}
 
 
+# ---------------------------------------------------------------------------
+# 总体总结（digest）：全部由 payload 里的统计结果拼出，页面顶部卡片 / Markdown / 导航页共用
+# ---------------------------------------------------------------------------
+DIGEST_WINDOWS = (("节前5日%", "节前5日"), ("T0当日%", "T0当日"), ("T1跳空%", "复牌跳空"),
+                  ("节后5日%", "节后5日"), ("节后10日%", "节后10日"), ("节后20日%", "节后20日"))
+
+
+def _num(v, nd=2, sign=True, unit=""):
+    if v is None:
+        return "—"
+    return (f"{v:+.{nd}f}" if sign else f"{v:.{nd}f}") + unit
+
+
+def _tone(v, eps=0.0):
+    return "neutral" if v is None or abs(v) <= eps else ("up" if v > 0 else "down")
+
+
+def _summ_index(payload: dict):
+    by = {(s.get("分组"), s.get("口径"), s.get("指标")): s for s in payload.get("summary") or []}
+    rs = {(s.get("代码"), s.get("分组"), s.get("口径"), s.get("指标")): s for s in payload.get("rs_summary") or []}
+    return by, rs
+
+
+def rs_verdict(pre: dict | None, post: dict | None) -> tuple[str | None, str | None]:
+    """与脚本自动结论同一规则：均值与胜率同向才算有方向。"""
+    a = b = None
+    if pre and pre.get("均值") is not None and pre.get("胜率%") is not None:
+        a = "节前去风险" if pre["均值"] < 0 and pre["胜率%"] < 50 else (
+            "节前偏风险偏好" if pre["均值"] > 0 and pre["胜率%"] > 50 else "节前无一致方向")
+    if post and post.get("均值") is not None and post.get("胜率%") is not None:
+        b = "节后再风险" if post["均值"] > 0 and post["胜率%"] > 50 else (
+            "节后继续偏防御" if post["均值"] < 0 and post["胜率%"] < 50 else "节后无一致方向")
+    return a, b
+
+
+def digest_payload(payload: dict) -> dict:
+    meta = payload.get("meta") or {}
+    by, rs = _summ_index(payload)
+    idx = meta.get("index_name") or "主指数"
+    g0, v0 = "全部", "all"
+    S = lambda m, g=g0, v=v0: by.get((g, v, m))  # noqa: E731
+    base = {"id": "holiday_effect", "order": 50, "icon": "🏮", "title": "节假日效应 · 总体总结",
+            "page": "/holiday_effect.html", "generated": meta.get("generated"), "sample": meta.get("sample"),
+            "md_path": "output/research/holiday_effect/holiday_summary.md",
+            "caveats": ["全部数字由本次回测自动计算（只统计已走完 T+20 的完整事件）；历史统计关联，不构成投资建议。"]}
+    n0 = S("节后5日%")
+    if not n0 or not n0.get("样本数"):
+        return {**base, "headline": "暂无完整事件，无法汇总。", "kpis": [], "sections": [], "tables": []}
+    n = int(n0["样本数"])
+    t1, vol, p20 = S("T1跳空%"), S("节前量比"), S("节后20日%")
+    proxies = meta.get("proxies") or []
+    ticker = payload.get("ticker") or ticker_payload(payload)
+    cd = ticker.get("countdown") or {}
+
+    # ---- 收益窗口 ----
+    win_items = []
+    sig = []
+    for m, label in DIGEST_WINDOWS:
+        s = S(m)
+        if not s:
+            continue
+        diverge = (s.get("均值") or 0) * (s.get("中位数") or 0) < 0
+        p = s.get("p值")
+        if p is not None and p < 0.05:
+            sig.append(label)
+        win_items.append({
+            "text": f"{label}：均值 {_num(s.get('均值'), unit='%')} / 中位 {_num(s.get('中位数'), unit='%')}，"
+                    f"胜率 {_num(s.get('胜率%'), 0, False, '%')}；平时均值 {_num(s.get('基准均值'), unit='%')}、"
+                    f"胜率 {_num(s.get('基准胜率%'), 0, False, '%')}" + (f"；p={p:.2f}" if p is not None else ""),
+            "tone": _tone(s.get("均值")), "tag": "均值/中位背离" if diverge else ("显著" if p is not None and p < 0.05 else "")})
+
+    # ---- 各节日对比 ----
+    hol = [h["name"] for h in payload.get("holidays") or [] if h.get("name") in (payload.get("groups") or [])]
+    rows, post5 = [], []
+    for h in hol:
+        a, b, c, vv = S("节前5日%", h), S("T1跳空%", h), S("节后5日%", h), S("节前量比", h)
+        if not c or not c.get("样本数"):
+            continue
+        rows.append([h, int(c["样本数"]), _num(a and a.get("均值"), unit="%"), _num(b and b.get("均值"), unit="%"),
+                     _num(c.get("均值"), unit="%"), _num(c.get("胜率%"), 0, False, "%"),
+                     _num(vv and vv.get("胜率%"), 0, False, "%")])
+        post5.append((h, c))
+    hol_items = []
+    if post5:
+        best = max(post5, key=lambda x: x[1]["均值"])
+        worst = min(post5, key=lambda x: x[1]["均值"])
+        hol_items.append({"text": f"节后5日最强：{best[0]}（均值 {_num(best[1]['均值'], unit='%')}，胜率 "
+                                  f"{_num(best[1]['胜率%'], 0, False, '%')}，n={int(best[1]['样本数'])}）",
+                          "tone": _tone(best[1]["均值"])})
+        hol_items.append({"text": f"节后5日最弱：{worst[0]}（均值 {_num(worst[1]['均值'], unit='%')}，胜率 "
+                                  f"{_num(worst[1]['胜率%'], 0, False, '%')}，n={int(worst[1]['样本数'])}）",
+                          "tone": _tone(worst[1]["均值"])})
+        small = [h for h, c in post5 if c["样本数"] < 10]
+        if small:
+            hol_items.append({"text": "样本不足 10 次：" + "、".join(small) + "，单节日结论波动大。", "tone": "neutral"})
+
+    # ---- 量能 ----
+    vol_items = []
+    if vol and vol.get("样本数"):
+        vol_items.append({"text": f"节前量比中位数 {_num(vol.get('中位数'), 2, False)}，缩量(<1)占比 "
+                                  f"{_num(vol.get('胜率%'), 0, False, '%')}，平时 {_num(vol.get('基准胜率%'), 0, False, '%')}",
+                          "tone": "down" if (vol.get("胜率%") or 0) > (vol.get("基准胜率%") or 0) else "neutral"})
+
+    # ---- 风险偏好 ----
+    rs_items, rot = [], []
+    for p in proxies:
+        pre, post = rs.get((p["code"], g0, v0, "节前5日%")), rs.get((p["code"], g0, v0, "节后5日%"))
+        if not pre or not pre.get("样本数"):
+            continue
+        a, b = rs_verdict(pre, post)
+        rs_items.append({"text": f"{p['name']}−{idx}：节前5日 {_num(pre['均值'], unit='pp')}（跑赢 {_num(pre['胜率%'], 0, False, '%')}）"
+                                 f" → 节后5日 {_num(post and post.get('均值'), unit='pp')}（跑赢 {_num(post and post.get('胜率%'), 0, False, '%')}）",
+                         "tag": f"{a} → {b}", "tone": _tone(post and post.get("均值"))})
+        if a == "节前去风险" and b == "节后再风险":
+            rot.append(p["name"])
+
+    # ---- 稳健性 ----
+    rob_items = []
+    ex = meta.get("exclude_years") or []
+    if ex:
+        for m, label in (("节前5日%", "节前5日"), ("节后10日%", "节后10日"), ("节后20日%", "节后20日")):
+            a, b = S(m), S(m, g0, "ex")
+            if a and b and a.get("均值") is not None and b.get("均值") is not None:
+                flip = a["均值"] * b["均值"] < 0
+                rob_items.append({"text": f"{label}均值：全部年份 {_num(a['均值'], unit='%')} → 剔除 {','.join(map(str, ex))} 后 "
+                                          f"{_num(b['均值'], unit='%')}（中位 {_num(b.get('中位数'), unit='%')}）",
+                                  "tag": "方向翻转" if flip else "", "tone": "neutral"})
+
+    # ---- 当前位置 ----
+    cur_items = []
+    if cd:
+        items = (ticker.get("items") or {}).get("all") or []
+        cur_items.append({"text": f"下一个休市：{cd.get('name')}，T0 {cd.get('t0')}，距 T0 还有 {cd.get('gap')} 个交易日"
+                                  + (f"，休市 {cd['days']} 天" if cd.get("days") else ""), "tone": "neutral"})
+        for it in items[:2] + [x for x in items if x.get("vol")][:1]:
+            if it.get("value") is None:
+                continue
+            unit = "" if it.get("vol") else it.get("unit", "")
+            cur_items.append({"text": f"{it['label']}{('·' + it['sub']) if it.get('sub') else ''} "
+                                      f"{_num(it['value'], 2, not it.get('vol'), unit)}，位于历年{ticker.get('group')}节前分布的 "
+                                      f"{_num(it.get('pct'), 0, False)} 分位（n={it.get('n')}）", "tone": "neutral"})
+
+    # ---- 一句话结论 ----
+    parts = []
+    if vol and (vol.get("胜率%") or 0) >= (vol.get("基准胜率%") or 0) + 10:
+        parts.append("节前普遍缩量")
+    if t1 and (t1.get("胜率%") or 0) >= (t1.get("基准胜率%") or 0) + 10:
+        parts.append(f"复牌多高开（胜率 {t1['胜率%']:.0f}% vs 平时 {t1['基准胜率%']:.0f}%）")
+    if rot:
+        parts.append("、".join(rot) + " 节前去风险、节后再风险")
+    if not sig:
+        parts.append("各收益窗口均值与平时差异不显著（p≥0.05）")
+    else:
+        ex_years = meta.get("exclude_years") or []
+        keep = [label for m, label in DIGEST_WINDOWS if label in sig
+                and (S(m, g0, "ex") or {}).get("p值") is not None and S(m, g0, "ex")["p值"] < 0.05]
+        txt = "p<0.05：" + "、".join(sig)
+        if ex_years:
+            txt += "（剔除 " + "/".join(map(str, ex_years)) + " 后仍显著：" + ("、".join(keep) if keep else "无") + "）"
+        parts.append(txt)
+    headline = f"{idx} {n} 次完整休市：" + "；".join(parts) + "。"
+
+    kpis = [{"label": "完整事件", "value": str(n), "sub": meta.get("sample") or "", "tone": "neutral"}]
+    if t1:
+        kpis.append({"label": "复牌跳空胜率", "value": _num(t1.get("胜率%"), 0, False, "%"),
+                     "sub": f"平时 {_num(t1.get('基准胜率%'), 0, False, '%')} · 均值 {_num(t1.get('均值'), unit='%')}",
+                     "tone": _tone((t1.get("胜率%") or 0) - (t1.get("基准胜率%") or 0), 5)})
+    if vol and vol.get("样本数"):
+        kpis.append({"label": "节前缩量占比", "value": _num(vol.get("胜率%"), 0, False, "%"),
+                     "sub": f"平时 {_num(vol.get('基准胜率%'), 0, False, '%')} · 量比中位 {_num(vol.get('中位数'), 2, False)}",
+                     "tone": "neutral"})
+    if p20:
+        kpis.append({"label": "节后20日 中位", "value": _num(p20.get("中位数"), unit="%"),
+                     "sub": f"均值 {_num(p20.get('均值'), unit='%')} · 胜率 {_num(p20.get('胜率%'), 0, False, '%')}",
+                     "tone": _tone(p20.get("中位数"))})
+    if proxies:
+        p = proxies[0]
+        post = rs.get((p["code"], g0, v0, "节后5日%"))
+        if post:
+            kpis.append({"label": f"{p['name']} 节后5日", "value": _num(post.get("均值"), unit="pp"),
+                         "sub": f"相对{idx} · 跑赢 {_num(post.get('胜率%'), 0, False, '%')}", "tone": _tone(post.get("均值"))})
+    if cd:
+        kpis.append({"label": f"距 {cd.get('name')}", "value": f"{cd.get('gap')} 交易日",
+                     "sub": f"T0 {cd.get('t0')} → T1 {cd.get('t1')}", "tone": "neutral"})
+
+    sections = [s for s in (
+        {"title": "收益窗口（全部事件 · 全部年份）", "items": win_items},
+        {"title": "各节日对比", "items": hol_items},
+        {"title": "节前量能", "items": vol_items},
+        {"title": "风险偏好轮动（相对" + idx + "）", "items": rs_items},
+        {"title": "稳健性（剔除异常年）", "items": rob_items},
+        {"title": "当前位置", "items": cur_items},
+    ) if s["items"]]
+    tables = [{"title": "各节日对比（全部年份）", "columns": ["节日", "完整事件", "节前5日均值", "复牌跳空均值",
+                                                           "节后5日均值", "节后5日胜率", "节前缩量占比"], "rows": rows}] if rows else []
+    return {**base, "headline": headline, "kpis": kpis, "sections": sections, "tables": tables}
+
+
 TEMPLATE = r"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -263,11 +461,85 @@ details.hx-fold:not([open])>summary{border-bottom:0}
   .hx-cd .big{font-size:40px}
 }
 @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+/* ---- 结论可视化 ---- */
+.hx-cz-head{padding:10px 12px 0;font-size:12.5px;color:var(--hx-text2)}
+.hx-cz{display:grid;gap:10px;padding:10px 12px 12px;grid-template-columns:minmax(0,1fr)}
+@container (min-width:880px){.hx-cz{grid-template-columns:minmax(0,1.15fr) minmax(0,1fr)}}
+.hx-czside{display:grid;gap:10px;align-content:start;min-width:0}
+.hx-czb{border:1px solid var(--hx-line2);border-radius:8px;background:var(--hx-soft);padding:10px 12px;min-width:0}
+.hx-czt{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;font-weight:650;color:var(--hx-text2);margin-bottom:6px}
+.hx-czl{font-weight:400;font-size:10.5px;color:var(--hx-muted);display:inline-flex;align-items:center;gap:5px}
+.hx-czl i{display:inline-block;width:12px;height:6px;border-radius:2px;background:var(--hx-muted)}
+.hx-czl i.lg-md{width:3px;height:11px;background:var(--hx-text)}.hx-czl i.lg-bs{width:0;height:11px;border-left:2px dashed var(--hx-muted);background:none}
+.hx-wr{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"l v" "b b" "m m";gap:4px 10px;padding:9px 0;border-top:1px solid var(--hx-line2)}
+.hx-wr:first-of-type{border-top:0}
+.hx-wl{grid-area:l;font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.hx-wv{grid-area:v;font-family:var(--hx-mono);font-size:17px;font-weight:700;text-align:right}
+.hx-wbar{grid-area:b;position:relative;height:12px;border-radius:3px;background:color-mix(in srgb,var(--hx-line) 45%,transparent)}
+.hx-wbar i{position:absolute;top:0;bottom:0}
+.hx-wbar .z{width:1px;background:var(--hx-muted);opacity:.7}
+.hx-wbar .m{top:2px;bottom:2px;border-radius:2px;background:var(--hx-muted)}.hx-wbar .m.up{background:var(--hx-up)}.hx-wbar .m.down{background:var(--hx-down)}
+.hx-wbar .md{width:3px;margin-left:-1.5px;top:-2px;bottom:-2px;border-radius:2px;background:var(--hx-text)}
+.hx-wbar .bs{width:0;margin-left:-1px;top:-3px;bottom:-3px;border-left:2px dashed var(--hx-muted)}
+.hx-wm{grid-area:m;display:flex;flex-wrap:wrap;gap:4px 14px;font-size:11.5px;color:var(--hx-muted)}
+.hx-wm b{font-family:var(--hx-mono);font-weight:650;color:var(--hx-text2)}.hx-wm b.up{color:var(--hx-up)}.hx-wm b.down{color:var(--hx-down)}
+.hx-flag{font-style:normal;font-size:10.5px;font-weight:600;padding:1px 6px;border-radius:4px;color:#b45309;background:color-mix(in srgb,#f59e0b 16%,transparent);border:1px solid color-mix(in srgb,#f59e0b 40%,transparent)}
+.hx-flag.sig{color:var(--hx-blue);background:color-mix(in srgb,var(--hx-blue) 14%,transparent);border-color:color-mix(in srgb,var(--hx-blue) 40%,transparent)}
+:root[data-theme="dark"] .hx-flag{color:#fbbf24}
+.hx-vol{display:grid;grid-template-columns:auto minmax(0,1fr);gap:14px;align-items:center}
+.hx-volbig span{display:block;font-size:10.5px;color:var(--hx-muted)}.hx-volbig b{display:block;font-family:var(--hx-mono);font-size:26px;line-height:1.2}.hx-volbig small{font-size:10.5px;color:var(--hx-muted)}
+.hx-volbars{display:grid;gap:8px;min-width:0}
+.hx-volbars>div{display:grid;grid-template-columns:52px minmax(0,1fr) 38px;gap:8px;align-items:center;font-size:11.5px;color:var(--hx-muted)}
+.hx-volbars b{font-family:var(--hx-mono);color:var(--hx-text);text-align:right}
+.hx-hb{height:10px;border-radius:5px;background:color-mix(in srgb,var(--hx-line) 50%,transparent);overflow:hidden}.hx-hb i{display:block;height:100%;background:var(--hx-down);border-radius:5px}.hx-hb.base i{background:var(--hx-muted)}
+.hx-rg{display:grid;gap:6px}
+.hx-rr{display:grid;grid-template-columns:minmax(64px,1fr) repeat(3,minmax(0,1.1fr));gap:5px;align-items:stretch}
+.hx-rhd>div{font-size:10.5px;color:var(--hx-muted);text-align:center}
+.hx-rn{font-size:12.5px;font-weight:650;display:flex;flex-direction:column;justify-content:center;min-width:0}.hx-rn small{font-weight:400;font-size:10.5px;color:var(--hx-muted);font-family:var(--hx-mono)}
+.hx-rc{border-radius:6px;padding:6px 4px;text-align:center;background:color-mix(in srgb,var(--c,var(--hx-muted)) var(--a,0%),var(--hx-card));border:1px solid var(--hx-line2);min-width:0}
+.hx-rc b{display:block;font-family:var(--hx-mono);font-size:14px}.hx-rc small{display:block;font-size:10.5px;color:var(--hx-text2);margin-top:1px}
+.hx-rv{grid-column:1/-1;display:flex;gap:6px;flex-wrap:wrap;padding:0 0 6px;border-bottom:1px solid var(--hx-line2)}
+.hx-rr:last-child .hx-rv{border-bottom:0;padding-bottom:0}
+.hx-vchip{font-size:11px;padding:2px 8px;border-radius:999px;border:1px solid var(--hx-line);color:var(--hx-text2);background:var(--hx-card)}
+.hx-vchip.up{color:var(--hx-up);border-color:color-mix(in srgb,var(--hx-up) 45%,transparent)}.hx-vchip.down{color:var(--hx-down);border-color:color-mix(in srgb,var(--hx-down) 45%,transparent)}
+.hx-plain{margin:0 12px 12px;border-top:1px dashed var(--hx-line2);padding-top:6px}.hx-plain summary{cursor:pointer;font-size:11.5px;color:var(--hx-muted);padding:4px 0}
+/* ---- 总体总结卡 ---- */
+.hx-sum{margin:0 0 var(--hx-gap);border-left:3px solid var(--hx-blue)}
+.hx-sumtop{padding:10px 12px 0}
+.hx-sumk{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--hx-blue)}
+.hx-sumtop p{margin:4px 0 10px;font-size:14px;line-height:1.6;font-weight:600;color:var(--hx-text)}
+.hx-sumkpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:var(--hx-line2);border-top:1px solid var(--hx-line2);border-bottom:1px solid var(--hx-line2)}
+@container (max-width:639px){.hx-sumlist{display:none}.hx-skpi:nth-child(n+5){display:none}.hx-sumtop p{font-size:13.5px}}
+@container (min-width:640px){.hx-sumkpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@container (min-width:1100px){.hx-sumkpis{grid-template-columns:repeat(6,minmax(0,1fr))}}
+.hx-skpi{background:var(--hx-card);padding:9px 12px;min-width:0}
+.hx-skpi span{display:block;font-size:10.5px;color:var(--hx-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hx-skpi b{display:block;font-family:var(--hx-mono);font-size:19px;margin:2px 0;white-space:nowrap}
+.hx-skpi small{display:block;font-size:10.5px;color:var(--hx-muted);line-height:1.4}
+.hx-sumfold>summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:8px 12px;font-size:12px;color:var(--hx-text2)}
+.hx-sumfold>summary::-webkit-details-marker{display:none}
+.hx-sumfold>summary .chev{transition:transform .2s}.hx-sumfold[open]>summary .chev{transform:rotate(180deg)}
+.hx-ssecs{display:grid;gap:10px;padding:0 12px 4px;grid-template-columns:minmax(0,1fr)}
+@container (min-width:760px){.hx-ssecs{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@container (min-width:1180px){.hx-ssecs{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.hx-ssec{border:1px solid var(--hx-line2);border-radius:8px;background:var(--hx-soft);padding:9px 12px;min-width:0}
+.hx-ssec h3{margin:0 0 6px;font-size:12px;font-weight:650;color:var(--hx-text2)}
+.hx-ssec ul{margin:0;padding:0;list-style:none;display:grid;gap:7px}
+.hx-ssec li{position:relative;padding-left:12px;font-size:12.5px;line-height:1.6;color:var(--hx-text2)}
+.hx-ssec li::before{content:"";position:absolute;left:0;top:.62em;width:6px;height:6px;border-radius:50%;background:var(--hx-muted)}
+.hx-ssec li.t-up::before{background:var(--hx-up)}.hx-ssec li.t-down::before{background:var(--hx-down)}
+.hx-stag{font-style:normal;display:inline-block;margin-right:6px;font-size:10.5px;padding:0 6px;border-radius:4px;border:1px solid var(--hx-line);color:var(--hx-text);background:var(--hx-card)}
+.hx-sum .note a{color:var(--hx-blue)}
 </style>
 </head>
 <body>
 <main class="hx-page">
   <div class="hx-title"><span class="hx-logo" aria-hidden="true">节</span><h1>节假日效应回测</h1><p id="hx-sub"></p><span class="hx-live"><i></i><span id="hx-gen"></span></span></div>
+  <section class="hx-panel hx-sum" id="summary" aria-label="总体总结">
+    <div class="hx-sumtop"><span class="hx-sumk">总体总结 · 自动生成</span><p id="hx-sumhead"></p></div>
+    <div class="hx-sumkpis" id="hx-sumkpis"></div>
+    <details class="hx-sumfold" id="hx-sumfold"><summary><span>展开要点（<span id="hx-sumcount"></span> 组）<span class="hx-sumlist"> · 收益窗口 / 各节日 / 量能 / 风险偏好 / 稳健性 / 当前位置</span></span><span class="chev">▾</span></summary><div id="hx-sumbody"></div></details>
+  </section>
   <div class="hx-ticker" id="hx-ticker" aria-label="今年节前位置"></div>
   <div class="hx-bar">
     <div class="hx-chips" id="hx-chips" role="tablist" aria-label="节日分组"></div>
@@ -295,6 +567,17 @@ details.hx-fold:not([open])>summary{border-bottom:0}
     <section class="hx-panel hx-wide"><div class="hx-ph"><h2 id="hx-mtitle">总览热力矩阵</h2><span class="hx-legend">跌 <i></i> 涨 <i class="v"></i> 缩量</span></div>
       <div class="tw" id="hx-matrix"></div>
       <p class="note">单元格：均值（大字）/ 胜率（小字）；颜色按列内最大绝对值缩放。点击行切换分组。节日分组含带该标签的合并休市；RS = 代理指数收益 − 主指数（百分点），胜率 = 跑赢占比；量比胜率 = 缩量(&lt;1)占比。</p></section>
+    <section class="hx-panel hx-wide">
+      <details class="hx-fold" open><summary class="hx-ph"><h2 id="hx-concl-title">结论</h2><span class="chev">▾</span></summary><div id="hx-concl"></div></details>
+    </section>
+    <div class="hx-pair hx-wide">
+      <section class="hx-panel"><div class="hx-ph"><h2>各节日对比</h2><span class="hx-sub" id="hx-hol-sub"></span></div>
+        <div class="hx-chart" id="hx-hol"></div>
+        <p class="note">每个节日（含带该标签的合并休市）的平均表现；悬停 / 长按看中位数、胜率与样本数，点击切换分组。</p></section>
+      <section class="hx-panel"><div class="hx-ph"><h2 id="hx-yoy-title">节前5日：今年 vs 历年</h2><span class="hx-sub" id="hx-yoy-sub"></span></div>
+        <div class="hx-chart" id="hx-yoy"></div>
+        <p class="note">柱 = 每次休市的节前5日涨跌（橙色 = 今年，以最新交易日视作 T0）；空心点 = 该次节后5日；虚线 = 历年均值 / 中位。“全部 / 长假”分组下显示即将到来的节日。</p></section>
+    </div>
     <div class="hx-pair hx-wide">
       <section class="hx-panel"><div class="hx-ph"><h2>平均累计路径 T-10 ~ T+20</h2><span class="hx-sub">T0 收盘 = 0 · T+1 复牌首日</span></div>
         <div class="hx-chart" id="hx-path"></div>
@@ -305,9 +588,6 @@ details.hx-fold:not([open])>summary{border-bottom:0}
     </div>
     <section class="hx-panel hx-wide"><div class="hx-ph"><h2 id="hx-etitle">事件明细</h2><span class="hx-sub">点击行在日 K 定位 · 灰行 = 剔除年</span></div><div class="tw tall" id="hx-events"></div>
       <p class="note">量比 = T-5..T0 平均成交量 ÷ T-25..T-6 平均成交量。灰色行为“剔除异常年”口径下被排除的事件。</p></section>
-    <section class="hx-panel hx-wide">
-      <details class="hx-fold" open><summary class="hx-ph"><h2 id="hx-concl-title">结论</h2><span class="chev">▾</span></summary><div id="hx-concl"></div></details>
-    </section>
     <section class="hx-panel hx-wide">
       <details class="hx-fold"><summary class="hx-ph"><h2 id="hx-stats-title">统计 vs 基准</h2><span class="chev">▾</span></summary><div class="tw" id="hx-stats"></div>
         <p class="note">基准 = 样本期内每个交易日都当作 T0 的同口径分布。p 值为自助抽样双侧近似，窗口重叠且事件少，仅供参考。</p></details>
@@ -443,13 +723,49 @@ function renderSched(){
   $('hx-sched').innerHTML=h;
 }
 
+/* ---------- 结论：窗口表 + 量能 + 风险偏好网格（随分组 / 口径更新） ---------- */
+var WIN=[['节前5日%','节前5日'],['T0当日%','T0 当日'],['T1跳空%','复牌跳空'],['节后5日%','节后5日'],['节后10日%','节后10日'],['节后20日%','节后20日']];
+function sgn(v){return v==null||!isFinite(v)?0:(v>0?1:(v<0?-1:0))}
+function winCls(w){return w==null?'dim':(w>=60?'up':(w<=40?'down':''))}
+function rsVerdict(pre,post){
+  var a=!pre?null:(pre['均值']<0&&pre['胜率%']<50?['节前去风险','down']:(pre['均值']>0&&pre['胜率%']>50?['节前偏风险偏好','up']:['节前无一致方向','']));
+  var b=!post?null:(post['均值']>0&&post['胜率%']>50?['节后再风险','up']:(post['均值']<0&&post['胜率%']<50?['节后继续偏防御','down']:['节后无一致方向','']));
+  return[a,b].filter(Boolean);
+}
+function pos(v,M){return Math.max(0,Math.min(100,50+(v/M)*50))}
 function renderConcl(){
   var lines=(D.conclusions[S.g]||{})[S.v]||[];
   $('hx-concl-title').textContent='结论 · '+short(S.g)+' · '+D.variants[S.v];
-  var k=['节前5日%','T0当日%','T1跳空%','节后10日%'],kh='';
-  k.forEach(function(m){var s=stat(S.g,S.v,m);if(!s)return;
-    kh+='<div class="hx-kpi"><span>'+esc(m.replace('%',''))+'</span><b class="'+cls(s['均值'])+'">'+num(s['均值'])+'%</b><small>胜率 '+num(s['胜率%'],0,false)+'% · 基准 '+num(s['基准均值'])+'%</small></div>'});
-  $('hx-concl').innerHTML=(kh?'<div class="hx-kpis">'+kh+'</div>':'')+'<ul class="hx-concl">'+lines.map(function(x){return'<li>'+esc(x)+'</li>'}).join('')+'</ul>';
+  var n0=stat(S.g,S.v,'节后5日%'),box=$('hx-concl');
+  if(!n0||!n0['样本数']){box.innerHTML='<p class="note">该分组在此口径下没有走完 T+20 的完整事件。</p>';return}
+  var rows=WIN.map(function(w){return{k:w[0],l:w[1],s:stat(S.g,S.v,w[0])}}).filter(function(r){return r.s});
+  var M=0.3;rows.forEach(function(r){[r.s['均值'],r.s['中位数'],r.s['基准均值']].forEach(function(v){if(v!=null&&isFinite(v))M=Math.max(M,Math.abs(v))})});
+  var h='<div class="hx-cz-head"><b>'+esc(D.meta.index_name)+'</b> · '+n0['样本数']+' 个完整事件 · <span class="dim">'+esc(short(S.g))+' · '+esc(D.variants[S.v])+'</span></div>';
+  h+='<div class="hx-cz"><div class="hx-czb"><div class="hx-czt">收益窗口 <span class="hx-czl"><i class="lg-bar"></i>均值 <i class="lg-md"></i>中位 <i class="lg-bs"></i>基准</span></div>';
+  rows.forEach(function(r){var s=r.s,mn=s['均值'],md=s['中位数'],bs=s['基准均值'],w=s['胜率%'],p=s['p值'];
+    var div=sgn(mn)*sgn(md)<0,x0=pos(0,M),x1=pos(mn,M);
+    h+='<div class="hx-wr"><div class="hx-wl">'+esc(r.l)+(div?'<em class="hx-flag" title="均值与中位数方向相反：少数极端年份拉动均值">均值/中位背离</em>':'')+(p!=null&&p<0.05?'<em class="hx-flag sig" title="自助抽样 p&lt;0.05">显著</em>':'')+'</div>'
+      +'<div class="hx-wv '+cls(mn)+'">'+num(mn)+'%</div>'
+      +'<div class="hx-wbar"><i class="z" style="left:'+x0+'%"></i><i class="m '+cls(mn)+'" style="left:'+Math.min(x0,x1)+'%;width:'+Math.abs(x1-x0)+'%"></i>'
+      +(md!=null?'<i class="md" style="left:'+pos(md,M)+'%"></i>':'')+(bs!=null?'<i class="bs" style="left:'+pos(bs,M)+'%"></i>':'')+'</div>'
+      +'<div class="hx-wm"><span>中位 <b class="'+cls(md)+'">'+num(md)+'</b></span><span>胜率 <b class="'+winCls(w)+'">'+num(w,0,false)+'%</b></span><span>基准 <b>'+num(bs)+'</b></span>'+(p!=null?'<span>p <b>'+num(p,2,false)+'</b></span>':'')+'</div></div>'});
+  h+='</div><div class="hx-czside">';
+  var vol=stat(S.g,S.v,'节前量比'),vpost=stat(S.g,S.v,'节后量比');
+  if(vol&&vol['样本数']){var sh=vol['胜率%'],bsh=vol['基准胜率%'];
+    h+='<div class="hx-czb"><div class="hx-czt">节前量能</div><div class="hx-vol"><div class="hx-volbig"><span>节前量比中位数</span><b class="'+(vol['中位数']<1?'down':'up')+'">'+num(vol['中位数'],2,false)+'</b><small>&lt;1 = 缩量'+(vpost&&vpost['样本数']?' · 节后 '+num(vpost['中位数'],2,false):'')+'</small></div>'
+      +'<div class="hx-volbars"><div><span>缩量占比</span><div class="hx-hb"><i style="width:'+Math.max(0,Math.min(100,sh))+'%"></i></div><b>'+num(sh,0,false)+'%</b></div>'
+      +'<div><span>平时</span><div class="hx-hb base"><i style="width:'+Math.max(0,Math.min(100,bsh))+'%"></i></div><b>'+num(bsh,0,false)+'%</b></div></div></div></div>'}
+  var cols=[['节前5日%','节前5日'],['节后5日%','节后5日'],['节后10日%','节后10日']],prox=(D.meta.proxies||[]),rh='',RM=0.5;
+  prox.forEach(function(p){cols.forEach(function(c){var s=rsStat(p.code,S.g,S.v,c[0]);if(s&&s['均值']!=null)RM=Math.max(RM,Math.abs(s['均值']))})});
+  prox.forEach(function(p){var pre=rsStat(p.code,S.g,S.v,'节前5日%');if(!pre||!pre['样本数'])return;
+    var cells=cols.map(function(c){var s=rsStat(p.code,S.g,S.v,c[0]);if(!s)return'<div class="hx-rc">—</div>';var v=s['均值'],a=Math.min(1,Math.abs(v)/RM);
+      return'<div class="hx-rc" style="--a:'+Math.round(a*42)+'%;--c:var('+(v>0?'--hx-up':'--hx-down')+')"><b class="'+cls(v)+'">'+num(v)+'</b><small>跑赢 '+num(s['胜率%'],0,false)+'%</small></div>'}).join('');
+    var vd=rsVerdict(pre,rsStat(p.code,S.g,S.v,'节后5日%'));
+    rh+='<div class="hx-rr"><div class="hx-rn">'+esc(p.name)+'<small>n='+pre['样本数']+'</small></div>'+cells+'<div class="hx-rv">'+vd.map(function(x){return'<span class="hx-vchip '+x[1]+'">'+esc(x[0])+'</span>'}).join('')+'</div></div>'});
+  if(rh)h+='<div class="hx-czb"><div class="hx-czt">风险偏好 <span class="hx-czl">相对'+esc(D.meta.index_name)+' · pp · 跑赢=胜率</span></div><div class="hx-rg"><div class="hx-rr hx-rhd"><div></div>'+cols.map(function(c){return'<div>'+c[1]+'</div>'}).join('')+'</div>'+rh+'</div></div>';
+  h+='</div></div>';
+  h+='<details class="hx-plain"><summary>文字版结论</summary><ul class="hx-concl">'+lines.map(function(x){return'<li>'+esc(x)+'</li>'}).join('')+'</ul></details>';
+  box.innerHTML=h;
 }
 
 function renderMatrix(){
@@ -690,9 +1006,70 @@ function renderFoot(){
     '<p>顶部行情条与休市倒计时：生成时由 ticker_payload() 从“当前位置 / 休市日程 / 日 K”计算，默认分组 = 最近一次待到来休市所属节日。</p>'+
     '<p>重跑：<code>'+esc(m.command)+'</code><br>新增节日：在 backtest/holiday_effect.py 的 HOLIDAY_REGISTRY 追加一项 HolidaySpec。</p>';
 }
-function redrawCharts(){renderPath();renderRS();renderKline(true)}
-function render(){chips();renderTicker();renderCurrent();renderSched();renderMatrix();renderPath();renderKline(true);renderRS();renderConcl();renderStats();renderEvents()}
-renderFoot();render();
+/* ---------- 总体总结卡（digest_payload 生成，同一份数据也写成 Markdown / 导航页卡片） ---------- */
+function renderDigest(){
+  var d=D.digest;if(!d||!$('summary'))return;
+  $('hx-sumhead').textContent=d.headline||'';
+  $('hx-sumkpis').innerHTML=(d.kpis||[]).map(function(k){return'<div class="hx-skpi"><span>'+esc(k.label)+'</span><b class="'+(k.tone==='up'?'up':(k.tone==='down'?'down':''))+'">'+esc(k.value)+'</b><small>'+esc(k.sub||'')+'</small></div>'}).join('');
+  var secs=(d.sections||[]).map(function(s){return'<div class="hx-ssec"><h3>'+esc(s.title)+'</h3><ul>'+(s.items||[]).map(function(it){
+    return'<li class="t-'+esc(it.tone||'neutral')+'">'+(it.tag?'<em class="hx-stag">'+esc(it.tag)+'</em>':'')+esc(it.text)+'</li>'}).join('')+'</ul></div>'}).join('');
+  var md=d.md_path?String(d.md_path).replace(/^output\//,'/'):'';
+  $('hx-sumbody').innerHTML='<div class="hx-ssecs">'+secs+'</div><p class="note">'+(d.caveats||[]).map(esc).join(' ')+(md?' · <a href="'+esc(md)+'" target="_blank" rel="noopener">Markdown 文档</a>':'')+' · 生成 '+esc(d.generated||'')+'</p>';
+  var f=$('hx-sumfold'),key='holidaySummaryOpen',saved=null;try{saved=localStorage.getItem(key)}catch(_){}
+  if(f){f.open=location.hash==='#summary'||saved==='1';f.addEventListener('toggle',function(){try{localStorage.setItem(key,f.open?'1':'0')}catch(_){}})}
+  $('hx-sumcount').textContent=(d.sections||[]).length;
+}
+
+/* ---------- 各节日对比：节前5日 / 复牌跳空 / 节后5日 均值（胜率在提示里），点击切换分组 ---------- */
+var HOLW=[['节前5日%','节前5日','#60a5fa'],['T1跳空%','复牌跳空','#f59e0b'],['节后5日%','节后5日','#a78bfa']];
+function holCats(){return D.holidays.map(function(h){return h.name}).concat(['合并']).filter(function(g){var s=stat(g,S.v,'节后5日%');return D.groups.indexOf(g)>=0&&s&&s['样本数']})}
+function renderHol(){
+  var cats=holCats(),c=mkChart('hx-hol',function(){return cats.length},{axisPointerType:'shadow'});if(!c)return;
+  var t=tk(),nw=narrow(),ax=axisStyle(t);
+  $('hx-hol-sub').textContent=D.variants[S.v]+' · 均值 %';
+  var series=HOLW.map(function(w){return{name:w[1],type:'bar',barMaxWidth:nw?9:14,itemStyle:{color:w[2],borderRadius:nw?[0,2,2,0]:[2,2,0,0]},
+    data:cats.map(function(g){var s=stat(g,S.v,w[0]);return s?{value:s['均值'],win:s['胜率%'],med:s['中位数'],n:s['样本数']}:null}),
+    label:{show:!nw,position:'top',fontSize:9,color:t.muted,formatter:function(p){return p.value==null?'':num(p.value,1)}}}});
+  var catAx=Object.assign({type:'category',data:cats,inverse:nw},ax,{axisLabel:{color:t.text,fontSize:11,formatter:function(v){return v===S.g?'{a|'+v+'}':v},rich:{a:{color:t.accent,fontWeight:'bold',fontSize:12}}},splitLine:{show:false}});
+  var valAx=Object.assign({type:'value'},ax,{axisLabel:{color:t.muted,fontSize:10,formatter:'{value}%'}});
+  c.setOption({backgroundColor:'transparent',animation:false,grid:nw?{left:44,right:14,top:34,bottom:20}:{left:44,right:12,top:40,bottom:26},
+    legend:{top:4,textStyle:{fontSize:nw?10:11,color:t.text},itemWidth:12,itemHeight:8},
+    tooltip:Object.assign({trigger:'axis',confine:true,formatter:function(ps){var h='<b>'+esc(ps[0].axisValue)+'</b>';ps.forEach(function(p){var d=p.data||{};
+      h+='<br>'+p.marker+esc(p.seriesName)+'：'+num(d.value)+'%（中位 '+num(d.med)+'%，胜率 '+num(d.win,0,false)+'%，n='+d.n+'）'});return h}},tipStyle(t)),
+    xAxis:nw?valAx:catAx,yAxis:nw?catAx:valAx,series:series},true);
+  c.setOption(tipPatch('hx-hol','shadow'),false);
+  var zr=c.getZr();zr.off('click');zr.on('click',function(e){var pt=[e.offsetX,e.offsetY];if(!c.containPixel('grid',pt))return;
+    var v=c.convertFromPixel({seriesIndex:0},pt),i=Math.round(nw?v[1]:v[0]),g=cats[i];if(g&&g!==S.g&&D.groups.indexOf(g)>=0){S.g=g;render()}});
+}
+
+/* ---------- 今年 vs 历年：同一节日每次休市的节前5日（柱）与节后5日（点），今年用当前值 ---------- */
+function yoyGroup(){return(S.g==='全部'||S.g.indexOf('长假')===0)?(TK.group||S.g):S.g}
+function renderYoy(){
+  var g=yoyGroup(),evs=D.events.filter(function(e){return e['状态']==='完整'&&e['节前5日%']!=null&&inGroup(e,g,S.v)});
+  var cur=((D.current[g]||{})[S.v]||[]).filter(function(r){return r['项目']===D.meta.index_name&&r['指标']==='节前5日%'})[0];
+  var cats=evs.map(function(e){return String(e['年份'])+(e['类型']==='合并'?'合':'')}),pre=evs.map(function(e){return{value:e['节前5日%'],post:e['节后5日%'],label:e['年份']+e['节日']}}),post=evs.map(function(e){return e['节后5日%']});
+  var t=tk(),nw=narrow();
+  if(cur&&cur['当前值']!=null){cats.push('今年');pre.push({value:cur['当前值'],cur:true,pct:cur['历史分位%'],label:'今年（最新交易日视作 T0）',itemStyle:{color:'#ff9f1c'}});post.push(null)}
+  var c=mkChart('hx-yoy',function(){return cats.length},{axisPointerType:'shadow'});if(!c)return;
+  $('hx-yoy-title').textContent='节前5日：今年 vs 历年'+short(g);
+  $('hx-yoy-sub').textContent=D.variants[S.v]+(cur&&cur['历史分位%']!=null?' · 今年处于 '+num(cur['历史分位%'],0,false)+' 分位':'');
+  var hist=evs.map(function(e){return e['节前5日%']}).sort(function(a,b){return a-b}),mean=hist.length?hist.reduce(function(a,b){return a+b},0)/hist.length:null,med=hist.length?(hist.length%2?hist[(hist.length-1)/2]:(hist[hist.length/2-1]+hist[hist.length/2])/2):null;
+  var ax=axisStyle(t);
+  c.setOption({backgroundColor:'transparent',animation:false,grid:{left:nw?40:46,right:12,top:nw?40:40,bottom:nw?40:28},
+    legend:{top:4,textStyle:{fontSize:nw?10:11,color:t.text},itemWidth:12,itemHeight:8,data:['节前5日','节后5日']},
+    tooltip:Object.assign({trigger:'axis',confine:true,formatter:function(ps){var d=(ps[0]&&ps[0].data)||{};var h='<b>'+esc(d.label||ps[0].axisValue)+'</b><br>节前5日 '+num(d.value)+'%';
+      if(d.cur)h+='<br>历年分位 '+num(d.pct,0,false)+'%';else if(d.post!=null)h+='<br>节后5日 '+num(d.post)+'%';return h}},tipStyle(t)),
+    xAxis:Object.assign({type:'category',data:cats},ax,{axisLabel:{color:t.muted,fontSize:10,rotate:nw&&cats.length>8?45:0,interval:0},splitLine:{show:false}}),
+    yAxis:Object.assign({type:'value'},ax,{axisLabel:{color:t.muted,fontSize:10,formatter:'{value}%'}}),
+    series:[{name:'节前5日',type:'bar',barMaxWidth:18,data:pre,itemStyle:{color:function(p){return p.data&&p.data.cur?'#ff9f1c':(p.value>=0?t.up:t.down)},borderRadius:[2,2,0,0]},
+      markLine:{silent:true,symbol:'none',lineStyle:{type:'dashed',color:t.muted},label:{color:t.muted,fontSize:10,position:'insideEndTop'},
+        data:[mean!=null?{yAxis:+mean.toFixed(2),name:'均值',label:{formatter:'均值 '+num(mean)+'%'}}:null,med!=null?{yAxis:+med.toFixed(2),name:'中位',lineStyle:{type:'dotted'},label:{formatter:'中位 '+num(med)+'%',position:'insideStartTop'}}:null].filter(Boolean)}},
+      {name:'节后5日',type:'scatter',symbolSize:nw?6:8,data:post,itemStyle:{color:t.card,borderColor:t.text,borderWidth:1.5},z:5}]},true);
+  c.setOption(tipPatch('hx-yoy','shadow'),false);
+}
+function redrawCharts(){renderPath();renderRS();renderHol();renderYoy();renderKline(true)}
+function render(){chips();renderTicker();renderCurrent();renderSched();renderMatrix();renderPath();renderKline(true);renderRS();renderConcl();renderHol();renderYoy();renderStats();renderEvents()}
+renderFoot();renderDigest();render();
 function resizeAll(){Object.keys(charts).forEach(function(k){charts[k].resize()})}
 var rt;window.addEventListener('resize',function(){clearTimeout(rt);rt=setTimeout(function(){measureTicker();resizeAll();redrawCharts()},150)});
 if(window.ResizeObserver&&$('hx-kline')){var ro,rq;ro=new ResizeObserver(function(){clearTimeout(rq);rq=setTimeout(function(){if(charts['hx-kline'])charts['hx-kline'].resize()},60)});ro.observe($('hx-kline'))}
@@ -707,5 +1084,6 @@ window.addEventListener('stockapp:layout',function(){setTimeout(function(){measu
 def build_holiday_page(payload: dict) -> str:
     payload = dict(payload)
     payload.setdefault("ticker", ticker_payload(payload))
+    payload.setdefault("digest", digest_payload(payload))
     data = json.dumps(payload, ensure_ascii=False, allow_nan=False, separators=(",", ":")).replace("</", "<\\/")
     return TEMPLATE.replace("__DATA__", data)
