@@ -84,6 +84,17 @@ def save(d: dict, digest_dir: Path | None = None) -> Path:
     return out
 
 
+def prune(prefix: str, keep_ids, digest_dir: Path | None = None) -> list[str]:
+    """删除 id == prefix 或以 “prefix-” 开头、但不在 keep_ids 里的摘要（多标的回测去掉已下线的标的）。"""
+    digest_dir = Path(digest_dir or DIGEST_DIR)
+    keep, removed = set(keep_ids), []
+    for p in sorted(digest_dir.glob("*.json")):
+        if (p.stem == prefix or p.stem.startswith(prefix + "-")) and p.stem not in keep:
+            p.unlink()
+            removed.append(p.stem)
+    return removed
+
+
 def load_all(digest_dir: Path | None = None) -> list[dict]:
     digest_dir = Path(digest_dir or DIGEST_DIR)
     out = []

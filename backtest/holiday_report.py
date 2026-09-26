@@ -1,6 +1,6 @@
 """节假日效应回测页面（output/holiday_effect.html）——“专业终端风”（设计 A）。
 
-页面完全由嵌入的一份 JSON 驱动：分组（全部 / 长假 / 各节日 / 合并）、休市色带、沪深300 日 K、
+页面完全由标的 payload 驱动（默认标的内嵌，其余按 targets 清单懒加载）：分组（全部 / 长假 / 各节日 / 合并）、休市色带、主指数日 K、
 顶部行情条（分位 + 休市倒计时）都来自回测结果；注册表新增节日后重跑即可自动出现在切换条、
 热力矩阵、图表、日 K 色带、行情条和表格里。
 
@@ -154,9 +154,13 @@ def digest_payload(payload: dict) -> dict:
     idx = meta.get("index_name") or "主指数"
     g0, v0 = "全部", "all"
     S = lambda m, g=g0, v=v0: by.get((g, v, m))  # noqa: E731
-    base = {"id": "holiday_effect", "order": 50, "icon": "🏮", "title": "节假日效应 · 总体总结",
-            "page": "/holiday_effect.html", "generated": meta.get("generated"), "sample": meta.get("sample"),
-            "md_path": "output/research/holiday_effect/holiday_summary.md",
+    slug = (meta.get("target") or {}).get("slug")
+    base = {"id": f"holiday_effect-{slug}" if slug else "holiday_effect", "order": 50, "icon": "🏮",
+            "title": f"节假日效应 · {idx}" if slug else "节假日效应 · 总体总结",
+            "page": f"/holiday_effect.html?target={slug}" if slug else "/holiday_effect.html",
+            "generated": meta.get("generated"), "sample": meta.get("sample"),
+            "md_path": f"output/research/holiday_effect/{slug}/holiday_summary.md" if slug
+            else "output/research/holiday_effect/holiday_summary.md",
             "caveats": ["全部数字由本次回测自动计算（只统计已走完 T+20 的完整事件）；历史统计关联，不构成投资建议。"]}
     n0 = S("节后5日%")
     if not n0 or not n0.get("样本数"):
@@ -530,11 +534,29 @@ details.hx-fold:not([open])>summary{border-bottom:0}
 .hx-ssec li.t-up::before{background:var(--hx-up)}.hx-ssec li.t-down::before{background:var(--hx-down)}
 .hx-stag{font-style:normal;display:inline-block;margin-right:6px;font-size:10.5px;padding:0 6px;border-radius:4px;border:1px solid var(--hx-line);color:var(--hx-text);background:var(--hx-card)}
 .hx-sum .note a{color:var(--hx-blue)}
+/* ---- 标的切换 / 标的对比 ---- */
+.hx-tsel{display:inline-flex;flex:0 0 auto;border:1px solid var(--hx-line);border-radius:6px;overflow:hidden;background:var(--hx-soft)}
+.hx-tsel[hidden]{display:none}
+.hx-tsel button{border:0;background:transparent;color:var(--hx-text2);height:26px;padding:0 12px;font-size:12.5px;font-weight:650;cursor:pointer;white-space:nowrap}
+.hx-tsel button+button{border-left:1px solid var(--hx-line2)}
+.hx-tsel button.active{background:var(--hx-blue);color:var(--hx-card)}
+.hx-tsel.loading{opacity:.55;pointer-events:none}
+@media (max-width:700px){.hx-title{flex-wrap:wrap}.hx-title p{display:none}.hx-tsel{order:10;flex:1 1 100%;overflow-x:auto}.hx-tsel button{flex:1 0 auto;height:32px}}
+.hx-cmpw{overflow-x:auto;padding:10px 12px 12px}
+.hx-cmpt{display:grid;grid-template-columns:64px repeat(var(--n,2),minmax(128px,1fr));gap:6px;align-items:stretch}
+.hx-cmph{border:1px solid var(--hx-line2);background:var(--hx-soft);color:var(--hx-text2);border-radius:6px;padding:6px 4px;font-size:12.5px;font-weight:650;cursor:pointer}
+.hx-cmph.on{border-color:var(--hx-blue);color:var(--hx-blue)}
+.hx-cmpl{display:flex;align-items:center;font-size:12.5px;font-weight:600;color:var(--hx-text2)}
+.hx-cmpc{border:1px solid var(--hx-line2);border-radius:6px;padding:7px 8px;background:var(--hx-card);min-width:0}
+.hx-cmpc.on{border-color:color-mix(in srgb,var(--hx-blue) 55%,transparent);background:color-mix(in srgb,var(--hx-blue) 7%,var(--hx-card))}
+.hx-cmpc b{display:block;font-family:var(--hx-mono);font-size:16px}
+.hx-cmpc small{display:block;font-size:11px;color:var(--hx-muted);margin-top:2px;white-space:nowrap}
+.hx-cmpc em{font-style:normal;font-family:var(--hx-mono)}
 </style>
 </head>
 <body>
 <main class="hx-page">
-  <div class="hx-title"><span class="hx-logo" aria-hidden="true">节</span><h1>节假日效应回测</h1><p id="hx-sub"></p><span class="hx-live"><i></i><span id="hx-gen"></span></span></div>
+  <div class="hx-title"><span class="hx-logo" aria-hidden="true">节</span><h1>节假日效应回测</h1><div class="hx-tsel" id="hx-target" role="tablist" aria-label="标的" hidden></div><p id="hx-sub"></p><span class="hx-live"><i></i><span id="hx-gen"></span></span></div>
   <section class="hx-panel hx-sum" id="summary" aria-label="总体总结">
     <div class="hx-sumtop"><span class="hx-sumk">总体总结 · 自动生成</span><p id="hx-sumhead"></p></div>
     <div class="hx-sumkpis" id="hx-sumkpis"></div>
@@ -547,7 +569,7 @@ details.hx-fold:not([open])>summary{border-bottom:0}
   </div>
   <div class="hx-grid">
     <section class="hx-panel hx-kcard" id="hx-kcard">
-      <div class="hx-ph"><h2 id="hx-ktitle">沪深300 日 K · 休市色带</h2>
+      <div class="hx-ph"><h2 id="hx-ktitle">日 K · 休市色带</h2>
         <div class="hx-ktools"><button class="hx-btn" data-z="60">近3月</button><button class="hx-btn" data-z="120">近半年</button><button class="hx-btn" data-z="250">近1年</button><button class="hx-btn" data-z="750">近3年</button><button class="hx-btn" data-z="all">全部</button><button class="hx-btn" data-z="now" title="跳到即将到来的休市">当前</button></div></div>
       <div class="hx-ktip" id="hx-ktip"></div>
       <p class="hx-focus"><span id="hx-khint"></span> <span id="hx-focus">点击下方“事件明细”任一行，可在日 K 上定位到该次休市。</span></p>
@@ -569,6 +591,10 @@ details.hx-fold:not([open])>summary{border-bottom:0}
       <p class="note">单元格：均值（大字）/ 胜率（小字）；颜色按列内最大绝对值缩放。点击行切换分组。节日分组含带该标签的合并休市；RS = 代理指数收益 − 主指数（百分点），胜率 = 跑赢占比；量比胜率 = 缩量(&lt;1)占比。</p></section>
     <section class="hx-panel hx-wide">
       <details class="hx-fold" open><summary class="hx-ph"><h2 id="hx-concl-title">结论</h2><span class="chev">▾</span></summary><div id="hx-concl"></div></details>
+    </section>
+    <section class="hx-panel hx-wide" id="hx-cmpcard" hidden>
+      <div class="hx-ph"><h2 id="hx-cmp-title">标的对比</h2><span class="hx-sub">均值（大字）· 中位 · 胜率 · 样本数 · 点击标的名切换</span></div>
+      <div id="hx-cmp"></div>
     </section>
     <div class="hx-pair hx-wide">
       <section class="hx-panel"><div class="hx-ph"><h2>各节日对比</h2><span class="hx-sub" id="hx-hol-sub"></span></div>
@@ -599,6 +625,7 @@ details.hx-fold:not([open])>summary{border-bottom:0}
   </div>
 </main>
 <script id="holiday-data" type="application/json">__DATA__</script>
+<script id="holiday-targets" type="application/json">__TARGETS__</script>
 <script src="/vendor/echarts.min.js"></script>
 <script src="/assets/app-shell.js"></script>
 <script src="/assets/chart-touch.js"></script>
@@ -647,8 +674,6 @@ window.addEventListener('stockapp:theme',function(e){
 });
 document.addEventListener('DOMContentLoaded',function(){applyPageTheme();shellReady=true;setTimeout(function(){syncThemeLabel();measureTicker()},400)});
 
-$('hx-sub').textContent=D.meta.index_name+' · '+D.meta.sample+' · 休市 '+D.events.length+' 次 / 完整 '+D.events.filter(function(e){return e['状态']==='完整'}).length+' · 节日注册表 × 交易日历空档识别';
-$('hx-gen').textContent='生成 '+String(D.meta.generated||'').slice(5);
 
 /* ---------- 顶部行情条（ticker_payload 生成） ---------- */
 function unitOf(it){return it.vol?'':it.unit}
@@ -865,12 +890,16 @@ function renderRS(){
    Ctrl/⌘/Alt+滚轮 = 缩放，Shift+滚轮 = 平移，普通上下滚动 = 滚动页面。
    手机：轻点 = 选中该日；长按拖动 = 逐根滑看，松手后停在最后一根；双指捏合缩放（至少 20 根）、单指左右拖动平移（chart-touch.js 的 pinchZoom / panX）；上下滑动照常滚动页面。
    信息条常驻图上方：悬停/滑看时显示当前根，否则显示选中日，默认最新交易日。 */
-var K=D.kline||{d:[],o:[],h:[],l:[],c:[],v:[]},KI={};K.d.forEach(function(d,i){KI[d]=i});
-var KN=K.d.length,KLAST=KI[K.last]!=null?KI[K.last]:KN-1;
-var OHLC=K.d.map(function(_,i){return K.o[i]==null?'-':[K.o[i],K.c[i],K.l[i],K.h[i]]});
+var K,KI,KN,KLAST,OHLC,MA5,MA20,HOLMAP;
+function deriveK(){K=D.kline||{d:[],o:[],h:[],l:[],c:[],v:[]};KI={};K.d.forEach(function(d,i){KI[d]=i});
+  KN=K.d.length;KLAST=KI[K.last]!=null?KI[K.last]:KN-1;
+  OHLC=K.d.map(function(_,i){return K.o[i]==null?'-':[K.o[i],K.c[i],K.l[i],K.h[i]]});
+  MA5=ma(5);MA20=ma(20);
+  HOLMAP={};D.bands.forEach(function(b){HOLMAP[b.t0]=(HOLMAP[b.t0]||[]).concat([b.year+b.label+' T0']);HOLMAP[b.t1]=(HOLMAP[b.t1]||[]).concat([b.year+b.label+' T1'])});
+}
+function deriveAll(){TK=D.ticker||{};ex=D.meta.exclude_years||[];HCOLOR={};D.holidays.forEach(function(h,i){HCOLOR[h.name]=h.color||PAL[i%PAL.length]});HCOLOR['合并']=D.merged_color||'#14b8a6';deriveK()}
 function ma(n){var out=[],s=0;for(var i=0;i<KN;i++){var c=K.c[i];if(c==null){out.push('-');continue}s+=c;if(i>=n)s-=K.c[i-n]||0;out.push(i>=n-1&&K.c[i-n+1]!=null?+(s/n).toFixed(2):'-')}return out}
-var MA5=ma(5),MA20=ma(20);
-var HOLMAP={};D.bands.forEach(function(b){HOLMAP[b.t0]=(HOLMAP[b.t0]||[]).concat([b.year+b.label+' T0']);HOLMAP[b.t1]=(HOLMAP[b.t1]||[]).concat([b.year+b.label+' T1'])});
+deriveK();
 var kzoom=null,KSEL=null,kHover=null,kScrubIdx=null,kScrubEnd=0;
 function kDefault(){return narrow()?60:120}
 function holTag(d){if(!HOLMAP[d])return'';return'<span class="hol" style="background:'+bandColor(D.bands.filter(function(b){return b.t0===d||b.t1===d})[0])+'">'+esc(HOLMAP[d].join(' / '))+'</span>'}
@@ -999,14 +1028,14 @@ function focusEvent(t0){
 }
 
 function renderFoot(){
-  var m=D.meta;
-  $('hx-foot').innerHTML='<p>'+(m.coverage||[]).map(esc).join('<br>')+'</p>'+
+  var m=D.meta,tg=m.target||{};
+  $('hx-foot').innerHTML=(tg.name?'<p>当前标的：'+esc(tg.name)+'（'+esc(tg.code)+'）'+(tg.note?' · '+esc(tg.note):'')+'</p>':'')+'<p>'+(m.coverage||[]).map(esc).join('<br>')+'</p>'+
     ((m.notes||[]).length?'<p>未形成事件：'+m.notes.map(esc).join('；')+'</p>':'')+
     ((m.missing||[]).length?'<p>缺失指数：'+esc(m.missing.join(', '))+'</p>':'')+
     '<p>“剔除异常年”口径排除事件年份：'+esc(ex.join('、')||'无')+'（2015 股灾 / 2024 年 9 月底政策行情主导小样本均值）。</p>'+
     '<p>指标：节前 N 日 = C(T0)/C(T−N)−1；T1 跳空 = O(T1)/C(T0)−1；节后 N 日 = C(T+N)/C(T0)−1；量比 = T−5..T0 均量 ÷ T−25..T−6 均量；基准 = 全部交易日同口径分布。</p>'+
     '<p>顶部行情条与休市倒计时：生成时由 ticker_payload() 从“当前位置 / 休市日程 / 日 K”计算，默认分组 = 最近一次待到来休市所属节日。</p>'+
-    '<p>重跑：<code>'+esc(m.command)+'</code><br>新增节日：在 backtest/holiday_effect.py 的 HOLIDAY_REGISTRY 追加一项 HolidaySpec。</p>';
+    '<p>重跑：<code>'+esc(m.command)+'</code><br>新增节日：在 backtest/holiday_effect.py 的 HOLIDAY_REGISTRY 追加一项 HolidaySpec；新增标的：在 HOLIDAY_TARGETS 追加一项 HolidayTarget 后重跑。</p>';
 }
 /* ---------- 总体总结卡（digest_payload 生成，同一份数据也写成 Markdown / 导航页卡片） ---------- */
 function renderDigest(){
@@ -1018,7 +1047,7 @@ function renderDigest(){
   var md=d.md_path?String(d.md_path).replace(/^output\//,'/'):'';
   $('hx-sumbody').innerHTML='<div class="hx-ssecs">'+secs+'</div><p class="note">'+(d.caveats||[]).map(esc).join(' ')+(md?' · <a href="'+esc(md)+'" target="_blank" rel="noopener">Markdown 文档</a>':'')+' · 生成 '+esc(d.generated||'')+'</p>';
   var f=$('hx-sumfold'),key='holidaySummaryOpen',saved=null;try{saved=localStorage.getItem(key)}catch(_){}
-  if(f){f.open=location.hash==='#summary'||saved==='1';f.addEventListener('toggle',function(){try{localStorage.setItem(key,f.open?'1':'0')}catch(_){}})}
+  if(f&&!f.__hxBound){f.__hxBound=true;f.open=location.hash==='#summary'||saved==='1';f.addEventListener('toggle',function(){try{localStorage.setItem(key,f.open?'1':'0')}catch(_){}})}
   $('hx-sumcount').textContent=(d.sections||[]).length;
 }
 
@@ -1069,9 +1098,64 @@ function renderYoy(){
       {name:'节后5日',type:'scatter',symbolSize:nw?6:8,data:post,itemStyle:{color:t.card,borderColor:t.text,borderWidth:1.5},z:5}]},true);
   c.setOption(tipPatch('hx-yoy','shadow'),false);
 }
+/* ---------- 标的（backtest/holiday_effect.py 的 HOLIDAY_TARGETS）：切换 / 懒加载 / URL 同步 ---------- */
+var TG=(function(){try{return JSON.parse($('holiday-targets').textContent)}catch(_){return null}})()||{};
+if(!TG.targets||!TG.targets.length){var mt0=D.meta.target||{slug:D.meta.index||'main',code:D.meta.index,name:D.meta.index_name};TG={default:mt0.slug,targets:[mt0],compare:{},metrics:[]}}
+var TSLUG=(D.meta.target||{}).slug||TG.default,PCACHE={};PCACHE[TSLUG]=D;
+function findTarget(k){if(!k)return null;k=String(k).trim().toLowerCase();if(/\.(sh|sz)$/.test(k))k=k.slice(-2)+k.slice(0,-3);
+  return TG.targets.filter(function(t){return[t.slug,t.code,t.name].map(function(x){return String(x||'').toLowerCase()}).indexOf(k)>=0})[0]||null}
+function renderTargets(){var box=$('hx-target');if(!box)return;box.hidden=TG.targets.length<2;
+  box.innerHTML=TG.targets.map(function(t){var on=t.slug===TSLUG;return'<button type="button" role="tab" data-target="'+esc(t.slug)+'" aria-selected="'+on+'"'+(on?' class="active"':'')+' title="'+esc(t.code)+'">'+esc(t.name)+'</button>'}).join('')}
+function syncUrl(){try{var u=new URL(location.href);u.searchParams.set('target',TSLUG);history.replaceState(history.state,'',u.pathname+u.search+u.hash)}catch(_){}}
+function renderHead(){
+  $('hx-sub').textContent=D.meta.index_name+' · '+D.meta.sample+' · 休市 '+D.events.length+' 次 / 完整 '+D.events.filter(function(e){return e['状态']==='完整'}).length+' · 节日注册表 × 交易日历空档识别';
+  $('hx-gen').textContent='生成 '+String(D.meta.generated||'').slice(5);
+  document.title='节假日效应回测 · '+D.meta.index_name;
+}
+function applyTarget(P,slug){
+  var zd=kzoom&&K.d[kzoom[0]]?[K.d[kzoom[0]],K.d[kzoom[1]]]:null,sd=KSEL!=null?K.d[KSEL]:null,focus=S.focus;
+  var zb=document.querySelector('[data-z].on'),zbtn=zb?zb.getAttribute('data-z'):null;
+  D=P;TSLUG=slug;deriveAll();
+  if(D.groups.indexOf(S.g)<0)S.g=D.groups.indexOf(TK.group)>=0?TK.group:D.groups[0];
+  if(!D.variants[S.v])S.v='all';
+  kzoom=null;KSEL=null;kHover=null;kScrubIdx=null;
+  if(zd&&KI[zd[0]]!=null&&KI[zd[1]]!=null)kzoom=[KI[zd[0]],KI[zd[1]]];     // 保留同一日期区间的缩放
+  if(sd&&KI[sd]!=null)KSEL=KI[sd];                                          // 保留选中日
+  S.focus=focus&&D.bands.some(function(b){return b.t0===focus})?focus:null;
+  if(!S.focus)$('hx-focus').textContent='点击下方“事件明细”任一行，可在日 K 上定位到该次休市。';
+  renderTargets();renderHead();renderFoot();renderDigest();render();
+  if(kzoom)markZoomBtn(zbtn);
+}
+function switchTarget(slug){
+  var t=findTarget(slug);if(!t)return;
+  if(t.slug===TSLUG){syncUrl();return}
+  var box=$('hx-target'),go=function(P){applyTarget(P,t.slug);syncUrl()};
+  if(PCACHE[t.slug])return go(PCACHE[t.slug]);
+  if(box)box.classList.add('loading');
+  fetch(t.data,{cache:'no-store',credentials:'same-origin'}).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json()})
+    .then(function(P){PCACHE[t.slug]=P;go(P)})
+    .catch(function(e){$('hx-sub').textContent='加载 '+t.name+' 数据失败：'+e.message})
+    .then(function(){if(box)box.classList.remove('loading')});
+}
+document.addEventListener('click',function(e){var b=e.target.closest('[data-target]');if(b){e.preventDefault();switchTarget(b.getAttribute('data-target'))}});
+
+/* ---------- 标的对比：所选节日 × 口径下，各标的节前5日 / 复牌跳空 / 节后5日 ---------- */
+function cmpRow(slug,g,v,m){var rows=(TG.compare||{})[slug]||[];for(var i=0;i<rows.length;i++){var r=rows[i];if(r['分组']===g&&r['口径']===v&&r['指标']===m)return r}return null}
+function renderCmp(){
+  var sec=$('hx-cmpcard');if(!sec)return;
+  if(TG.targets.length<2){sec.hidden=true;return}sec.hidden=false;
+  $('hx-cmp-title').textContent='标的对比 · '+short(S.g)+' · '+D.variants[S.v];
+  var W=[['节前5日%','节前5日'],['T1跳空%','复牌跳空'],['节后5日%','节后5日']];
+  var h='<div class="hx-cmpw"><div class="hx-cmpt" style="--n:'+TG.targets.length+'"><div></div>'+TG.targets.map(function(t){return'<button type="button" class="hx-cmph'+(t.slug===TSLUG?' on':'')+'" data-target="'+esc(t.slug)+'">'+esc(t.name)+'</button>'}).join('');
+  W.forEach(function(w){h+='<div class="hx-cmpl">'+w[1]+'</div>';
+    TG.targets.forEach(function(t){var r=cmpRow(t.slug,S.g,S.v,w[0]),on=t.slug===TSLUG?' on':'';
+      h+=r&&r['样本数']?'<div class="hx-cmpc'+on+'"><b class="'+cls(r['均值'])+'">'+num(r['均值'])+'%</b><small>中位 <em class="'+cls(r['中位数'])+'">'+num(r['中位数'])+'</em> · 胜率 <em class="'+winCls(r['胜率%'])+'">'+num(r['胜率%'],0,false)+'%</em></small><small>n='+r['样本数']+'</small></div>':'<div class="hx-cmpc dim'+on+'">—</div>'})});
+  $('hx-cmp').innerHTML=h+'</div></div>';
+}
 function redrawCharts(){renderPath();renderRS();renderHol();renderYoy();renderKline(true)}
-function render(){chips();renderTicker();renderCurrent();renderSched();renderMatrix();renderPath();renderKline(true);renderRS();renderConcl();renderHol();renderYoy();renderStats();renderEvents()}
-renderFoot();renderDigest();render();
+function render(){chips();renderTicker();renderCurrent();renderSched();renderMatrix();renderPath();renderKline(true);renderRS();renderConcl();renderCmp();renderHol();renderYoy();renderStats();renderEvents()}
+renderTargets();renderHead();renderFoot();renderDigest();render();
+(function(){var q=null;try{q=new URLSearchParams(location.search).get('target')}catch(_){}if(!q)return;var t=findTarget(q);if(t)switchTarget(t.slug)})();
 function resizeAll(){Object.keys(charts).forEach(function(k){charts[k].resize()})}
 var rt;window.addEventListener('resize',function(){clearTimeout(rt);rt=setTimeout(function(){measureTicker();resizeAll();redrawCharts()},150)});
 if(window.ResizeObserver&&$('hx-kline')){var ro,rq;ro=new ResizeObserver(function(){clearTimeout(rq);rq=setTimeout(function(){if(charts['hx-kline'])charts['hx-kline'].resize()},60)});ro.observe($('hx-kline'))}
@@ -1083,9 +1167,13 @@ window.addEventListener('stockapp:layout',function(){setTimeout(function(){measu
 """
 
 
-def build_holiday_page(payload: dict) -> str:
+def _dumps(obj) -> str:
+    return json.dumps(obj, ensure_ascii=False, allow_nan=False, separators=(",", ":")).replace("</", "<\\/")
+
+
+def build_holiday_page(payload: dict, targets: dict | None = None) -> str:
+    """单一模板：内嵌默认标的的完整 payload（首屏不等网络）+ 标的清单（其余标的切换时按 data URL 懒加载）。"""
     payload = dict(payload)
     payload.setdefault("ticker", ticker_payload(payload))
     payload.setdefault("digest", digest_payload(payload))
-    data = json.dumps(payload, ensure_ascii=False, allow_nan=False, separators=(",", ":")).replace("</", "<\\/")
-    return TEMPLATE.replace("__DATA__", data)
+    return TEMPLATE.replace("__TARGETS__", _dumps(targets or {})).replace("__DATA__", _dumps(payload))

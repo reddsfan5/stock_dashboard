@@ -85,6 +85,43 @@ HOLIDAY_REGISTRY: List[HolidaySpec] = [
     # HolidaySpec("qingming", "清明", {2015: "2015-04-05", ...}),
 ]
 
+# ---------------------------------------------------------------------------
+# 标的注册表：同一页面 / 同一套计算，按标的各跑一份（新增标的 = 追加一项 + 重跑脚本）
+# ---------------------------------------------------------------------------
+DEFAULT_PROXIES: Tuple[str, ...] = ("sh000852", "sh000905", "sz399006", "sh000688")
+
+
+@dataclass(frozen=True)
+class HolidayTarget:
+    code: str                    # 指数代码（index_kline_cache 里的代码；不在其中的走低频补齐缓存）
+    name: str                    # 显示名
+    slug: str                    # URL 参数 / 输出子目录（?target=<slug> 或 ?target=<code>）
+    start: int = 2015            # 样本起始年份
+    proxies: Tuple[str, ...] = DEFAULT_PROXIES   # 风险偏好代理：RS = 代理收益 − 本标的收益（自身会被自动剔除）
+    exclude_years: Tuple[int, ...] = (2015, 2024)  # “剔除异常年”口径
+    note: str = ""               # 页面脚注里的补充说明（可空）
+
+
+HOLIDAY_TARGETS: List[HolidayTarget] = [
+    HolidayTarget("sh000300", "沪深300", "hs300"),
+    HolidayTarget("sh000001", "上证指数", "sse", note="风险偏好网格以上证指数自身为基准：中证1000/500/创业板指/科创50 − 上证指数。"),
+    # 新增示例：HolidayTarget("sh000905", "中证500", "csi500"),
+]
+
+
+def get_target(key: Optional[str], targets: Optional[Sequence[HolidayTarget]] = None) -> Optional[HolidayTarget]:
+    """按 slug / 代码 / 显示名（不区分大小写，代码可带 .SH/.SZ 后缀）查找标的。"""
+    if not key:
+        return None
+    k = str(key).strip().lower()
+    if k.endswith((".sh", ".sz")):
+        k = k[-2:] + k[:-3]            # 000001.SH → sh000001
+    for t in targets or HOLIDAY_TARGETS:
+        if k in (t.slug.lower(), t.code.lower(), t.name.lower()):
+            return t
+    return None
+
+
 MERGED = "合并"
 MERGED_COLOR = "#14b8a6"
 ALL_GROUP = "全部"

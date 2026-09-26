@@ -291,5 +291,91 @@ class HolidayEventTest(unittest.TestCase):
         self.assertEqual(json.loads(raw.replace("<\\/", "</"))["digest"]["kpis"][0]["value"], "20")
 
 
+    # ---------- 多标的（HOLIDAY_TARGETS 配置驱动） ----------
+    def test_target_registry_and_lookup(self):
+        slugs = [t.slug for t in he.HOLIDAY_TARGETS]
+        self.assertEqual(slugs[:2], ["hs300", "sse"])
+        self.assertEqual(len(set(slugs)), len(slugs))
+        self.assertEqual(len({t.code for t in he.HOLIDAY_TARGETS}), len(slugs))
+        for t in he.HOLIDAY_TARGETS:
+            self.assertEqual(t.start, 2015)
+            self.assertTrue(t.proxies)
+            self.assertNotIn(t.code, t.proxies)
+        for key in ("sse", "sh000001", "000001.SH", "上证指数", "SSE"):
+            self.assertEqual(he.get_target(key).code, "sh000001", key)
+        self.assertEqual(he.get_target("hs300").name, "沪深300")
+        self.assertIsNone(he.get_target("nope"))
+
+    def test_resolve_targets_and_overrides(self):
+        from scripts.research.holiday_effect import resolve_targets
+        self.assertEqual([t.slug for t in resolve_targets("all", None, None, None, None)],
+                         [t.slug for t in he.HOLIDAY_TARGETS])
+        ts = resolve_targets("sse,hs300", None, 2018, "sh000852", "")
+        self.assertEqual([t.slug for t in ts], ["sse", "hs300"])
+        self.assertTrue(all(t.start == 2018 and t.proxies == ("sh000852",) and t.exclude_years == () for t in ts))
+        self.assertEqual(resolve_targets("all", "sh000300", None, None, None)[0].slug, "hs300")   # 兼容 --index
+        with self.assertRaises(SystemExit):
+            resolve_targets("bogus", None, None, None, None)
+
+    def _target_payload(self, slug, code, name, shift=0.0):
+        p = self._digest_payload()
+        for r in p["summary"]:
+            r["均值"] = r["均值"] + shift
+        p["meta"] = dict(p["meta"], index=code, index_name=name, target={"code": code, "name": name, "slug": slug, "note": ""})
+        return p
+
+    def test_manifest_and_compare_rows(self):
+        from scripts.research.holiday_effect import targets_manifest
+        m = targets_manifest([self._target_payload("hs300", "sh000300", "沪深300"),
+                              self._target_payload("sse", "sh000001", "上证指数", 0.5)])
+        self.assertEqual(m["default"], "hs300")
+        self.assertEqual([t["data"] for t in m["targets"]],
+                         ["/research/holiday_effect/hs300/holiday_effect.json", "/research/holiday_effect/sse/holiday_effect.json"])
+        self.assertEqual(set(m["metrics"]), {"节前5日%", "T1跳空%", "节后5日%"})
+        for slug in ("hs300", "sse"):
+            self.assertTrue(m["compare"][slug])
+            self.assertTrue(all(r["指标"] in m["metrics"] for r in m["compare"][slug]))
+        a = [r for r in m["compare"]["hs300"] if (r["分组"], r["口径"], r["指标"]) == ("国庆", "all", "T1跳空%")][0]
+        b = [r for r in m["compare"]["sse"] if (r["分组"], r["口径"], r["指标"]) == ("国庆", "all", "T1跳空%")][0]
+        self.assertAlmostEqual(b["均值"] - a["均值"], 0.5)
+        json.dumps(m, allow_nan=False)
+
+    def test_per_target_digest_ids_and_prune(self):
+        import tempfile
+        from pathlib import Path
+        from backtest import research_digest as rd
+        from backtest.holiday_report import digest_payload
+        d = digest_payload(self._target_payload("sse", "sh000001", "上证指数"))
+        self.assertEqual(d["id"], "holiday_effect-sse")
+        self.assertEqual(d["page"], "/holiday_effect.html?target=sse")
+        self.assertIn("上证指数", d["title"])
+        self.assertIn("上证指数", d["headline"])
+        self.assertNotIn("沪深300", json.dumps(d, ensure_ascii=False))
+        with tempfile.TemporaryDirectory() as tmp:
+            dd = Path(tmp)
+            for i in ("holiday_effect", "holiday_effect-hs300", "holiday_effect-sse", "holiday_effect-old", "other"):
+                (dd / f"{i}.json").write_text("{}", encoding="utf-8")
+            removed = rd.prune("holiday_effect", ["holiday_effect-hs300", "holiday_effect-sse"], dd)
+            self.assertEqual(sorted(removed), ["holiday_effect", "holiday_effect-old"])
+            self.assertEqual(sorted(p.stem for p in dd.glob("*.json")), ["holiday_effect-hs300", "holiday_effect-sse", "other"])
+
+    def test_page_is_target_driven_with_url_param(self):
+        from backtest.holiday_report import TEMPLATE
+        from scripts.research.holiday_effect import targets_manifest
+        self.assertNotIn("沪深300", TEMPLATE)          # 模板不写死标的
+        self.assertNotIn("000300", TEMPLATE)
+        p1 = self._target_payload("hs300", "sh000300", "沪深300")
+        m = targets_manifest([p1, self._target_payload("sse", "sh000001", "上证指数")])
+        html = build_holiday_page(p1, m)
+        for needle in ('id="hx-target"', 'id="hx-cmpcard"', "function renderCmp", "function switchTarget",
+                       "function applyTarget", "URLSearchParams", "history.replaceState", "searchParams.set('target'",
+                       "function deriveAll", "fetch(t.data"):
+            self.assertIn(needle, html)
+        raw = re.search(r'<script id="holiday-targets" type="application/json">(.*?)</script>', html, re.S).group(1)
+        tg = json.loads(raw.replace("<\\/", "</"))
+        self.assertEqual([t["slug"] for t in tg["targets"]], ["hs300", "sse"])
+        # 不传清单也能渲染（单标的页面）
+        self.assertIn('<script id="holiday-targets" type="application/json">{}</script>', build_holiday_page(p1))
+
 if __name__ == "__main__":
     unittest.main()

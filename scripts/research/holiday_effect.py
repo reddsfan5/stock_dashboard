@@ -3,13 +3,15 @@
 
 用法
 ----
-$ python -m scripts.research.holiday_effect                          # 默认 2015 至今，沪深300，生成页面
-$ python -m scripts.research.holiday_effect --start 2015 --index sh000300
-$ python -m scripts.research.holiday_effect --exclude-years 2015,2024  # “剔除异常年”口径
+$ python -m scripts.research.holiday_effect                          # 注册表里全部标的（沪深300、上证指数…），生成页面
+$ python -m scripts.research.holiday_effect --targets hs300,sse       # 指定标的（slug 或代码）
+$ python -m scripts.research.holiday_effect --index sh000300          # 兼容旧用法：只跑单个主指数
+$ python -m scripts.research.holiday_effect --exclude-years 2015,2024  # 覆盖“剔除异常年”口径
 $ python -m scripts.research.holiday_effect --no-fetch                # 只用本地缓存，不联网
 $ python -m scripts.research.holiday_effect --no-html                 # 不生成页面
 
 新增节日：在 backtest/holiday_effect.py 的 HOLIDAY_REGISTRY 追加一个 HolidaySpec。
+新增标的：在 backtest/holiday_effect.py 的 HOLIDAY_TARGETS 追加一个 HolidayTarget（代码、名称、slug、起始年、代理…）。
 
 数据
 ----
@@ -22,8 +24,8 @@ $ python -m scripts.research.holiday_effect --no-html                 # 不生�
 输出
 ----
 页面：output/holiday_effect.html（http://127.0.0.1:8765/holiday_effect.html）
-明细：output/research/holiday_effect/ 下的 CSV / JSON / PNG / Markdown 报告
-总结：output/research/holiday_effect/holiday_summary.md（总体总结）+ output/research/digests/holiday_effect.json（摘要卡片数据，导航页自动收录）
+明细：output/research/holiday_effect/<slug>/ 下的 CSV / JSON（页面按需懒加载）/ PNG / Markdown 报告；targets.json = 标的清单
+总结：output/research/holiday_effect/<slug>/holiday_summary.md（每个标的一份）+ output/research/digests/holiday_effect-<slug>.json（导航页自动收录）
 """
 
 from __future__ import annotations
@@ -33,6 +35,7 @@ import json
 import subprocess
 import sys
 import time
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -54,7 +57,7 @@ DEFAULT_HTML = PROJECT_DIR / "output" / "holiday_effect.html"
 PAGE_URL = "http://127.0.0.1:8765/holiday_effect.html"
 EXTRA_NAMES = {"sh000905": "中证500", "sh000852": "中证1000"}
 NAMES = {**INDEXES, **EXTRA_NAMES}
-DEFAULT_PROXIES = "sh000852,sh000905,sz399006,sh000688"
+DEFAULT_PROXIES = ",".join(he.DEFAULT_PROXIES)
 MIN_FETCH_INTERVAL = 1.5  # 秒；与项目低频抓取约定一致，不得调低
 RS_COLS = ["节前10日%", "节前5日%", "T0当日%", "T1跳空%", "T1当日%", "节后5日%", "节后10日%", "节后20日%"]
 MATRIX_COLS = ["节前5日%", "T0当日%", "T1跳空%", "T1当日%", "节后5日%", "节后10日%", "节后20日%", "节前量比"]
@@ -110,9 +113,12 @@ def ensure_extra_indexes(codes, start_year: int, target: pd.Timestamp, fetch: bo
 
 def load_indexes(main: str, proxies, start_year: int, fetch: bool):
     base = IndexData().cache
-    if main not in set(base["代码"]):
-        raise SystemExit(f"主指数 {main} 不在 index_kline_cache 中，请先 python data/index.py --update")
-    target = base.loc[base["代码"] == main, "日期"].max()
+    if main in set(base["代码"]):
+        target = base.loc[base["代码"] == main, "日期"].max()
+    else:  # 不在日常指数目录里的标的：以日常缓存的最新交易日为终点，低频补齐到额外缓存
+        target = base["日期"].max()
+        if not fetch and main not in set(_read_extra()["代码"]):
+            raise SystemExit(f"标的 {main} 既不在 index_kline_cache 也不在额外缓存中；去掉 --no-fetch 以低频补齐")
     extra_codes = [c for c in [main] + list(proxies) if c not in set(base["代码"])]
     extra = ensure_extra_indexes(extra_codes, start_year, target, fetch)
     allc = pd.concat([base, extra], ignore_index=True) if len(extra) else base
@@ -436,7 +442,7 @@ def write_markdown(res, cur, mat, concl, meta, out_dir: Path):
     ev = res["events"]
     L = [f"# A 股节假日效应回测（{meta['index_name']}）\n",
          f"- 生成：{meta['generated']}；样本 {meta['sample']}；剔除异常年口径：{meta['exclude_years'] or '无'}",
-         f"- 页面：{PAGE_URL}", "- 数据覆盖：" + "；".join(meta["coverage"])]
+         f"- 页面：{PAGE_URL}" + (f"?target={meta['target']['slug']}" if meta.get("target") else ""), "- 数据覆盖：" + "；".join(meta["coverage"])]
     if meta["notes"]:
         L.append("- 未形成事件：" + "；".join(meta["notes"]))
     L.append("- 总体总结（自动生成）：holiday_summary.md")
@@ -528,29 +534,20 @@ def build_payload(res, cur, mat, concl, meta, exclude_years):
     }
 
 
-def main():
-    ap = argparse.ArgumentParser(description="A 股节假日效应回测（注册表驱动）")
-    ap.add_argument("--start", type=int, default=2015, help="起始年份（默认 2015）")
-    ap.add_argument("--index", default="sh000300", help="主指数代码（默认 sh000300 沪深300）")
-    ap.add_argument("--proxies", default=DEFAULT_PROXIES, help=f"风险偏好代理，逗号分隔（默认 {DEFAULT_PROXIES}）")
-    ap.add_argument("--exclude-years", default="2015,2024",
-                    help="“剔除异常年”口径要排除的事件年份，逗号分隔（默认 2015,2024；传空串关闭）")
-    ap.add_argument("--out", default=str(DEFAULT_OUT), help="CSV/报告输出目录")
-    ap.add_argument("--html", default=str(DEFAULT_HTML), help="页面输出路径")
-    ap.add_argument("--no-html", action="store_true", help="不生成页面与导航")
-    ap.add_argument("--no-nav", action="store_true", help="生成页面但不刷新导航页")
-    ap.add_argument("--no-fetch", action="store_true", help="只用本地缓存，缺的代理指数直接跳过")
-    ap.add_argument("--bootstrap", type=int, default=5000, help="自助抽样次数（0 关闭 p 值）")
-    args = ap.parse_args()
+COMPARE_METRICS = ("节前5日%", "T1跳空%", "节后5日%")
+TARGET_DATA_URL = "/research/holiday_effect/{slug}/holiday_effect.json"
 
-    exclude_years = [int(x) for x in args.exclude_years.split(",") if x.strip()]
-    proxies = [p.strip() for p in args.proxies.split(",") if p.strip() and p.strip() != args.index]
-    frames, missing = load_indexes(args.index, proxies, args.start, fetch=not args.no_fetch)
+
+def run_target(tgt: "he.HolidayTarget", out_root: Path, fetch: bool, n_boot: int) -> dict:
+    """单个标的：回测 → CSV / JSON / PNG / Markdown / 摘要，全部写到 out_root/<slug>/，返回页面 payload。"""
+    exclude_years = list(tgt.exclude_years)
+    proxies = [p for p in tgt.proxies if p != tgt.code]
+    frames, missing = load_indexes(tgt.code, proxies, tgt.start, fetch=fetch)
     proxies = [p for p in proxies if p in frames]
-    res = build(frames, args.index, proxies, args.start, exclude_years, args.bootstrap)
-    cur = current_state(res, args.index, exclude_years)
+    res = build(frames, tgt.code, proxies, tgt.start, exclude_years, n_boot)
+    cur = current_state(res, tgt.code, exclude_years)
     mat = matrix(res, exclude_years)
-    concl = conclusions(res, args.index, exclude_years)
+    concl = conclusions(res, tgt.code, exclude_years)
 
     ev = res["events"]
     upcoming = []
@@ -560,19 +557,19 @@ def main():
                          "状态": r["状态"], "距T0交易日": gap})
     meta = {
         "generated": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M"),
-        "index": args.index, "index_name": NAMES.get(args.index, args.index),
-        "sample": f"{args.start}-01-01 ~ {res['last'].date()}",
-        "last_date": res["last"].date().isoformat(), "start": args.start,
+        "index": tgt.code, "index_name": tgt.name,
+        "sample": f"{tgt.start}-01-01 ~ {res['last'].date()}",
+        "last_date": res["last"].date().isoformat(), "start": tgt.start,
         "exclude_years": exclude_years,
         "proxies": [{"code": p, "name": NAMES.get(p, p)} for p in proxies],
         "coverage": [f"{NAMES.get(c, c)} {c}: {df['日期'].min().date()} ~ {df['日期'].max().date()}"
                      for c, df in frames.items()],
         "missing": missing, "notes": res["notes"], "upcoming": upcoming,
-        "command": f"python -m scripts.research.holiday_effect --start {args.start} --index {args.index}",
+        "command": f"python -m scripts.research.holiday_effect --targets {tgt.slug}",
+        "target": {"code": tgt.code, "name": tgt.name, "slug": tgt.slug, "note": tgt.note},
     }
 
-    out_dir = Path(args.out)
-    out_dir = out_dir if out_dir.is_absolute() else PROJECT_DIR / out_dir
+    out_dir = out_root / tgt.slug
     out_dir.mkdir(parents=True, exist_ok=True)
     kw = dict(index=False, encoding="utf-8-sig", float_format="%.4f")
     ev.to_csv(out_dir / "holiday_events.csv", **kw)
@@ -585,11 +582,13 @@ def main():
     payload["ticker"] = ticker_payload(payload)
     payload["digest"] = digest_payload(payload)  # 总体总结：页面顶部卡片 + Markdown + 导航页“研究结论速览”
     digest_json = research_digest.save(payload["digest"])
-    (out_dir / "holiday_effect.json").write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    (out_dir / "holiday_effect.json").write_text(
+        json.dumps(payload, ensure_ascii=False, allow_nan=False, separators=(",", ":")), encoding="utf-8")
     plot(res, out_dir / "holiday_effect_paths.png", meta["index_name"])
     write_markdown(res, cur, mat, concl, meta, out_dir)
 
-    print(f"\n事件数：{len(ev)}（合并 {int((ev['类型'] == he.MERGED).sum())}，完整 {int((ev['状态'] == '完整').sum())}）")
+    print(f"\n[{tgt.name} {tgt.code}] 事件数：{len(ev)}（合并 {int((ev['类型'] == he.MERGED).sum())}，"
+          f"完整 {int((ev['状态'] == '完整').sum())}）")
     for g in res["groups"]:
         print(f"  {g}: {int(he.group_mask(ev, g).sum())} 个（完整 {int((he.group_mask(ev, g) & (ev['状态'] == '完整')).sum())}）")
     for n in res["notes"]:
@@ -598,12 +597,79 @@ def main():
     print(f"✓ 总体总结：{PROJECT_DIR / payload['digest']['md_path']}（卡片数据 {digest_json}）")
     if missing:
         print(f"⚠ 缺失指数：{missing}")
+    return payload
+
+
+def targets_manifest(payloads: list) -> dict:
+    """页面标的切换 + “标的对比”所需的轻量清单（完整数据按需从 data URL 懒加载）。"""
+    items, compare = [], {}
+    for p in payloads:
+        t = p["meta"]["target"]
+        items.append({**t, "data": TARGET_DATA_URL.format(slug=t["slug"]), "last_date": p["meta"].get("last_date"),
+                      "sample": p["meta"].get("sample")})
+        compare[t["slug"]] = [{k: r.get(k) for k in ("分组", "口径", "指标", "样本数", "均值", "中位数", "胜率%")}
+                              for r in p["summary"] if r.get("指标") in COMPARE_METRICS]
+    return {"default": items[0]["slug"] if items else None, "targets": items, "compare": compare,
+            "metrics": list(COMPARE_METRICS)}
+
+
+def resolve_targets(arg: str, index: str | None, start: int | None, proxies: str | None,
+                    exclude_years: str | None) -> list:
+    if index:  # 兼容旧参数：--index 指定单个标的（注册表里有就用注册表配置）
+        base = he.get_target(index) or he.HolidayTarget(index, NAMES.get(index, index), index)
+        chosen = [base]
+    elif not arg or arg == "all":
+        chosen = list(he.HOLIDAY_TARGETS)
+    else:
+        chosen = []
+        for k in arg.split(","):
+            t = he.get_target(k)
+            if t is None:
+                raise SystemExit(f"未知标的 {k}；可选：" + "、".join(f"{x.slug}({x.code})" for x in he.HOLIDAY_TARGETS))
+            chosen.append(t)
+    over = {}
+    if start is not None:
+        over["start"] = start
+    if proxies is not None:
+        over["proxies"] = tuple(p.strip() for p in proxies.split(",") if p.strip())
+    if exclude_years is not None:
+        over["exclude_years"] = tuple(int(x) for x in exclude_years.split(",") if x.strip())
+    return [replace(t, **over) for t in chosen] if over else chosen
+
+
+def main():
+    ap = argparse.ArgumentParser(description="A 股节假日效应回测（节日注册表 × 标的注册表）")
+    ap.add_argument("--targets", default="all",
+                    help="标的：all（默认，backtest/holiday_effect.py 的 HOLIDAY_TARGETS 全部）或逗号分隔的 slug/代码，如 hs300,sse")
+    ap.add_argument("--index", default=None, help="（兼容）只跑单个主指数代码，如 sh000300")
+    ap.add_argument("--start", type=int, default=None, help="覆盖所有标的的起始年份（默认用注册表，2015）")
+    ap.add_argument("--proxies", default=None, help=f"覆盖风险偏好代理，逗号分隔（默认 {DEFAULT_PROXIES}）")
+    ap.add_argument("--exclude-years", default=None,
+                    help="覆盖“剔除异常年”口径的事件年份，逗号分隔（默认 2015,2024；传空串关闭）")
+    ap.add_argument("--out", default=str(DEFAULT_OUT), help="CSV/报告输出根目录（每个标的一个子目录）")
+    ap.add_argument("--html", default=str(DEFAULT_HTML), help="页面输出路径")
+    ap.add_argument("--no-html", action="store_true", help="不生成页面与导航")
+    ap.add_argument("--no-nav", action="store_true", help="生成页面但不刷新导航页")
+    ap.add_argument("--no-fetch", action="store_true", help="只用本地缓存，缺的指数直接跳过")
+    ap.add_argument("--bootstrap", type=int, default=5000, help="自助抽样次数（0 关闭 p 值）")
+    args = ap.parse_args()
+
+    targets = resolve_targets(args.targets, args.index, args.start, args.proxies, args.exclude_years)
+    out_root = Path(args.out)
+    out_root = out_root if out_root.is_absolute() else PROJECT_DIR / out_root
+    payloads = [run_target(t, out_root, fetch=not args.no_fetch, n_boot=args.bootstrap) for t in targets]
+    manifest = targets_manifest(payloads)
+    (out_root / "targets.json").write_text(json.dumps(manifest, ensure_ascii=False, allow_nan=False), encoding="utf-8")
+    if args.targets == "all" and not args.index:  # 清掉已不在注册表里的标的摘要（含旧版单标的 holiday_effect.json）
+        removed = research_digest.prune("holiday_effect", [p["digest"]["id"] for p in payloads])
+        for r in removed:
+            print(f"  · 移除过期摘要 {r}")
 
     if not args.no_html:
         html_path = Path(args.html)
         html_path = html_path if html_path.is_absolute() else PROJECT_DIR / html_path
-        html_path.write_text(build_holiday_page(payload), encoding="utf-8")
-        print(f"✓ 页面：{html_path} → {PAGE_URL}")
+        html_path.write_text(build_holiday_page(payloads[0], manifest), encoding="utf-8")
+        print(f"✓ 页面：{html_path} → {PAGE_URL}（标的：" + "、".join(t.name for t in targets) + "）")
         if not args.no_nav:
             for module in ("scripts.reports.gen_index", "scripts.reports.gen_mobile"):
                 subprocess.run([sys.executable, "-m", module], cwd=PROJECT_DIR, check=False)
