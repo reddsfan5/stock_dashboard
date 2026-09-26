@@ -860,7 +860,9 @@ function renderRS(){
 }
 
 /* ---------- 主指数日 K：逐根查看 ----------
-   桌面：悬停 = 十字光标 + 浮层 + 信息条；点击 = 选中该日（黄色竖线），←/→ 逐日移动（超出视窗自动平移）；滚轮缩放、拖动平移、底部滑块。
+   桌面：悬停 = 十字光标 + 浮层 + 信息条；点击 = 选中该日（黄色竖线），←/→ 逐日移动（超出视窗自动平移）；拖动平移、底部滑块。
+   触控板 / 滚轮（chart-touch.js trackpad:true，ECharts 自带滚轮缩放关闭）：双指左右 = 平移，捏合(ctrl+wheel / Safari gesture) = 以光标为中心缩放，
+   Ctrl/⌘/Alt+滚轮 = 缩放，Shift+滚轮 = 平移，普通上下滚动 = 滚动页面。
    手机：轻点 = 选中该日；长按拖动 = 逐根滑看，松手后停在最后一根；双指捏合缩放（至少 20 根）、单指左右拖动平移（chart-touch.js 的 pinchZoom / panX）；上下滑动照常滚动页面。
    信息条常驻图上方：悬停/滑看时显示当前根，否则显示选中日，默认最新交易日。 */
 var K=D.kline||{d:[],o:[],h:[],l:[],c:[],v:[]},KI={};K.d.forEach(function(d,i){KI[d]=i});
@@ -924,7 +926,7 @@ function kIndexAt(c,x,y){
   var p=c.convertFromPixel({gridIndex:0},[x,y]);var i=p&&Math.round(p[0]);return(i==null||!isFinite(i))?null:i;
 }
 function renderKline(keepZoom){
-  var c=mkChart('hx-kline',function(){return KN},{axisPointerType:'cross',showEchartsTipContent:false,pinchZoom:true,panX:true,minSpan:20,
+  var c=mkChart('hx-kline',function(){return KN},{axisPointerType:'cross',showEchartsTipContent:false,pinchZoom:true,panX:true,trackpad:true,minSpan:20,
     onGestureEnd:function(){kScrubEnd=Date.now();markZoomBtn(null)},
     onIndex:function(i){kScrubIdx=i;ktip(i,'scrub')},
     onExit:function(){kScrubEnd=Date.now();if(kScrubIdx!=null){var i=kScrubIdx;kScrubIdx=null;selectK(i)}else ktip(null)}});
@@ -935,14 +937,14 @@ function renderKline(keepZoom){
   var legend=D.holidays.map(function(h){return'<span><i style="background:'+HCOLOR[h.name]+'"></i>'+esc(h.name)+'</span>'}).join('')+'<span><i style="background:'+HCOLOR['合并']+'"></i>合并休市</span><span><i style="background:rgba(245,158,11,.4)"></i>选中事件 T-10~T+20</span><span><i style="background:#facc15;width:3px"></i>选中日</span>';
   $('hx-kleg').innerHTML=legend;
   $('hx-ktitle').textContent=D.meta.index_name+' 日K · '+short(S.g)+'休市色带（'+visibleBands().length+'）';
-  $('hx-khint').textContent=co?'轻点选中一根 K 线；长按后左右拖动逐根查看，松手停在该日；双指捏合缩放、单指左右拖动平移；上下滑动照常滚动页面。':'悬停逐根查看 · 点击选中后用 ← / → 逐日移动 · 滚轮缩放、按住拖动平移、底部滑块调范围。';
+  $('hx-khint').textContent=co?'轻点选中一根 K 线；长按后左右拖动逐根查看，松手停在该日；双指捏合缩放、单指左右拖动平移；上下滑动照常滚动页面。':'悬停逐根查看 · 点击选中后用 ← / → 逐日移动 · 触控板：双指左右平移、捏合缩放（上下滑动照常滚页）· 鼠标：按住拖动平移，Ctrl/⌘/Alt+滚轮缩放，Shift+滚轮平移 · 底部滑块调范围。';
   c.setOption({backgroundColor:'transparent',animation:false,
     axisPointer:{link:[{xAxisIndex:'all'}],label:{show:false},lineStyle:{color:t.muted}},
     grid:[{left:nw?44:56,right:nw?8:14,top:12,height:nw?'62%':'65%'},{left:nw?44:56,right:nw?8:14,top:nw?'74%':'77%',height:nw?'12%':'12%'}],
     xAxis:[Object.assign({type:'category',data:K.d,gridIndex:0,boundaryGap:true},ax,{axisLabel:{show:false},splitLine:{show:false}}),
            Object.assign({type:'category',data:K.d,gridIndex:1,boundaryGap:true},ax,{axisLabel:{color:t.muted,fontSize:10,formatter:function(v){return kSpan()<=160?v.slice(5):v.slice(0,7)}},splitLine:{show:false}})],
     yAxis:[Object.assign({scale:true,gridIndex:0,splitNumber:4,position:'left'},ax),Object.assign({gridIndex:1,splitNumber:2},ax,{axisLabel:{color:t.muted,fontSize:9,formatter:function(v){return(v/1e4).toFixed(1)+'亿'}}})],
-    dataZoom:[{type:'inside',xAxisIndex:[0,1],startValue:kzoom[0],endValue:kzoom[1],disabled:co,minValueSpan:20,zoomOnMouseWheel:true,moveOnMouseMove:true,moveOnMouseWheel:false},
+    dataZoom:[{type:'inside',xAxisIndex:[0,1],startValue:kzoom[0],endValue:kzoom[1],disabled:co,minValueSpan:20,zoomOnMouseWheel:false,moveOnMouseMove:true,moveOnMouseWheel:false},
               {type:'slider',xAxisIndex:[0,1],startValue:kzoom[0],endValue:kzoom[1],bottom:4,height:nw?18:18,showDetail:false,borderColor:t.line,backgroundColor:'transparent',fillerColor:t.dark?'rgba(96,165,250,.16)':'rgba(37,99,235,.10)',handleStyle:{color:t.soft,borderColor:t.muted},moveHandleStyle:{color:t.line},dataBackground:{lineStyle:{color:t.muted,opacity:.5},areaStyle:{color:t.muted,opacity:.12}},textStyle:{color:t.muted},minValueSpan:20}],
     series:[
       {id:'k',name:'日K',type:'candlestick',data:OHLC,xAxisIndex:0,yAxisIndex:0,barMaxWidth:14,itemStyle:{color:t.up,color0:t.down,borderColor:t.up,borderColor0:t.down},

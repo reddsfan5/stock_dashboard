@@ -183,7 +183,7 @@ class HolidayEventTest(unittest.TestCase):
         # 日 K 逐根查看：信息条 + 点击选中 + 方向键；手机双指缩放 / 横向平移走共享 chart-touch.js（显式开启）
         html = build_holiday_page({"meta": {}, "groups": ["全部"]})
         for needle in ('id="hx-ktip"', "selectK(", "ArrowLeft", 'tabindex="0"', "pinchZoom:true", "panX:true",
-                       "minSpan:20", 'data-z="120"'):
+                       "minSpan:20", 'data-z="120"', "trackpad:true", "zoomOnMouseWheel:false", "触控板：双指左右平移、捏合缩放"):
             self.assertIn(needle, html)
 
     def test_chart_touch_never_puts_cross_on_top_level_axis_pointer(self):
@@ -193,6 +193,10 @@ class HolidayEventTest(unittest.TestCase):
         self.assertIn("axisPointerType === 'cross' ? 'line' : axisPointerType", js)
         self.assertIn("pinchZoom", js)
         self.assertIn("panX", js)
+        # 桌面触控板：横向 deltaX 平移、ctrl+wheel / Safari gesture 捏合缩放、纵向交给页面滚动，按手势锁轴
+        for needle in ("trackpad", "e.ctrlKey || e.metaKey || e.altKey", "gesturechange", "WHEEL_IDLE = 150",
+                       "lock === 'y'", "addEventListener('wheel', onWheel, { passive: false, capture: true })"):
+            self.assertIn(needle, js)
 
     # ---------- 总体总结 digest / 结论可视化 ----------
     @staticmethod

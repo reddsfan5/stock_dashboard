@@ -13,6 +13,13 @@
  *   minSpan: 20       smallest visible bar count when zooming (max = full range)
  *   onGestureEnd(type) called after a pinch / pan ends ('pinch' | 'pan'), e.g. to ignore the
  *                     synthetic click that may follow
+ *   trackpad: true    desktop wheel / trackpad gestures (turn OFF the inside dataZoom's
+ *                     zoomOnMouseWheel / moveOnMouseWheel so ECharts doesn't also react):
+ *                       - horizontal two-finger swipe (|deltaX| dominant, or Shift+wheel) pans
+ *                       - pinch (wheel + ctrlKey; Safari gesturestart/change) zooms around the cursor
+ *                       - Ctrl / ⌘ / Alt + wheel zooms around the cursor (mouse users)
+ *                       - plain vertical wheel / swipe is left alone, so the page scrolls
+ *                     Axis is locked per gesture; the lock resets after 150 ms without wheel events.
  * Works on ECharts category x-axes by dispatching { type: 'dataZoom', start, end } (percent),
  * so every dataZoom bound to that axis (inside + slider) stays in sync.
  */
@@ -384,6 +391,99 @@
       if (pinchOn) el.addEventListener('gesturestart', onIosGesture, { passive: false }); // iOS Safari 原生缩放手势
     }
 
+    /* ---- 可选：桌面触控板 / 滚轮手势 ---- */
+    var padOn = !!options.trackpad, WHEEL_IDLE = 150;
+    var wheel = null, wheelTimer = null, wheelRaf = 0, safariPinch = null;
+    function wheelFlush() {
+      wheelRaf = 0;
+      if (wheel && wheel.target) applyWindow(wheel.st, wheel.target[0], wheel.target[1]);
+    }
+    function wheelQueue(a, b) {
+      var full = wheel.st.n - 1, span = Math.max(Math.min(b - a, full), Math.min(minSpan, full));
+      if (a < 0) a = 0;
+      if (a + span > full) a = full - span;
+      wheel.target = [a, a + span];
+      if (!wheelRaf) wheelRaf = (global.requestAnimationFrame || function (f) { return setTimeout(f, 16); })(wheelFlush);
+    }
+    function wheelEnd() {
+      wheelTimer = null;
+      var type = wheel && wheel.lock;
+      wheel = null;
+      if ((type === 'x' || type === 'zoom') && onGestureEnd) {
+        try { onGestureEnd(type === 'x' ? 'wheel-pan' : 'wheel-zoom'); } catch (err) {}
+      }
+    }
+    function cursorAnchor(st, clientX, a, b) {
+      var cx = clientX - el.getBoundingClientRect().left, anchor = null;
+      try { var v = st.chart.convertFromPixel({ xAxisIndex: 0 }, cx); if (typeof v === 'number') anchor = v; } catch (err) {}
+      if (anchor == null) anchor = (a + b) / 2;
+      return Math.max(a, Math.min(b, anchor));
+    }
+    function zoomAround(anchor, factor) {
+      var w = wheel.target || [wheel.st.s, wheel.st.e], span0 = w[1] - w[0];
+      var span = Math.max(Math.min(minSpan, wheel.st.n - 1), Math.min(wheel.st.n - 1, span0 * factor));
+      var frac = (anchor - w[0]) / Math.max(1e-6, span0);
+      wheelQueue(anchor - frac * span, anchor - frac * span + span);
+    }
+    function onWheel(e) {
+      if (active) return;
+      // ECharts 5 的 inside dataZoom 不论 zoomOnMouseWheel 设置如何都会在 wheel 上 preventDefault + stopPropagation，
+      // 这里在捕获阶段截住，滚轮手势完全由本模块决定（纵向不 preventDefault → 浏览器正常滚动页面）。
+      e.stopPropagation();
+      var zoomKey = e.ctrlKey || e.metaKey || e.altKey;
+      var dx = e.deltaX || 0, dy = e.deltaY || 0;
+      if (e.deltaMode === 1) { dx *= 16; dy *= 16; } else if (e.deltaMode === 2) { dx *= el.clientWidth; dy *= el.clientHeight; }
+      if (e.shiftKey && !dx) { dx = dy; dy = 0; }            // Shift + 滚轮 = 横向
+      if (wheel && wheel.lock === 'zoom' && !zoomKey) { clearTimeout(wheelTimer); wheelEnd(); }
+      if (!wheel) {
+        var lock = zoomKey ? 'zoom' : (Math.abs(dx) > Math.abs(dy) ? 'x' : 'y');
+        var st = lock === 'y' ? null : zoomState();
+        if (lock !== 'y' && !st) return;
+        wheel = { lock: lock, st: st, target: null };
+      }
+      clearTimeout(wheelTimer);
+      wheelTimer = setTimeout(wheelEnd, WHEEL_IDLE);
+      if (wheel.lock === 'y') return;                          // 纵向：交给浏览器滚动页面
+      e.preventDefault();                                      // 横向 / 缩放：不滚页面、不触发浏览器前进后退或页面缩放
+      if (safariPinch) return;
+      var w = wheel.target || [wheel.st.s, wheel.st.e];
+      if (wheel.lock === 'x') {
+        var px = wheel.st.px * (wheel.st.e - wheel.st.s) / Math.max(1e-6, w[1] - w[0]);
+        var bars = dx / px;
+        wheelQueue(w[0] + bars, w[1] + bars);
+      } else {
+        zoomAround(cursorAnchor(wheel.st, e.clientX, w[0], w[1]), Math.exp(Math.max(-25, Math.min(25, dy)) * 0.01));
+      }
+    }
+    function onSafariGestureStart(e) {
+      var st = zoomState(); if (!st) return;
+      e.preventDefault();
+      clearTimeout(wheelTimer);
+      wheel = { lock: 'zoom', st: st, target: null };
+      safariPinch = { span: st.e - st.s, anchor: cursorAnchor(st, e.clientX, st.s, st.e), s: st.s };
+    }
+    function onSafariGestureChange(e) {
+      if (!safariPinch || !wheel) return;
+      e.preventDefault();
+      var g = safariPinch, span = g.span / Math.max(0.05, e.scale || 1);
+      span = Math.max(Math.min(minSpan, wheel.st.n - 1), Math.min(wheel.st.n - 1, span));
+      var frac = (g.anchor - g.s) / Math.max(1e-6, g.span);
+      wheelQueue(g.anchor - frac * span, g.anchor - frac * span + span);
+    }
+    function onSafariGestureEnd(e) {
+      if (!safariPinch) return;
+      e.preventDefault();
+      safariPinch = null;
+      clearTimeout(wheelTimer);
+      wheelTimer = setTimeout(wheelEnd, WHEEL_IDLE);
+    }
+    if (padOn) {
+      el.addEventListener('wheel', onWheel, { passive: false, capture: true }); // 捕获阶段：先于 ECharts/zrender 内部处理
+      el.addEventListener('gesturestart', onSafariGestureStart, { passive: false });
+      el.addEventListener('gesturechange', onSafariGestureChange, { passive: false });
+      el.addEventListener('gestureend', onSafariGestureEnd, { passive: false });
+    }
+
     el.addEventListener('touchstart', onTouchStart, { passive: true });
     el.addEventListener('touchmove', onTouchMoveCancel, { passive: true });
     el.addEventListener('touchend', onTouchEnd, { passive: true });
@@ -405,6 +505,11 @@
         el.removeEventListener('touchend', onGestureEndEvt);
         el.removeEventListener('touchcancel', onGestureEndEvt);
         el.removeEventListener('gesturestart', onIosGesture);
+        el.removeEventListener('wheel', onWheel, true);
+        el.removeEventListener('gesturestart', onSafariGestureStart);
+        el.removeEventListener('gesturechange', onSafariGestureChange);
+        el.removeEventListener('gestureend', onSafariGestureEnd);
+        clearTimeout(wheelTimer);
         el.classList.remove(HOST_CLASS, SCRUB_CLASS);
         delete el.dataset[BOUND_KEY];
         el._chartTouchController = null;
