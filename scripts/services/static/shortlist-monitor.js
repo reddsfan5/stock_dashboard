@@ -57,7 +57,7 @@
     node.textContent = message;
   }
   function statusLabel(status) {
-    return {complete: '已完成', partial: '观察中', pending: '等待入场', unavailable: '无数据'}[status] || status || '—';
+    return {complete: '已完成', partial: '观察中', pending: '等待入场', awaiting_sell: '等待可卖日', blocked: '无法买入', unavailable: '无数据'}[status] || status || '—';
   }
   function fromUrl() {
     for (const [key, id] of [['from', 'fromDate'], ['to', 'toDate'], ['rank_max', 'rankMax'], ['sector', 'sector'], ['status', 'status']]) {
@@ -105,9 +105,13 @@
     $('peakMedian').className = 'monitor-lead-value ' + tone(summary.peak_median_pct);
     $('closeMedian').textContent = percentage(summary.close_median_pct);
     $('closeMedian').className = tone(summary.close_median_pct);
+    $('peakNote').textContent = horizon === 1
+      ? '1 日窗口只有买入当天，T+1 不能卖出，没有理论峰值；请看窗口收盘。'
+      : '峰值从买入次日（T+1 可卖）起算；同时看收盘结果，避免把最高价当作可直接兑现的收益。';
+    const extra = [summary.awaiting_sell ? `${summary.awaiting_sell} 等待可卖日` : '', summary.blocked ? `${summary.blocked} 无法买入` : ''].filter(Boolean).join(' · ');
     $('metrics').innerHTML = [
-      metric('样本 / 完成度', `${summary.count || 0} 只`, `${summary.completed || 0} 完成 · ${summary.partial || 0} 观察中 · ${summary.pending || 0} 待入场`),
-      metric('峰值 ≥ 5%', rate(summary.peak_hit_5pct_rate_pct), '仅已出现价格的样本'),
+      metric('样本 / 完成度', `${summary.count || 0} 只`, `${summary.completed || 0} 完成 · ${summary.partial || 0} 观察中 · ${summary.pending || 0} 待入场` + (extra ? ' · ' + extra : '')),
+      metric('峰值 ≥ 5%', rate(summary.peak_hit_5pct_rate_pct), horizon === 1 ? '1 日窗口无可卖日' : `${summary.peak_samples || 0} 个可卖样本；开盘涨停无法买入的不计`),
       metric('已观察收盘为正', rate(summary.close_positive_rate_pct), '观察中数据并非窗口最终结果'),
       metric('最大不利 · 中位', percentage(summary.adverse_median_pct), '窗口内最低价', tone(summary.adverse_median_pct)),
       metric('沪深300收盘 · 中位', percentage(summary.benchmark_close_median_pct), '同期指数表现', tone(summary.benchmark_close_median_pct)),
@@ -117,7 +121,7 @@
   function renderCohorts(cohorts) {
     $('cohortCount').textContent = cohorts.length + ' 个批次';
     $('cohortBody').innerHTML = cohorts.map(row => `<tr class="${selectedBatch() === row.market_date ? 'is-selected-batch' : ''}">
-      <td data-label="精选日期"><button type="button" class="monitor-batch-link" data-batch="${escapeHtml(row.market_date)}" aria-label="查看 ${escapeHtml(row.market_date)} 批次">${escapeHtml(row.market_date)}</button><small>${row.partial || 0} 只观察中 · ${row.pending || 0} 只待入场</small><a class="monitor-batch-return" href="${dateLink(row.market_date)}">当日精选 ↗</a></td>
+      <td data-label="精选日期"><button type="button" class="monitor-batch-link" data-batch="${escapeHtml(row.market_date)}" aria-label="查看 ${escapeHtml(row.market_date)} 批次">${escapeHtml(row.market_date)}</button><small>${row.partial || 0} 只观察中 · ${row.pending || 0} 只待入场${row.blocked ? ` · ${row.blocked} 只无法买入` : ''}</small><a class="monitor-batch-return" href="${dateLink(row.market_date)}">当日精选 ↗</a></td>
       ${valueCell('样本 / 已完成', `${row.count || 0} / ${row.completed || 0}`)}
       ${valueCell('峰值中位', percentage(row.peak_median_pct), tone(row.peak_median_pct))}
       ${valueCell('+5% 命中', rate(row.peak_hit_5pct_rate_pct))}
@@ -133,7 +137,7 @@
       <td data-label="标的 / 精选日期"><a href="/symbol.html?code=${encodeURIComponent(row.code)}">${escapeHtml(row.name || row.code)}</a><small>${escapeHtml(row.code)} · 排名 ${escapeHtml(row.rank)}</small><div class="monitor-date-sub"><a href="${dateLink(row.market_date)}">${escapeHtml(row.market_date)} 每日精选</a></div></td>
       <td data-label="板块">${escapeHtml(row.sector || '—')}</td>
       <td data-label="状态"><span class="monitor-status ${escapeHtml(row.status)}">${escapeHtml(statusLabel(row.status))}</span></td>
-      <td data-label="入场价 / 日期">${escapeHtml(money(row.entry_open))}<small>${escapeHtml(row.entry_date || '尚未入场')}</small></td>
+      <td data-label="入场价 / 日期">${escapeHtml(money(row.entry_open))}<small>${escapeHtml(row.entry_date || '尚未入场')}</small>${row.entry_note ? `<small class="monitor-entry-note">${escapeHtml(row.entry_note)}</small>` : ''}</td>
       ${valueCell('理论峰值', percentage(row.peak_return_pct), tone(row.peak_return_pct))}
       ${valueCell('窗口收盘', percentage(row.close_return_pct), tone(row.close_return_pct))}
       ${valueCell('最大不利', percentage(row.adverse_return_pct), tone(row.adverse_return_pct))}

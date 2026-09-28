@@ -90,7 +90,7 @@
           node.querySelector(".outcome-placeholder").textContent = "尚未生成结果";
           return;
         }
-        var status = {complete:"已完成", partial:"观察中", pending:"等待入场", unavailable:"无数据"}[item.status] || item.status;
+        var status = {complete:"已完成", partial:"观察中", pending:"等待入场", awaiting_sell:"等待可卖日", blocked:"无法买入", unavailable:"无数据"}[item.status] || item.status;
         var tone = Number(item.peak_return_pct) > 0 ? " is-up" : Number(item.peak_return_pct) < 0 ? " is-down" : "";
         node.innerHTML = "<span class='outcome-label'>5日收益监控</span>" +
           "<strong class='outcome-peak" + tone + "'>峰值 " + escapeHtml(formatPct(item.peak_return_pct)) + "</strong>" +

@@ -79,7 +79,10 @@ class ShortlistMonitorTest(unittest.TestCase):
         self.assertEqual(row["entry_date"], "2026-09-05")
         self.assertEqual(row["entry_open"], 101.0)
         self.assertAlmostEqual(row["peak_high"], 108.0)
+        self.assertEqual(row["peak_high_date"], "2026-09-08")
         self.assertAlmostEqual(row["peak_return_pct"], (108 / 101 - 1) * 100)
+        # 基准峰值同样从买入次日起算
+        self.assertAlmostEqual(row["benchmark_peak_return_pct"], (1020 / 1001 - 1) * 100)
         self.assertAlmostEqual(row["close_value"], 106.0)
         self.assertAlmostEqual(row["adverse_return_pct"], (99 / 101 - 1) * 100)
         self.assertAlmostEqual(row["benchmark_close_return_pct"], (1010 / 1001 - 1) * 100)
@@ -95,10 +98,56 @@ class ShortlistMonitorTest(unittest.TestCase):
         self.assertIsNone(pending["peak_return_pct"])
 
         service.refresh(as_of="2026-09-05")
+        awaiting = service.query(horizon=5, limit=10)["items"][0]
+        self.assertEqual(awaiting["status"], "awaiting_sell")
+        self.assertIsNone(awaiting["peak_return_pct"])
+        self.assertIsNotNone(awaiting["close_return_pct"])
+        self.assertEqual(awaiting["available_through"], "2026-09-05")
+
+        service.refresh(as_of="2026-09-08")
         partial = service.query(horizon=5, limit=10)["items"][0]
         self.assertEqual(partial["status"], "partial")
-        self.assertIsNotNone(partial["peak_return_pct"])
-        self.assertEqual(partial["available_through"], "2026-09-05")
+        self.assertAlmostEqual(partial["peak_return_pct"], (108 / 101 - 1) * 100)
+
+    def test_buy_day_high_is_not_a_sellable_peak(self):
+        service = ShortlistMonitorService(repository=ShortlistMonitorRepository(self.db))
+        service.refresh(as_of="2026-09-09")
+        one_day = service.query(horizon=1, limit=10)
+        self.assertIsNone(one_day["items"][0]["peak_return_pct"])
+        self.assertIsNone(one_day["summary"]["peak_median_pct"])
+        self.assertAlmostEqual(one_day["items"][0]["close_return_pct"], (103 / 101 - 1) * 100)
+        self.assertAlmostEqual(one_day["items"][0]["adverse_return_pct"], (99 / 101 - 1) * 100)
+
+    def test_limit_up_entry_is_blocked_and_excluded_from_summary(self):
+        _bars("sh600000", [
+            ("2026-09-04", 100, 100, 98, 100),
+            ("2026-09-05", 110, 110, 110, 110),
+            ("2026-09-08", 111, 115, 108, 112),
+            ("2026-09-09", 112, 116, 109, 113),
+        ]).to_parquet(self.stock, index=False)
+        service = ShortlistMonitorService(repository=ShortlistMonitorRepository(self.db))
+        service.refresh(as_of="2026-09-09")
+        data = service.query(horizon=3, limit=10)
+        row = data["items"][0]
+        self.assertEqual(row["status"], "blocked")
+        self.assertIn("一字涨停", row["entry_note"])
+        self.assertIsNone(row["peak_return_pct"])
+        self.assertEqual(data["summary"]["blocked"], 1)
+        self.assertEqual(data["summary"]["peak_samples"], 0)
+        self.assertIsNone(data["summary"]["peak_median_pct"])
+        self.assertEqual(service.query(horizon=3, status="blocked")["total"], 1)
+
+    def test_stale_source_version_is_recomputed(self):
+        repository = ShortlistMonitorRepository(self.db)
+        service = ShortlistMonitorService(repository=repository)
+        service.refresh(as_of="2026-09-09")
+        with repository._connect() as connection:
+            connection.execute("UPDATE shortlist_outcome SET source_version='daily-bars-v1', peak_return_pct=99")
+            connection.commit()
+        result = service.refresh()
+        self.assertEqual(result["refreshed_dates"], 1)
+        row = service.query(horizon=3, limit=1)["items"][0]
+        self.assertAlmostEqual(row["peak_return_pct"], (108 / 101 - 1) * 100)
 
     def test_filters_pagination_and_idempotent_refresh(self):
         service = ShortlistMonitorService(repository=ShortlistMonitorRepository(self.db))

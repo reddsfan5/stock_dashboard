@@ -6,9 +6,9 @@
   <title>每日精选收益监控 · 量化工作台</title>
   <link rel="stylesheet" href="/assets/app.css">
   <link rel="stylesheet" href="/assets/workbench.css">
-  <link rel="stylesheet" href="/assets/shortlist-monitor.css?v=3">
+  <link rel="stylesheet" href="/assets/shortlist-monitor.css?v=4">
   <script defer src="/assets/app-shell.js"></script>
-  <script defer src="/assets/shortlist-monitor.js?v=4"></script>
+  <script defer src="/assets/shortlist-monitor.js?v=5"></script>
 </head>
 <body>
   <div id="app-shell" data-active="shortlist"></div>
@@ -39,7 +39,7 @@
         <button type="button" data-horizon="1">1 日</button><button type="button" data-horizon="3">3 日</button><button type="button" data-horizon="5" class="is-active">5 日</button><button type="button" data-horizon="10">10 日</button><button type="button" data-horizon="20">20 日</button>
       </div>
       <div class="monitor-fields">
-        <label>从 <input id="fromDate" type="date"></label><label>到 <input id="toDate" type="date"></label><label>前 N 名 <input id="rankMax" type="number" min="1" placeholder="全部"></label><label>板块 <select id="sector"><option value="">全部板块</option></select></label><label>状态 <select id="status"><option value="">全部状态</option><option value="complete">已完成</option><option value="partial">观察中</option><option value="pending">等待入场</option><option value="unavailable">无数据</option></select></label>
+        <label>从 <input id="fromDate" type="date"></label><label>到 <input id="toDate" type="date"></label><label>前 N 名 <input id="rankMax" type="number" min="1" placeholder="全部"></label><label>板块 <select id="sector"><option value="">全部板块</option></select></label><label>状态 <select id="status"><option value="">全部状态</option><option value="complete">已完成</option><option value="partial">观察中</option><option value="pending">等待入场</option><option value="awaiting_sell">等待可卖日</option><option value="blocked">无法买入</option><option value="unavailable">无数据</option></select></label>
         <button type="button" class="monitor-reset" id="resetFilters">查看全部批次</button>
       </div>
     </section>
@@ -47,8 +47,8 @@
 
     <section class="monitor-overview" aria-label="收益总览">
       <article class="monitor-lead">
-        <div class="monitor-lead-label">理论峰值 · 中位数 <span title="次日开盘至窗口内最高价；只表示出现过的价格空间">ⓘ</span></div><strong id="peakMedian" class="monitor-lead-value">—</strong>
-        <div class="monitor-lead-baseline"><span>窗口末收盘中位</span><b id="closeMedian">—</b></div><p>同时看收盘结果，避免把最高价当作可直接兑现的收益。</p>
+        <div class="monitor-lead-label">理论峰值 · 中位数 <span title="以入选次日（买入日）开盘价为成本；A 股 T+1，峰值取买入次日至窗口末的最高价，不含买入当天；只表示出现过的价格空间">ⓘ</span></div><strong id="peakMedian" class="monitor-lead-value">—</strong>
+        <div class="monitor-lead-baseline"><span>窗口末收盘中位</span><b id="closeMedian">—</b></div><p id="peakNote">峰值从买入次日（T+1 可卖）起算；同时看收盘结果，避免把最高价当作可直接兑现的收益。</p>
       </article>
       <div class="monitor-metrics" id="metrics"></div>
     </section>
@@ -59,11 +59,11 @@
     </section>
 
     <section class="monitor-section" aria-labelledby="itemsTitle">
-      <div class="monitor-section-head"><div><p class="monitor-kicker">02 / CANDIDATE DETAILS</p><h2 id="itemsTitle">候选明细</h2><p>峰值、收盘和最大不利波动均以入选后的首个交易日开盘价为基准。</p></div><div class="monitor-detail-actions"><label>排序 <select id="sort"><option value="rank">排名优先</option><option value="peak_return_pct">峰值高到低</option><option value="close_return_pct">收盘高到低</option></select></label><span id="itemCount" class="monitor-count">—</span></div></div>
+      <div class="monitor-section-head"><div><p class="monitor-kicker">02 / CANDIDATE DETAILS</p><h2 id="itemsTitle">候选明细</h2><p>峰值、收盘和最大不利波动均以入选次日（买入日）开盘价为基准；峰值不含买入当天。</p></div><div class="monitor-detail-actions"><label>排序 <select id="sort"><option value="rank">排名优先</option><option value="peak_return_pct">峰值高到低</option><option value="close_return_pct">收盘高到低</option></select></label><span id="itemCount" class="monitor-count">—</span></div></div>
       <div class="monitor-table-wrap"><table class="monitor-table item-table"><thead><tr><th>标的 / 精选日期</th><th>板块</th><th>状态</th><th>入场价 / 日期</th><th class="number">理论峰值</th><th class="number">窗口收盘</th><th class="number">最大不利</th><th class="number">峰值超额</th></tr></thead><tbody id="itemBody"></tbody></table></div>
       <div class="monitor-pager"><button type="button" id="prevPage">上一页</button><span id="pageInfo">—</span><button type="button" id="nextPage">下一页</button></div>
     </section>
-    <aside class="monitor-method"><strong>口径说明</strong><p>次日开盘价为入场基准，观察窗口包含入场日。理论峰值取窗口内最高价，表示曾出现的最大价格空间；它不代表能够在最高价成交。结果未计手续费、滑点和涨跌停成交限制。红色为上涨，绿色为下跌。</p></aside>
+    <aside class="monitor-method"><strong>口径说明</strong><p>入选次日（买入日）开盘价为成本，N 日窗口从买入日起数 N 个交易日。A 股 T+1，买入当天不能卖出，所以理论峰值只取买入次日至窗口末的最高价（1 日窗口没有峰值）；它表示曾出现的最大可卖价格空间，不代表能在最高价成交。最大不利含买入当天最低价，窗口收盘取窗口最后一天收盘。买入日开盘即涨停（含一字涨停）视为无法买入，单独计数，不计入中位数和命中率。结果未计手续费和滑点。红色为上涨，绿色为下跌。</p></aside>
   </main>
 </body>
 </html>

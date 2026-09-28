@@ -1,8 +1,9 @@
 """每日精选的后续收益监控。
 
 这个模块只读取本地日 K、指数和短名单快照，不发起网络请求，也不修改行情
-Parquet。主口径是“短名单日之后第一个交易日开盘入场”，并记录窗口内曾经
-出现过的最高价路径收益，同时保存窗口末收盘收益和沪深 300 超额收益。
+Parquet。主口径是“短名单日之后第一个交易日（D1）开盘买入”；按 A 股 T+1，
+理论峰值只取 D2 起至窗口末的最高价，同时保存窗口末收盘收益、最大不利
+（含 D1）和沪深 300 超额收益。D1 开盘即涨停的候选标记为无法买入。
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ from typing import Iterable, Iterator, Optional
 import pandas as pd
 
 from data.etf import CACHE_FILE as ETF_CACHE_FILE
-from data.forward_returns import calculate_forward_window
+from data.forward_returns import OPEN_STATUSES, calculate_forward_window
 from data.index import CACHE_FILE as INDEX_CACHE_FILE
 from data.kline import CACHE_FILE as STOCK_CACHE_FILE
 from data.shortlist import DEFAULT_DB_PATH, ShortlistRepository
@@ -29,7 +30,8 @@ PROJECT_DIR = Path(__file__).resolve().parents[1]
 MONITOR_CACHE = PROJECT_DIR / "cache" / "shortlist_monitor.json"
 WINDOWS = (1, 3, 5, 10, 20)
 BENCHMARK_CODE = "sh000300"
-SOURCE_VERSION = "daily-bars-v1"
+SOURCE_VERSION = "daily-bars-v2"
+STATUSES = ("pending", "partial", "awaiting_sell", "complete", "blocked", "unavailable")
 
 
 def _iso_date(value, field: str = "日期") -> str:
@@ -192,6 +194,7 @@ class ShortlistMonitorRepository:
                     status TEXT NOT NULL,
                     entry_date TEXT,
                     entry_open REAL,
+                    entry_note TEXT,
                     signal_close REAL,
                     peak_high REAL,
                     peak_high_date TEXT,
@@ -225,6 +228,9 @@ class ShortlistMonitorRepository:
                 );
                 """
             )
+            columns = {row[1] for row in connection.execute("PRAGMA table_info(shortlist_outcome)")}
+            if "entry_note" not in columns:
+                connection.execute("ALTER TABLE shortlist_outcome ADD COLUMN entry_note TEXT")
             connection.commit()
 
     def replace_dates(self, dates: Iterable[str], rows: Iterable[dict]) -> int:
@@ -234,7 +240,7 @@ class ShortlistMonitorRepository:
             return 0
         columns = [
             "market_date", "code", "name", "rank", "sector", "score",
-            "horizon_days", "status", "entry_date", "entry_open", "signal_close",
+            "horizon_days", "status", "entry_date", "entry_open", "entry_note", "signal_close",
             "peak_high", "peak_high_date", "peak_return_pct", "close_value",
             "close_date", "close_return_pct", "low_value", "low_date",
             "adverse_return_pct", "benchmark_entry_open", "benchmark_peak_high",
@@ -292,19 +298,21 @@ class ShortlistMonitorRepository:
         if not values:
             return {}
         placeholders = ",".join("?" for _ in values)
+        open_marks = ",".join(f"'{status}'" for status in OPEN_STATUSES)
         with self._connect() as connection:
             rows = connection.execute(
                 f"""
                 SELECT market_date,
                        COUNT(*) AS row_count,
                        SUM(CASE WHEN status = 'complete' THEN 1 ELSE 0 END) AS complete_count,
-                       SUM(CASE WHEN status IN ('pending','partial','unavailable') THEN 1 ELSE 0 END) AS open_count,
+                       SUM(CASE WHEN status IN ({open_marks}) THEN 1 ELSE 0 END) AS open_count,
+                       SUM(CASE WHEN source_version != ? THEN 1 ELSE 0 END) AS stale_count,
                        MAX(computed_at) AS computed_at
                 FROM shortlist_outcome
                 WHERE market_date IN ({placeholders})
                 GROUP BY market_date
                 """,
-                values,
+                [SOURCE_VERSION, *values],
             ).fetchall()
         return {row["market_date"]: dict(row) for row in rows}
 
@@ -348,7 +356,7 @@ class ShortlistMonitorRepository:
             clauses.append("sector = ?")
             args.append(str(sector).strip())
         if status:
-            if status not in {"pending", "partial", "complete", "unavailable"}:
+            if status not in STATUSES:
                 raise ValueError("status 不合法")
             clauses.append("status = ?")
             args.append(status)
@@ -421,6 +429,9 @@ def _summary(rows: list[dict]) -> dict:
         "partial": statuses.get("partial", 0),
         "pending": statuses.get("pending", 0),
         "unavailable": statuses.get("unavailable", 0),
+        "awaiting_sell": statuses.get("awaiting_sell", 0),
+        "blocked": statuses.get("blocked", 0),
+        "peak_samples": len(peak),
         "completion_pct": round(statuses.get("complete", 0) / len(rows) * 100, 2) if rows else 0.0,
         "peak_mean_pct": round(mean(peak), 4) if peak else None,
         "peak_median_pct": round(median(peak), 4) if peak else None,
@@ -488,6 +499,7 @@ class ShortlistMonitorService:
             "status": "unavailable",
             "entry_date": None,
             "entry_open": None,
+            "entry_note": None,
             "signal_close": None,
             "peak_high": None,
             "peak_high_date": None,
@@ -521,7 +533,9 @@ class ShortlistMonitorService:
         signal_close = _finite(signal.iloc[-1]["收盘"])
         base["signal_close"] = signal_close
         future = source[source["日期"] > market_day].sort_values("日期")
-        outcome = calculate_forward_window(future, benchmark, horizon)
+        outcome = calculate_forward_window(
+            future, benchmark, horizon, prev_close=signal_close, code=code, name=base["name"],
+        )
         base.update({key: value for key, value in outcome.items() if key in base})
         base["status"] = outcome["status"]
         if outcome.get("close_date"):
@@ -554,6 +568,7 @@ class ShortlistMonitorService:
                 or not state
                 or int(state.get("row_count") or 0) != expected_rows
                 or int(state.get("open_count") or 0) > 0
+                or int(state.get("stale_count") or 0) > 0
                 or snapshot_changed
             ):
                 pending_dates.append(market_date)
@@ -617,11 +632,11 @@ class ShortlistMonitorService:
         horizon = int(kwargs.pop("horizon", 5))
         result = self.repository.query(horizon=horizon, **kwargs)
         meta = result.get("meta", {})
-        warnings = ["理论路径峰值不代表可以精准在最高价成交，未计手续费、滑点和涨跌停限制"]
+        warnings = ["理论峰值按 T+1 只取买入次日起的最高价，不代表可以精准在最高价成交；未计手续费和滑点；买入日开盘即涨停的候选记为无法买入并不计入统计"]
         if meta.get("last_error"):
             warnings.append(f"最近一次刷新失败：{meta['last_error']}")
         result.update({
-            "schema_version": "shortlist-monitor-v1",
+            "schema_version": "shortlist-monitor-v2",
             "request": {"horizon": horizon, **kwargs},
             "requested_range": {
                 "from": kwargs.get("date_from"),
@@ -629,7 +644,7 @@ class ShortlistMonitorService:
                 "horizon": horizon,
             },
             "resolved_as_of": result.get("resolved_as_of"),
-            "temporal_scope": "次日开盘入场；窗口内最高价/窗口末收盘；不使用未来数据",
+            "temporal_scope": "入选次日（D1）开盘买入；T+1 下理论峰值取 D2 至窗口末最高价，最大不利含 D1，窗口末收盘；D1 开盘涨停记为无法买入；不使用未来数据",
             "freshness": meta.get("last_refresh"),
             "provenance": {"daily_bars": "本地 Parquet", "benchmark": BENCHMARK_CODE},
             "warnings": warnings,

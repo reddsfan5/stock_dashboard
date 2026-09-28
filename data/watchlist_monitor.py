@@ -2,8 +2,9 @@
 
 本模块只读本地日 K/指数缓存，并把结果写入 ``state/watchlist.sqlite3``。
 批次日期严格使用观察池条目的 ``created_at``（上海时区），筛出日仅作为
-辅助信息展示。计算口径与每日精选监控一致：加入日后的第一个交易日开盘入场，
-窗口内最高价为理论峰值，窗口末收盘为可复核结果。
+辅助信息展示。计算口径与每日精选监控一致：加入日后的第一个交易日（D1）
+开盘买入；按 A 股 T+1，理论峰值只取 D2 起至窗口末的最高价，窗口末收盘为
+可复核结果；D1 开盘即涨停记为无法买入。
 """
 
 from __future__ import annotations
@@ -37,7 +38,11 @@ from data.watchlist import DEFAULT_DB_PATH, STATUSES, STATUS_LABELS, WatchlistRe
 
 PROJECT_DIR = Path(__file__).resolve().parents[1]
 MONITOR_CACHE = PROJECT_DIR / "cache" / "watchlist_monitor.json"
-SOURCE_VERSION = "watchlist-bars-v1"
+SOURCE_VERSION = "watchlist-bars-v2"
+RESULT_LABELS = {
+    "complete": "已完成", "partial": "观察中", "pending": "等待入场",
+    "awaiting_sell": "等待可卖日", "blocked": "无法买入", "unavailable": "无数据",
+}
 SHANGHAI = ZoneInfo("Asia/Shanghai")
 
 
@@ -80,13 +85,16 @@ def _summary(rows: list[dict]) -> dict:
     peak, close, adverse = (_values(rows, key) for key in ("peak_return_pct", "close_return_pct", "adverse_return_pct"))
     bench_close = _values(rows, "benchmark_close_return_pct")
     excess = _values(rows, "close_excess_pct")
-    statuses = {status: sum(1 for row in rows if (row.get("outcome_status") or row.get("result_status")) == status) for status in ("complete", "partial", "pending", "unavailable")}
+    statuses = {status: sum(1 for row in rows if (row.get("outcome_status") or row.get("result_status")) == status) for status in RESULT_LABELS}
     return {
         "count": len(rows),
         "completed": statuses["complete"],
         "partial": statuses["partial"],
         "pending": statuses["pending"],
         "unavailable": statuses["unavailable"],
+        "awaiting_sell": statuses["awaiting_sell"],
+        "blocked": statuses["blocked"],
+        "peak_samples": len(peak),
         "completion_pct": round(statuses["complete"] / len(rows) * 100, 2) if rows else 0.0,
         "peak_mean_pct": round(mean(peak), 4) if peak else None,
         "peak_median_pct": round(median(peak), 4) if peak else None,
@@ -133,7 +141,7 @@ class WatchlistMonitorRepository:
                     screen_date TEXT,
                     horizon_days INTEGER NOT NULL,
                     outcome_status TEXT NOT NULL,
-                    entry_date TEXT, entry_open REAL,
+                    entry_date TEXT, entry_open REAL, entry_note TEXT,
                     peak_high REAL, peak_high_date TEXT, peak_return_pct REAL,
                     close_value REAL, close_date TEXT, close_return_pct REAL,
                     low_value REAL, low_date TEXT, adverse_return_pct REAL,
@@ -155,6 +163,9 @@ class WatchlistMonitorRepository:
                 );
                 """
             )
+            columns = {row[1] for row in connection.execute("PRAGMA table_info(watchlist_outcome)")}
+            if "entry_note" not in columns:
+                connection.execute("ALTER TABLE watchlist_outcome ADD COLUMN entry_note TEXT")
             connection.commit()
 
     def replace_items(self, user_id: int, item_ids: Iterable[int], rows: Iterable[dict]):
@@ -162,7 +173,7 @@ class WatchlistMonitorRepository:
         rows = list(rows)
         columns = [
             "user_id", "item_id", "joined_date", "code", "name", "status", "source_module", "screen_date",
-            "horizon_days", "outcome_status", "entry_date", "entry_open", "peak_high", "peak_high_date",
+            "horizon_days", "outcome_status", "entry_date", "entry_open", "entry_note", "peak_high", "peak_high_date",
             "peak_return_pct", "close_value", "close_date", "close_return_pct", "low_value", "low_date",
             "adverse_return_pct", "benchmark_entry_open", "benchmark_peak_high", "benchmark_peak_return_pct",
             "benchmark_close_value", "benchmark_close_return_pct", "peak_excess_pct", "close_excess_pct",
@@ -260,9 +271,9 @@ class WatchlistMonitorRepository:
             row["current_status"] = row.get("watch_status") or row.get("status")
             row["watch_status"] = row["current_status"]
             row["status"] = row.get("outcome_status")
-            row["status_label"] = {"complete": "已完成", "partial": "观察中", "pending": "等待入场", "unavailable": "无数据"}.get(row.get("status"), row.get("status"))
+            row["status_label"] = RESULT_LABELS.get(row.get("status"), row.get("status"))
             row["watch_status_label"] = STATUS_LABELS.get(row.get("watch_status"), row.get("watch_status"))
-            row["result_status_label"] = {"complete": "已完成", "partial": "观察中", "pending": "等待入场", "unavailable": "无数据"}.get(row.get("result_status"), row.get("result_status"))
+            row["result_status_label"] = RESULT_LABELS.get(row.get("result_status"), row.get("result_status"))
         cohorts = []
         grouped = {}
         for row in all_rows:
@@ -310,7 +321,7 @@ class WatchlistMonitorService:
             "item_id": item["id"], "joined_date": joined_date, "code": code, "name": item.get("name") or code,
             "status": item.get("status") or "watching", "source_module": item.get("source_module") or "",
             "screen_date": item.get("screen_date"), "horizon_days": horizon, "outcome_status": "unavailable",
-            "entry_date": None, "entry_open": None, "peak_high": None, "peak_high_date": None, "peak_return_pct": None,
+            "entry_date": None, "entry_open": None, "entry_note": None, "peak_high": None, "peak_high_date": None, "peak_return_pct": None,
             "close_value": None, "close_date": None, "close_return_pct": None, "low_value": None, "low_date": None,
             "adverse_return_pct": None, "benchmark_entry_open": None, "benchmark_peak_high": None,
             "benchmark_peak_return_pct": None, "benchmark_close_value": None, "benchmark_close_return_pct": None,
@@ -323,8 +334,13 @@ class WatchlistMonitorService:
             if pd.Timestamp(joined_date).normalize() > resolved:
                 base["outcome_status"] = "pending"
             return base
-        future = source[(source["日期"] > pd.Timestamp(joined_date).normalize()) & (source["日期"] <= resolved)].sort_values("日期")
-        outcome = calculate_forward_window(future, benchmark, horizon)
+        joined_day = pd.Timestamp(joined_date).normalize()
+        future = source[(source["日期"] > joined_day) & (source["日期"] <= resolved)].sort_values("日期")
+        before = source[source["日期"] <= joined_day]
+        prev_close = _finite(before.iloc[-1]["收盘"]) if len(before) else None
+        outcome = calculate_forward_window(
+            future, benchmark, horizon, prev_close=prev_close, code=code, name=item.get("name") or "",
+        )
         base.update({key: value for key, value in outcome.items() if key in base})
         base["outcome_status"] = outcome["status"]
         if outcome.get("close_date"):
@@ -347,7 +363,8 @@ class WatchlistMonitorService:
         if resolved is None:
             return {"rows": 0, "items": len(items), "resolved_as_of": None, "message": "行情缓存为空"}
         joined = [_joined_date(item.get("created_at")) for item in items]
-        start = min(pd.Timestamp(value).normalize() for value in joined)
+        # 往前多读两周，保证周末/节假日加入的条目也能拿到买入日前一交易日收盘（涨停判断）。
+        start = min(pd.Timestamp(value).normalize() for value in joined) - pd.Timedelta(days=14)
         stocks = [code for code in codes if not str(code).lower().replace("etf:", "").startswith(("sh5", "sh56", "sh58"))]
         etfs = [code[2:] if code[:2] in {"sh", "sz"} else code for code in codes if code not in stocks]
         stock = _read_bars(Path(STOCK_CACHE_FILE), stocks, start, resolved)
@@ -368,12 +385,12 @@ class WatchlistMonitorService:
         horizon = int(kwargs.pop("horizon", 5))
         result = self.repository.query(user_id, horizon=horizon, **kwargs)
         meta = result.get("meta", {})
-        warnings = ["理论路径峰值只表示窗口内曾出现的价格空间，不代表可以精准在最高价成交；未计手续费、滑点和涨跌停限制"]
+        warnings = ["理论峰值按 T+1 只取买入次日起曾出现的价格空间，不代表可以精准在最高价成交；未计手续费和滑点；买入日开盘即涨停记为无法买入并不计入统计"]
         if meta.get("last_error"):
             warnings.append(f"最近一次计算失败：{meta['last_error']}。页面保留可用历史结果")
-        result.update({"schema_version": "watchlist-monitor-v1", "request": {"horizon": horizon, **kwargs},
+        result.update({"schema_version": "watchlist-monitor-v2", "request": {"horizon": horizon, **kwargs},
                       "requested_range": {"from": kwargs.get("date_from"), "to": kwargs.get("date_to"), "batch": kwargs.get("batch"), "horizon": horizon},
-                      "temporal_scope": "加入日后第一个交易日开盘入场；窗口内最高/最低/末收盘；不使用未来数据",
+                      "temporal_scope": "加入日后第一个交易日（D1）开盘买入；T+1 下理论峰值取 D2 至窗口末最高价，最大不利含 D1，窗口末收盘；D1 开盘涨停记为无法买入；不使用未来数据",
                       "freshness": meta.get("last_refresh"), "provenance": {"daily_bars": "本地 Parquet", "benchmark": BENCHMARK_CODE}, "warnings": warnings})
         return result
 

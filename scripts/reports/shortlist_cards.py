@@ -581,7 +581,7 @@ def render_shortlist_html(
 <link rel="stylesheet" href="/assets/workbench.css">
 <link rel="stylesheet" href="/assets/shortlist.css?v=3">
 <script defer src="/assets/app-shell.js"></script>
-<script defer src="/assets/shortlist.js?v=2"></script>
+<script defer src="/assets/shortlist.js?v=3"></script>
 </head>
 <body>
 <main class="wrap">

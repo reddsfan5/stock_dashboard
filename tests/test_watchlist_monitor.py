@@ -60,6 +60,31 @@ class WatchlistMonitorTest(unittest.TestCase):
         self.assertAlmostEqual(item["close_return_pct"], 25.0)
         self.assertEqual(item["result_status"], "complete")
 
+    def test_peak_starts_after_buy_day(self):
+        self._item()
+        self.service.refresh(user_id=1, as_of="2026-09-10")
+        one = self.service.query(user_id=1, horizon=1)["items"][0]
+        self.assertIsNone(one["peak_return_pct"])
+        self.assertAlmostEqual(one["close_return_pct"], 5.0)
+        self.assertAlmostEqual(one["adverse_return_pct"], -10.0)  # 含买入当天最低价
+        self.service.refresh(user_id=1, as_of="2026-09-07")
+        waiting = self.service.query(user_id=1, horizon=3)["items"][0]
+        self.assertEqual(waiting["result_status"], "awaiting_sell")
+        self.assertEqual(waiting["result_status_label"], "等待可卖日")
+        self.assertIsNone(waiting["peak_return_pct"])
+
+    def test_weekend_join_uses_previous_close_for_limit_up(self):
+        rows = pd.read_parquet(self.stock).astype({"开盘": float, "最高": float, "最低": float, "收盘": float})
+        rows.loc[rows["日期"] == pd.Timestamp("2026-09-07"), ["开盘", "最高", "最低", "收盘"]] = [10.45, 10.45, 10.45, 10.45]
+        rows.to_parquet(self.stock)
+        self._item()
+        self.service.refresh(user_id=1, as_of="2026-09-10")
+        data = self.service.query(user_id=1, horizon=3)
+        self.assertEqual(data["items"][0]["result_status"], "blocked")
+        self.assertIn("一字涨停", data["items"][0]["entry_note"])
+        self.assertEqual(data["summary"]["blocked"], 1)
+        self.assertIsNone(data["summary"]["peak_median_pct"])
+
     def test_pending_and_user_isolation(self):
         self._item(created_at="2026-09-11T09:00:00+08:00")
         self._item(user_id=2)
