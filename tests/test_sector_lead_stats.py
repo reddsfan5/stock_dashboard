@@ -124,7 +124,7 @@ class PageTest(unittest.TestCase):
         for needle in ('id="legend"', 'id="railHome"', 'id="expandBox"', 'id="lgScale"',
                        '/assets/chart-touch.js', '/assets/vendor/three/three.module.min.js',
                        'cdn.jsdelivr.net/npm/three@0.160.0/+esm', 'function exactMatches(q)',
-                       'function refreshFocus()', 'camera.setViewOffset', 'LineDashedMaterial',
+                       'function refreshFocus(', 'camera.setViewOffset', 'LineDashedMaterial',
                        "CFG_UI.default_mode === 'lead' ? 'lead' : 'sync'", '领先·实验'):
             self.assertIn(needle, html, needle)
 

@@ -22,6 +22,7 @@ sys.path.insert(0, str(PROJECT_DIR))
 
 from data.industry import StockInfo
 
+from scripts.reports.sector_graph import analyze as analyze_graph
 from scripts.reports.sector_lead_stats import build_lead_edges_sig, load_config, rolling_residualize
 
 # 参数集中在 config/sector_corr_cloud.yaml（缺省值见 sector_lead_stats.DEFAULTS）
@@ -564,6 +565,12 @@ def pack_payload(piv: pd.DataFrame, resid: pd.DataFrame, meta: pd.DataFrame, ben
     return attach_stock_payload(payload)
 
 
+def attach_graph(payload: dict) -> dict:
+    """同步图社区 / 桥梁 / 加权度（秒级，from-cache 也会刷新，参数见 config graph:）。"""
+    payload["graph"] = analyze_graph(payload.get("nodes", []), payload.get("edges", []), CFG.get("graph"))
+    return payload
+
+
 def render_html(payload: dict) -> str:
     """Embed Three.js page; payload JSON injected via token replace (no f-string brace hell)."""
     data_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).replace("<", "\\u003c")
@@ -669,6 +676,36 @@ button:hover,.chip:hover,.chip.active,.seg button.active{border-color:var(--acce
 .tag-ok{display:inline-block;margin-left:6px;font-size:10px;color:#ffb3b3;border:1px solid rgba(255,122,122,.4);border-radius:999px;padding:0 5px;line-height:15px}
 .kv .corelist{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .rail-btn.home{font-size:17px}
+.trail{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:5;display:flex;align-items:center;gap:6px;max-width:min(640px,calc(100vw - 460px));padding:4px 8px;border-radius:999px;background:var(--panel);border:1px solid var(--line);backdrop-filter:blur(10px);font-size:12px}
+.trail[hidden]{display:none}
+.trail button{padding:1px 9px;font-size:15px;line-height:20px;flex:0 0 auto}
+.trail button:disabled{opacity:.35;cursor:default}
+.crumbs{display:flex;align-items:center;gap:3px;overflow-x:auto;white-space:nowrap;scrollbar-width:none;min-width:0}
+.crumbs::-webkit-scrollbar{display:none}
+.crumb{color:var(--muted);cursor:pointer;padding:2px 7px;border-radius:999px}
+.crumb:hover{color:var(--text)}
+.crumb.on{color:#0b1220;background:#9ff3ff}
+.crumb-sep{color:rgba(139,155,184,.5)}
+.pstep{font-size:12px;line-height:1.5;color:#bfefff;background:rgba(90,209,255,.07);border-left:2px solid #9ff3ff;border-radius:6px;padding:6px 8px;margin:0 0 8px}
+.pstep:empty{display:none}
+.stag{display:inline-block;font-size:10px;border-radius:999px;padding:0 6px;margin-right:6px;line-height:16px;border:1px solid var(--line);color:var(--muted)}
+.stag.core{color:#0b1220;background:#ffe9a8;border-color:transparent}
+.stag.bridge{color:#ffe9a8;border-color:rgba(255,233,168,.6)}
+.stag.nb{color:var(--accent);border-color:rgba(90,209,255,.45)}
+.commlink{cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
+.cdot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;flex:0 0 auto}
+.lg-comm{display:grid;grid-template-columns:1fr 1fr;gap:3px 8px;margin:4px 0 0 2px}
+.lg-comm div{cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center}
+.lg-comm div:hover{color:var(--text)}
+.lg-ring{display:inline-block;width:14px;height:14px;border-radius:50%;border:1.5px dashed #ffe9a8}
+.lg-line.web{border-top:1px solid rgba(170,205,255,.8);box-shadow:0 0 5px rgba(170,205,255,.6)}
+.lg-line.trailc{border-top:2px solid #9ff3ff}
+.tourcap{position:fixed;left:50%;top:54px;transform:translateX(-50%);z-index:6;max-width:min(560px,calc(100vw - 24px));font-size:13px;color:var(--text);background:rgba(12,18,32,.92);border:1px solid rgba(159,243,255,.45);border-radius:12px;padding:8px 14px;display:none;text-align:center;pointer-events:none}
+.tourcap.show{display:block}
+@media(max-width:900px){
+  .trail{left:92px;right:10px;transform:none;max-width:none;top:calc(10px + env(safe-area-inset-top,0px))}
+  .tourcap{top:calc(56px + env(safe-area-inset-top,0px))}
+}
 @media(max-width:900px){
   .rail{left:50%;right:auto;top:auto;bottom:calc(10px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);flex-direction:row;width:auto;padding:6px 10px;border-radius:999px;gap:4px}
   .rail-btn{width:40px;height:40px;border-radius:999px;font-size:14px}
@@ -697,10 +734,13 @@ button:hover,.chip:hover,.chip.active,.seg button.active{border-color:var(--acce
 <div class="warnbar" id="warnBar" role="status"></div>
 <details class="legend" id="legend" open>
   <summary>图例</summary>
-  <div class="lg-row"><span class="lg-sw"><span class="lg-grad"></span></span><span id="lgScale">红涨 · 绿跌</span></div>
+  <div class="lg-row" id="lgRet"><span class="lg-sw"><span class="lg-grad"></span></span><span id="lgScale">红涨 · 绿跌</span></div>
+  <div id="lgCommBox"><div class="lg-row"><span class="lg-sw"><span class="cdot" style="background:#5ad1ff"></span><span class="cdot" style="background:#ffb347"></span></span><span>颜色 = 同步图社区（点名称进入该簇）</span></div><div class="lg-comm" id="lgComm"></div></div>
   <div class="lg-row"><span class="lg-sw"><span class="lg-dot" style="width:6px;height:6px"></span><span class="lg-dot" style="width:12px;height:12px"></span></span><span>点大小 = |涨跌|（非成交额/市值）；灰点 = 无行情</span></div>
-  <div class="lg-row"><span class="lg-sw"><span class="lg-line"></span></span><span>同步边 · 多年方向复核（红正 / 绿负，越亮越强）</span></div>
-  <div class="lg-row"><span class="lg-sw"><span class="lg-line soft"></span></span><span>同步边 · 补充（未复核，仅让孤立板块有参照）</span></div>
+  <div class="lg-row"><span class="lg-sw"><span class="lg-line web"></span></span><span id="lgWeb">千丝万缕 = 全部同步边，越亮 |ρ| 越大</span></div>
+  <div class="lg-row" id="lgSoft"><span class="lg-sw"><span class="lg-line soft"></span></span><span>同步边 · 补充（未复核，仅让孤立板块有参照）</span></div>
+  <div class="lg-row"><span class="lg-sw"><span class="lg-ring"></span></span><span>虚线环 = 桥梁板块（跨社区、介数高）</span></div>
+  <div class="lg-row"><span class="lg-sw"><span class="lg-line trailc"></span></span><span>青色折线 = 探索路径</span></div>
   <div class="lg-row"><span class="lg-sw"><span class="lg-arrow"></span></span><span>领先箭头（实验）：金 = 同向，蓝 = 反向；虚线 = 未通过 FDR</span></div>
 </details>
 
@@ -711,6 +751,12 @@ button:hover,.chip:hover,.chip.active,.seg button.active{border-color:var(--acce
   <button type="button" class="rail-btn home" data-act="home" id="railHome" title="复位视角" aria-label="复位视角">⟲</button>
 </nav>
 <div class="rail-tip" id="zenTip">再点轨道图标可收起面板</div>
+<div class="trail" id="trailBar" hidden aria-label="探索路径">
+  <button type="button" id="trBack" title="后退（Alt+←）" aria-label="后退">‹</button>
+  <button type="button" id="trFwd" title="前进（Alt+→）" aria-label="前进">›</button>
+  <div class="crumbs" id="crumbs"></div>
+</div>
+<div class="tourcap" id="tourCap" role="status"></div>
 
 <aside class="flyout open" id="flyout" data-mode="ctrl">
   <div class="fly-hd">
@@ -737,6 +783,11 @@ button:hover,.chip:hover,.chip.active,.seg button.active{border-color:var(--acce
           <button type="button" class="active" data-v="last">当日</button>
           <button type="button" data-v="cum20">近20日</button>
         </div>
+        <div class="seg" id="colormode" title="节点着色">
+          <button type="button" data-v="community">按簇</button>
+          <button type="button" data-v="return">按涨跌</button>
+        </div>
+        <button type="button" class="chip" id="tourBtn" title="从全局到局部：社区 → 核心 → 桥梁">导览 ▶</button>
         <div class="seg" id="edgemode">
           <button type="button" class="active" data-v="sync">同步相关</button>
           <button type="button" data-v="lead">领先传导</button>
@@ -804,7 +855,18 @@ let mode = CFG_UI.default_mode === 'lead' ? 'lead' : 'sync';
 let coreIds = new Set();
 let focusIds = new Set();
 let expandOptions = [];      // 查询扩展出的可选板块（默认不聚焦）
-let userInteracted = false;
+const GRAPH = DATA.graph || { communities: [], node_comm: {}, bridges: [], wdeg: {} };
+const COMM = GRAPH.communities || [];
+const commById = Object.fromEntries(COMM.map(c => [c.id, c]));
+const BRIDGES = new Map((GRAPH.bridges || []).map(b => [b.id, b]));
+function commOf(id) { const k = (GRAPH.node_comm || {})[id]; return k == null ? -1 : k; }
+function commName(k) { return commById[k] ? commById[k].name : '零散'; }
+let colorBy = (CFG_UI.color_by === 'return' || !COMM.length) ? 'return' : 'community';
+const REDUCED = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+const DIM_FLOOR = CFG_UI.web_focus_dim ?? 0.12;
+const TRAIL_MAX = CFG_UI.trail_max ?? 12;
+let commFocus = null;           // 当前聚焦的社区（图例 / 导览 / 详情里的“所属簇”）
+let trail = [], trailIdx = -1;  // 探索路径：每次点击邻居前进一步，支持后退/前进
 const LEAD_FOCUSED_TOTAL_LIMIT = LEAD_DISPLAY.focus_total ?? 12;
 const LEAD_PER_CORE_DIRECTION = LEAD_DISPLAY.per_core_direction ?? 3;
 const LEAD_PANEL_LIMIT = 6;
@@ -821,18 +883,25 @@ const scene = new THREE.Scene();
 scene.fog = new THREE.FogExp2(0x070b14, 0.0018);
 const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 2000);
 const HOME = { pos: new THREE.Vector3(0, 45, 145), target: new THREE.Vector3(0, 0, 0) };
+if (innerWidth / innerHeight < 0.8) HOME.pos.multiplyScalar(1.4);  // 竖屏手机：全局视角拉远一些，看到整张网
 camera.position.copy(HOME.pos);
 const controls = new OrbitControls(camera, canvas);
 controls.enableDamping = true;
 controls.autoRotateSpeed = CFG_UI.auto_rotate_speed ?? 0.55;
 controls.minDistance = 35;
 controls.maxDistance = 380;
-function syncAutoRotate() { controls.autoRotate = (CFG_UI.auto_rotate ?? true) && !userInteracted && !coreIds.size; }
-function markInteracted() { if (!userInteracted) { userInteracted = true; syncAutoRotate(); } }
-controls.addEventListener('start', markInteracted);
-canvas.addEventListener('wheel', markInteracted, { passive: true });
-canvas.addEventListener('touchstart', markInteracted, { passive: true });
-canvas.addEventListener('pointerdown', markInteracted);
+// 自转常开：仅在拖动/捏合/滚轮期间暂停，松手 rotate_resume_ms 后恢复；聚焦时绕焦点慢速环绕。
+let dragging = false, resumeTimer = 0, flight = null;
+const ROTATE_ON = (CFG_UI.auto_rotate ?? true) && (!REDUCED || !!CFG_UI.auto_rotate_reduced_motion);
+function syncAutoRotate() {
+  controls.autoRotate = ROTATE_ON && !dragging && !flight;
+  controls.autoRotateSpeed = (coreIds.size || commFocus != null) ? (CFG_UI.focus_orbit_speed ?? 0.3) : (CFG_UI.auto_rotate_speed ?? 0.55);
+}
+function pauseRotate() { dragging = true; clearTimeout(resumeTimer); syncAutoRotate(); }
+function scheduleResume() { clearTimeout(resumeTimer); resumeTimer = setTimeout(() => { dragging = false; syncAutoRotate(); }, CFG_UI.rotate_resume_ms ?? 1500); }
+controls.addEventListener('start', () => { pauseRotate(); cancelFlight(); stopTour(); });
+controls.addEventListener('end', scheduleResume);
+canvas.addEventListener('wheel', () => { pauseRotate(); scheduleResume(); }, { passive: true });
 syncAutoRotate();
 
 {
@@ -845,6 +914,13 @@ syncAutoRotate();
 
 const nodeById = Object.fromEntries(DATA.nodes.map(n => [n.id, n]));
 const N = DATA.nodes.length;
+const idxOf = Object.fromEntries(DATA.nodes.map((n, i) => [n.id, i]));
+const ADJ = {};
+function addAdj(a, b, c) { if (!ADJ[a]) ADJ[a] = new Map(); const cur = ADJ[a].get(b); if (cur == null || Math.abs(c) > Math.abs(cur)) ADJ[a].set(b, c); }
+for (const [id, rows] of Object.entries(DATA.neighbors || {})) for (const r of rows) { addAdj(id, r.id, r.corr); addAdj(r.id, id, r.corr); }
+for (const e of DATA.edges) { addAdj(e.source, e.target, e.corr); addAdj(e.target, e.source, e.corr); }
+const EDGE_SET = new Set(DATA.edges.filter(e => !e.soft).flatMap(e => [e.source + '|' + e.target, e.target + '|' + e.source]));
+function rhoOf(a, b) { return ADJ[a] ? ADJ[a].get(b) : undefined; }
 
 function radialTexture(stops) {
   const c = document.createElement('canvas'); c.width = c.height = 64;
@@ -913,32 +989,57 @@ function maxCorrToCores(nodeId) {
   }
   return best;
 }
-function applyNodeAppearance() {
+// 节点基础色（社区 / 涨跌）与基础大小；lit 为逐节点亮度（1=常态，>1=核心加亮，<1=压暗），过渡时逐帧插值。
+const baseCol = DATA.nodes.map(() => new THREE.Color()), baseSize = new Float32Array(N);
+const lit = new Float32Array(N).fill(1), litFrom = new Float32Array(N).fill(1), litTo = new Float32Array(N).fill(1);
+const litT0 = new Float32Array(N), litDur = new Float32Array(N).fill(1);
+let litAnimUntil = 0;
+function commColor(id) { const c = commById[commOf(id)]; return new THREE.Color(c ? c.color : (GRAPH.loose_color || '#6b778c')); }
+function computeBase() {
   computeRetScale();
-  const has = focusIds.size > 0;
   for (let i = 0; i < N; i++) {
-    const n = DATA.nodes[i], id = n.id, v = retOf(n);
-    let dim = 1, sizeMul = 1, gOp = 0.28;
-    const base = sizeFromRet(v);
-    if (has) {
-      if (coreIds.has(id)) { sizeMul = 1.5; gOp = 0.95; }
-      else if (focusIds.has(id)) {
-        const s = maxCorrToCores(id);
-        const t = Math.min(1, Math.max(0, s <= 0 ? 0.2 : (s - 0.2) / 0.55));
-        dim = 0.35 + 0.65 * t; sizeMul = 0.85 + 0.45 * t; gOp = 0.16 + 0.7 * t;
-      } else { dim = 0.16; sizeMul = 0.45; gOp = 0.03; }
-    }
-    const c = colorFromRet(v, dim);
-    discs[i].material.color.copy(c);
-    discs[i].material.opacity = has && !focusIds.has(id) ? 0.5 : 1;
-    const ds = Math.max(1.4, base * 0.34 * sizeMul);
-    discs[i].scale.set(ds, ds, 1);
-    glows[i].material.color.copy(c);
-    glows[i].material.opacity = gOp;
-    const gs = base * 1.35 * sizeMul;
-    glows[i].scale.set(gs, gs, 1);
+    const n = DATA.nodes[i], v = retOf(n);
+    baseCol[i].copy(colorBy === 'community' ? commColor(n.id) : colorFromRet(v, 1));
+    baseSize[i] = sizeFromRet(v);
   }
-  renderLegendScale();
+}
+const _c = new THREE.Color();
+function paintNode(i) {
+  const L = lit[i], l1 = Math.min(1, L), boost = Math.max(0, L - 1);
+  _c.copy(baseCol[i]).multiplyScalar(DIM_FLOOR + (1 - DIM_FLOOR) * l1);
+  discs[i].material.color.copy(_c);
+  discs[i].material.opacity = 0.45 + 0.55 * l1;
+  const mul = 0.45 + 0.55 * l1 + boost * 1.7;
+  const ds = Math.max(1.4, baseSize[i] * 0.34 * mul);
+  discs[i].scale.set(ds, ds, 1);
+  glows[i].material.color.copy(_c);
+  glows[i].material.opacity = 0.03 + 0.25 * l1 * l1 + boost * 2.2;
+  const gs = baseSize[i] * 1.35 * mul; glows[i].scale.set(gs, gs, 1);
+}
+// 桥梁板块：淡金色虚线环
+const ringTex = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d');
+  x.strokeStyle = 'rgba(255,255,255,0.95)'; x.lineWidth = 3; x.setLineDash([7, 5]);
+  x.beginPath(); x.arc(32, 32, 27, 0, Math.PI * 2); x.stroke();
+  return new THREE.CanvasTexture(c);
+})();
+const bridgeRings = [];
+for (const b of BRIDGES.values()) {
+  const i = idxOf[b.id]; if (i == null) continue; const n = DATA.nodes[i];
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: ringTex, color: 0xffe9a8, transparent: true, opacity: 0.5, depthWrite: false }));
+  sp.position.set(n.x, n.y, n.z); sp.renderOrder = 3; sp.userData.i = i; scene.add(sp); bridgeRings.push(sp);
+}
+function paintRings() {
+  for (const sp of bridgeRings) {
+    const i = sp.userData.i, l1 = Math.min(1, lit[i]);
+    const r = Math.max(4.2, discs[i].scale.x * 2.3); sp.scale.set(r, r, 1);
+    sp.material.opacity = 0.12 + 0.45 * l1;
+  }
+}
+function applyNodeAppearance() {
+  computeBase();
+  for (let i = 0; i < N; i++) paintNode(i);
+  paintRings(); updateWebColors(); renderLegend();
 }
 
 // ---------------- 同步边：多年复核 = 实线，补充（soft）= 暗色虚线 ----------------
@@ -963,8 +1064,152 @@ function buildSyncLines(soft) {
   if (soft) line.computeLineDistances();
   return line;
 }
-const syncLines = buildSyncLines(false); scene.add(syncLines);
+// “千丝万缕”：全部同步边合并为一个 LineSegments（一次绘制），加色混合，亮度随 |ρ|；
+// 社区着色时两端取各自社区色形成渐变，聚焦时按两端 lit 逐帧压暗/加亮。
+const WEB = (() => {
+  const list = DATA.edges.filter(e => !e.soft && nodeById[e.source] && nodeById[e.target]);
+  const pos = new Float32Array(list.length * 6), col = new Float32Array(list.length * 6), w = new Float32Array(list.length);
+  const lo = DATA.corr_thr || 0.4, wMin = CFG_UI.web_opacity_min ?? 0.07, wMax = CFG_UI.web_opacity_max ?? 0.6;
+  list.forEach((e, k) => {
+    const a = nodeById[e.source], b = nodeById[e.target];
+    pos.set([a.x, a.y, a.z, b.x, b.y, b.z], k * 6);
+    const t = Math.max(0, Math.min(1, ((e.abs ?? Math.abs(e.corr || 0)) - lo) / Math.max(0.05, 0.85 - lo)));
+    w[k] = wMin + (wMax - wMin) * Math.pow(t, 1.2);
+  });
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  const line = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false }));
+  line.renderOrder = 1;
+  return { list, w, col, line, ia: list.map(e => idxOf[e.source]), ib: list.map(e => idxOf[e.target]) };
+})();
+const syncLines = WEB.line; scene.add(syncLines);
 const softLines = buildSyncLines(true); scene.add(softLines);
+const cPosE = new THREE.Color(0xff7a7a), cNegE = new THREE.Color(0x3ddc97), cNegC = new THREE.Color(0x8fa3c4);
+function updateWebColors() {
+  const col = WEB.col, modeF = mode === 'lead' ? 0.35 : 1, focused = focusIds.size > 0;
+  for (let k = 0; k < WEB.list.length; k++) {
+    const e = WEB.list[k], i = WEB.ia[k], j = WEB.ib[k], la = lit[i], lb = lit[j];
+    let emph = Math.min(1, la, lb); emph = Math.max(0.05, emph * emph);
+    if (focused && (la > 1.01 || lb > 1.01)) emph = Math.min(1.9, emph * 2.0);  // 与核心相连的边加亮
+    const g = WEB.w[k] * emph * modeF;
+    let ca, cb;
+    if (colorBy === 'community') { ca = e.sign >= 0 ? baseCol[i] : cNegC; cb = e.sign >= 0 ? baseCol[j] : cNegC; }
+    else { ca = cb = e.sign >= 0 ? cPosE : cNegE; }
+    const o = k * 6;
+    col[o] = ca.r * g; col[o + 1] = ca.g * g; col[o + 2] = ca.b * g;
+    col[o + 3] = cb.r * g; col[o + 4] = cb.g * g; col[o + 5] = cb.b * g;
+  }
+  syncLines.geometry.attributes.color.needsUpdate = true;
+}
+
+// ---------------- 过渡：镜头弧线飞行 + 逐跳点亮 + 沿边脉冲 ----------------
+function T_MS() { return REDUCED ? (CFG_UI.reduced_motion_ms ?? 350) : (CFG_UI.transition_ms ?? 1700); }
+function tweenNode(i, to, delay, dur, now) {
+  litFrom[i] = lit[i]; litTo[i] = to; litT0[i] = now + delay; litDur[i] = Math.max(1, dur);
+  litAnimUntil = Math.max(litAnimUntil, now + delay + dur);
+}
+const PULSE_MAX = CFG_UI.pulse_max ?? 160;
+const pulseGeo = new THREE.BufferGeometry();
+pulseGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(PULSE_MAX * 3), 3));
+pulseGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(PULSE_MAX * 3), 3));
+pulseGeo.setDrawRange(0, 0);
+const pulsePts = new THREE.Points(pulseGeo, new THREE.PointsMaterial({ size: 4.2, map: glowTex, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+pulsePts.frustumCulled = false; pulsePts.renderOrder = 4; scene.add(pulsePts);
+let pulses = [];
+function clearPulses() { pulses = []; pulseGeo.setDrawRange(0, 0); }
+function addPulse(a, b, t0, dur, color, gain = 1) {
+  if (pulses.length >= PULSE_MAX) return;
+  const A = nodeById[a], B = nodeById[b]; if (!A || !B) return;
+  pulses.push({ A, B, t0, dur: Math.max(140, dur), c: new THREE.Color(color).multiplyScalar(gain) });
+}
+function stepPulses(now) {
+  if (!pulses.length) return;
+  pulses = pulses.filter(p => now < p.t0 + p.dur + 260);
+  const P = pulseGeo.attributes.position.array, C = pulseGeo.attributes.color.array; let k = 0;
+  for (const p of pulses) {
+    const u = (now - p.t0) / p.dur; if (u < 0) continue;
+    const t = Math.min(1, u), e = t * t * (3 - 2 * t), f = u > 1 ? Math.max(0, 1 - (u - 1) * p.dur / 260) : 1;
+    P[k * 3] = p.A.x + (p.B.x - p.A.x) * e; P[k * 3 + 1] = p.A.y + (p.B.y - p.A.y) * e; P[k * 3 + 2] = p.A.z + (p.B.z - p.A.z) * e;
+    C[k * 3] = p.c.r * f; C[k * 3 + 1] = p.c.g * f; C[k * 3 + 2] = p.c.b * f; k++;
+  }
+  pulseGeo.setDrawRange(0, k);
+  pulseGeo.attributes.position.needsUpdate = true; pulseGeo.attributes.color.needsUpdate = true;
+}
+function nearestCore(id, cores) {
+  let best = null, bv = -1;
+  for (const c of cores) { const r = rhoOf(c, id); const v = r == null ? -0.5 : Math.abs(r); if (v > bv) { bv = v; best = c; } }
+  return best;
+}
+let flowFade = 1, flowFadeT0 = 0, flowFadeDur = 1;
+function startTransition({ origin = null, cores = new Set(), hop1 = new Set(), hop2 = new Set(), strength = () => 1 } = {}) {
+  const now = performance.now(), T = T_MS(), quick = REDUCED;
+  const focused = cores.size > 0 || hop1.size > 0;
+  const o = origin ? nodeById[origin] : null;
+  let maxD = 1;
+  if (o) for (const id of hop1) { const n = nodeById[id]; if (n) maxD = Math.max(maxD, Math.hypot(n.x - o.x, n.y - o.y, n.z - o.z)); }
+  clearPulses();
+  const arrive = {};
+  for (let i = 0; i < N; i++) {
+    const id = DATA.nodes[i].id;
+    if (!focused) { tweenNode(i, 1, quick ? 0 : 0.18 * T * ((i * 0.618) % 1), quick ? T : 0.6 * T, now); continue; }
+    if (cores.has(id)) { tweenNode(i, 1.3, 0, quick ? T : 0.22 * T, now); arrive[id] = 0; }
+    else if (hop1.has(id)) {
+      const n = nodeById[id], d = o ? Math.hypot(n.x - o.x, n.y - o.y, n.z - o.z) / maxD : 0.5;
+      const t = Math.max(0, Math.min(1, strength(id)));
+      const delay = quick ? 0 : T * (0.1 + 0.32 * d);
+      arrive[id] = delay;
+      tweenNode(i, 0.55 + 0.45 * t, delay, quick ? T : 0.22 * T, now);
+    } else if (hop2.has(id)) tweenNode(i, 0.4, quick ? 0 : T * (0.52 + 0.18 * ((i * 0.618) % 1)), quick ? T : 0.3 * T, now);
+    else tweenNode(i, DIM_FLOOR, quick ? 0 : 0.1 * T, quick ? T : 0.8 * T, now);
+  }
+  if (!quick && focused) {
+    for (const id of hop1) { const src = (origin && cores.has(origin) && rhoOf(origin, id) != null) ? origin : nearestCore(id, cores); if (src) addPulse(src, id, now, arrive[id], 0xdff8ff, 1); }
+    let n2 = 0;
+    for (const id of hop2) {
+      if (n2 >= 60) break;
+      let par = null, pv = -1;
+      for (const h of hop1) { const r = rhoOf(h, id); if (r != null && Math.abs(r) > pv) { pv = Math.abs(r); par = h; } }
+      if (par) { addPulse(par, id, now + arrive[par], T * 0.28, 0x9ff3ff, 0.55); n2++; }
+    }
+  }
+  flowFadeT0 = now + (quick ? 0 : 0.45 * T); flowFadeDur = quick ? 1 : 0.5 * T; flowFade = 0;
+}
+function stepLit(now) {
+  if (now > litAnimUntil + 40) return false;
+  for (let i = 0; i < N; i++) {
+    const u = (now - litT0[i]) / litDur[i];
+    if (u <= 0) continue;
+    const t = Math.min(1, u), e = t * t * (3 - 2 * t);
+    lit[i] = litFrom[i] + (litTo[i] - litFrom[i]) * e;
+    paintNode(i);
+  }
+  paintRings(); updateWebColors(); updateLabelOpacity();
+  return true;
+}
+function flyTo(target, pos, ms = T_MS()) {
+  const d = camera.position.distanceTo(pos) + controls.target.distanceTo(target);
+  flight = { t0: performance.now(), dur: Math.max(1, ms), p0: camera.position.clone(), p1: pos.clone(), q0: controls.target.clone(), q1: target.clone(),
+    arc: REDUCED ? 0 : (CFG_UI.arc_height ?? 0.22) * d };
+  syncAutoRotate();
+}
+function cancelFlight() { if (flight) { flight = null; syncAutoRotate(); } }
+const _back = new THREE.Vector3();
+function stepFlight(now) {
+  if (!flight) return false;
+  const f = flight, u = Math.min(1, (now - f.t0) / f.dur);
+  const e = u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2;
+  controls.target.lerpVectors(f.q0, f.q1, e);
+  camera.position.lerpVectors(f.p0, f.p1, e);
+  if (f.arc) {
+    const h = Math.sin(Math.PI * e) * f.arc;
+    _back.copy(camera.position).sub(controls.target).normalize();
+    camera.position.addScaledVector(_back, h * 0.6); camera.position.y += h * 0.5;
+  }
+  camera.lookAt(controls.target);
+  if (u >= 1) { flight = null; controls.update(); syncAutoRotate(); }
+  return true;
+}
 
 // ---------------- 领先边（实验） ----------------
 function edgePass(edge) { return edge.fdr_pass !== false; }
@@ -1031,25 +1276,17 @@ function addFlow(a, b, color, opacity) {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   const mat = new THREE.LineDashedMaterial({ color, transparent: true, opacity, dashSize: 2.2, gapSize: 1.35, depthWrite: false });
-  flowMats.push(mat);
+  mat.userData.base = opacity; flowMats.push(mat);
   const line = new THREE.Line(geo, mat); line.computeLineDistances(); flowGroup.add(line);
   const pg = new THREE.BufferGeometry(); pg.setAttribute('position', new THREE.Float32BufferAttribute(new Array(21).fill(0), 3));
   const pts = new THREE.Points(pg, new THREE.PointsMaterial({ color, size: 1.7, map: discTex, alphaTest: 0.3, transparent: true, opacity: opacity * 0.9, depthWrite: false, blending: THREE.AdditiveBlending }));
+  pts.material.userData.base = opacity * 0.9;
   pts.userData = { ax: a.x, ay: a.y, az: a.z, bx: b.x, by: b.y, bz: b.z, n: 7, phase: Math.random() };
   flowGroup.add(pts);
 }
 function rebuildFlow() {
   clearFlow();
-  if (!focusIds.size) {
-    if (mode === 'sync') {
-      const top = DATA.edges.filter(e => !e.soft).sort((a, b) => b.abs - a.abs).slice(0, 36);
-      for (const e of top) {
-        const a = nodeById[e.source], b = nodeById[e.target]; if (!a || !b) continue;
-        addFlow(a, b, e.sign >= 0 ? 0xff7a7a : 0x3ddc97, 0.2 + 0.22 * Math.min(1, (e.abs - 0.4) / 0.4));
-      }
-    }
-    return;
-  }
+  if (!coreIds.size) return;  // 全局/社区视图由“千丝万缕”同步网承担
   if (mode === 'sync') {
     const seen = new Set();
     for (const e of DATA.edges) {
@@ -1084,7 +1321,7 @@ function makeLabel(text, color, priority) {
   ctx.fillStyle = color; ctx.textBaseline = 'middle'; ctx.fillText(text, 14, 26);
   const tex = new THREE.CanvasTexture(c); tex.minFilter = THREE.LinearFilter;
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
-  sp.scale.set(w / 10, 4.8, 1); sp.renderOrder = 5; sp.userData.priority = priority;
+  sp.scale.set(w / 10, 4.8, 1); sp.renderOrder = 5; sp.userData.priority = priority; sp.userData.w = w;
   return sp;
 }
 function setLabels(items) {
@@ -1092,9 +1329,17 @@ function setLabels(items) {
   for (const it of items) {
     const n = nodeById[it.id]; if (!n) continue;
     const lab = makeLabel(it.text || n.name, it.color || '#e8eefc', it.priority || 0);
-    lab.position.set(n.x, n.y + 4.5, n.z); labelGroup.add(lab);
+    lab.position.set(n.x, n.y + 4.5, n.z); lab.userData.i = idxOf[it.id]; lab.userData.pin = !!it.pin; labelGroup.add(lab);
   }
+  updateLabelOpacity();
   declutterLabels();
+}
+// 标签随节点点亮淡入（核心/置顶标签常亮）
+function updateLabelOpacity() {
+  for (const sp of labelGroup.children) {
+    const L = sp.userData.i == null ? 1 : lit[sp.userData.i];
+    sp.material.opacity = sp.userData.pin ? 1 : Math.max(0, Math.min(1, (L - 0.45) / 0.35));
+  }
 }
 function topMovers() {
   const k = CFG_UI.top_movers_labels ?? 8;
@@ -1104,15 +1349,25 @@ function topMovers() {
   return [...up, ...dn];
 }
 function rebuildLabels() {
+  const limit0 = CFG_UI.label_limit ?? 18;
+  if (commFocus != null && !coreIds.size) {
+    const c = commById[commFocus];
+    setLabels(c.members.slice(0, limit0).map((id, k) => ({ id, color: id === c.core ? c.color : '#e8eefc', priority: id === c.core ? 1000 : 100 - k, pin: id === c.core })));
+    return;
+  }
+  if (!coreIds.size && colorBy === 'community' && COMM.length) {
+    setLabels(COMM.map((c, k) => ({ id: c.core, text: `${c.name}`, color: c.color, priority: 60 - k })));
+    return;
+  }
   if (!coreIds.size) {
     setLabels(topMovers().map((r, i) => ({ id: r.id, text: `${r.id} ${fmtRet(r.v)}`, color: r.v >= 0 ? '#ff9d9d' : '#7fe7b8', priority: 50 - i })));
     return;
   }
   const limit = CFG_UI.label_limit ?? 18;
   const neighbors = [...focusIds].filter(id => !coreIds.has(id))
-    .map(id => ({ id, s: maxCorrToCores(id) })).sort((a, b) => b.s - a.s).slice(0, limit);
+    .map(id => ({ id, s: maxCorrToCores(id) })).filter(r => r.s > 0).sort((a, b) => b.s - a.s).slice(0, limit);
   setLabels([
-    ...[...coreIds].map(id => ({ id, color: '#5ad1ff', priority: 1000 })),
+    ...[...coreIds].map(id => ({ id, color: '#5ad1ff', priority: 1000, pin: true })),
     ...neighbors.map((r, i) => ({ id: r.id, color: '#e8eefc', priority: 100 - i - (r.s < 0.3 ? 20 : 0) })),
   ]);
 }
@@ -1124,6 +1379,10 @@ function declutterLabels() {
   const placed = [];
   const items = [...labelGroup.children].sort((a, b) => b.userData.priority - a.userData.priority);
   for (const sp of items) {
+    if (sp.material.opacity < 0.05) { sp.visible = false; continue; }
+    // 近处标签按距离缩小，避免贴近镜头时字号过大
+    const k = Math.max(0.45, Math.min(1.2, camera.position.distanceTo(sp.position) / 130));
+    sp.scale.set(sp.userData.w / 10 * k, 4.8 * k, 1);
     _v.copy(sp.position).project(camera);
     if (_v.z > 1 || Math.abs(_v.x) > 1.05 || Math.abs(_v.y) > 1.05) { sp.visible = false; continue; }
     const [cx, cy] = toScreen(_v);
@@ -1189,7 +1448,7 @@ function applyDeepLink() {
     return;
   }
   setExpandOptions([]);
-  setFocus([hit.sector]);
+  step([hit.sector]);
   const source = params.get('from');
   const title = document.getElementById('pTitle');
   if (title) title.textContent = `${hit.name} · ${hit.sector}`;
@@ -1217,7 +1476,7 @@ function egoOf(cores) {
 function applyFocusVisual() {
   applyNodeAppearance();
   const has = focusIds.size > 0;
-  syncLines.visible = mode === 'sync' && !has;
+  syncLines.visible = true;
   softLines.visible = mode === 'sync' && !has;
   leadGroup.visible = mode === 'lead';
   if (mode === 'lead') rebuildLeadArrows(has ? coreIds : null);
@@ -1237,46 +1496,219 @@ function applyViewOffset() {
   if (ox || oy) camera.setViewOffset(W, H, ox, oy, W, H); else camera.clearViewOffset();
   camera.aspect = W / H; camera.updateProjectionMatrix();
 }
-function frameCores() {
-  const pts = [...coreIds].map(id => nodeById[id]).filter(Boolean);
-  if (!pts.length) return;
+function frameFor(ids, oneHop = true) {
+  const pts = ids.map(id => nodeById[id]).filter(Boolean);
+  if (!pts.length) return null;
   const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
   const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length;
   const cz = pts.reduce((s, p) => s + p.z, 0) / pts.length;
-  // 取景覆盖核心 + 一跳邻居（按距离 80% 分位，避免个别远点把镜头拉太远）
-  const { one } = egoOf([...coreIds]);
-  const ds = [...one].map(id => nodeById[id]).filter(Boolean)
+  // 取景覆盖核心 + 一跳邻居（距离 80% 分位，避免个别远点把镜头拉太远）
+  const pool = oneHop ? [...egoOf(ids).one] : ids;
+  const ds = pool.map(id => nodeById[id]).filter(Boolean)
     .map(p => Math.hypot(p.x - cx, p.y - cy, p.z - cz)).sort((a, b) => a - b);
-  const r = Math.max(18, ds.length ? ds[Math.min(ds.length - 1, Math.floor(ds.length * 0.8))] : 18);
-  const fov = camera.fov * Math.PI / 180;
-  const dist = Math.min(260, r / Math.tan(fov / 2) * 1.08);
-  const dir = new THREE.Vector3(55, 28, 95).normalize();
-  controls.target.set(cx, cy, cz);
-  camera.position.set(cx + dir.x * dist, cy + dir.y * dist, cz + dir.z * dist);
-  controls.update();
+  const r = Math.max(18, ds.length ? ds[Math.min(ds.length - 1, Math.floor(ds.length * (oneHop ? 0.8 : 0.9)))] : 18);
+  const dist = Math.min(260, r / Math.tan(camera.fov * Math.PI / 360) * 1.08);
+  // 保持当前观察方向，从当前状态连续飞过去（不先复位）
+  const dir = camera.position.clone().sub(controls.target);
+  if (dir.lengthSq() < 1) dir.set(55, 28, 95);
+  dir.normalize();
+  const target = new THREE.Vector3(cx, cy, cz);
+  return { target, pos: target.clone().addScaledVector(dir, dist) };
 }
+function frameCores() { const f = frameFor([...coreIds]); if (f) flyTo(f.target, f.pos); }
 function resetView() {
   if (coreIds.size) { frameCores(); return; }
-  controls.target.copy(HOME.target); camera.position.copy(HOME.pos); controls.update();
+  if (commFocus != null && commById[commFocus]) { const f = frameFor(commById[commFocus].members, false); if (f) flyTo(f.target, f.pos); return; }
+  flyTo(HOME.target.clone(), HOME.pos.clone());
 }
-function refreshFocus() {
-  if (coreIds.size) { const { one, two } = egoOf([...coreIds]); focusIds = new Set([...one, ...two]); }
+function refreshFocus({ origin = null } = {}) {
+  let hop1 = new Set(), hop2 = new Set();
+  if (coreIds.size) {
+    const { one, two } = egoOf([...coreIds]);
+    hop1 = new Set([...one].filter(id => !coreIds.has(id))); hop2 = two;
+    focusIds = new Set([...one, ...two]);
+  } else if (commFocus != null && commById[commFocus]) focusIds = new Set(commById[commFocus].members);
   else focusIds = new Set();
   applyFocusVisual();
   if (coreIds.size) renderPanel([...coreIds], [...focusIds].filter(id => !coreIds.has(id)));
+  else if (commFocus != null) renderCommunityPanel(commFocus);
   else renderPanel(null, []);
   rebuildLabels();
   syncAutoRotate();
+  if (!coreIds.size && commFocus != null && commById[commFocus]) {
+    const c = commById[commFocus];
+    startTransition({ origin: c.core, cores: new Set([c.core]), hop1: new Set(c.members.filter(id => id !== c.core)), strength: () => 0.85 });
+  } else {
+    startTransition({ origin: origin || [...coreIds][0] || null, cores: coreIds, hop1, hop2,
+      strength: id => { const s = maxCorrToCores(id); return s <= 0 ? 0.2 : (s - 0.2) / 0.55; } });
+  }
 }
-function setFocus(cores, { moveCamera = true, openDetail = true } = {}) {
-  coreIds = new Set(cores);
-  refreshFocus();
+function setFocus(cores, { moveCamera = true, openDetail = true, origin = null } = {}) {
+  coreIds = new Set(cores); commFocus = null;
+  refreshFocus({ origin: origin || cores[0] || null });
   if (moveCamera) { if (cores.length) frameCores(); else resetView(); }
   if (openDetail && cores.length) setDockMode('detail', { fromFocus: true });
   renderExpandChips();
+  renderTrail();
+}
+function focusCommunity(k, { openDetail = true } = {}) {
+  if (!commById[k]) return;
+  coreIds = new Set(); commFocus = k; expandOptions = []; renderExpandChips();
+  refreshFocus();
+  resetView();
+  if (openDetail) setDockMode('detail', { fromFocus: true });
+  renderTrail();
 }
 
+// ---------------- 探索路径（面包屑 + 后退/前进 + 点云中的高亮折线） ----------------
+let touring = false;
+function entryLabel(en) { return en.comm != null ? `${commName(en.comm)}簇` : (en.cores.length === 1 ? en.cores[0] : `${en.cores[0]} 等 ${en.cores.length} 个`); }
+function explainStep(prev, id) {
+  const k = commOf(id), cn = commName(k), br = BRIDGES.get(id);
+  const brTxt = br ? `；${id} 是「${cn}」通往「${br.links.map(commName).join('」「')}」的桥梁` : '';
+  if (!prev || prev === id) {
+    const c = commById[k];
+    return c ? `${id} 属「${cn}」簇（${c.size} 个板块，簇核心 ${c.core}）${brTxt}` : `${id} 未归入主要社区（零散）${brTxt}`;
+  }
+  const r = rhoOf(prev, id), kp = commOf(prev);
+  const rel = r == null ? `残差相关未进前列（|ρ|<${DATA.corr_thr ?? '-'}）` : `残差相关 ρ=${r.toFixed(2)}${EDGE_SET.has(prev + '|' + id) ? '（多年复核）' : ''}`;
+  const same = (k === kp && k >= 0) ? `同属「${cn}」簇` : `跨簇：${prev} 属「${commName(kp)}」，${id} 属「${cn}」`;
+  return `${prev} 与 ${id} ${rel}，${same}${brTxt}`;
+}
+function communityWhy(k) {
+  const c = commById[k]; if (!c) return '';
+  const nb = (GRAPH.bridges || []).filter(b => b.comm === k).map(b => b.id);
+  return `「${c.name}」簇：${c.size} 个板块，主行业 ${c.l1_top}（${Math.round(c.l1_share * 100)}%），簇核心 ${c.core}${nb.length ? `，桥梁 ${nb.join('、')}` : ''}`;
+}
+function setPStep(text) { const el = document.getElementById('pStep'); if (el) el.textContent = text || ''; }
+function step(cores, { comm = null, push = true, openDetail = true, why = null } = {}) {
+  if (!touring) stopTour();
+  const cur = trail[trailIdx];
+  if (push && cur && comm == null && cur.comm == null && cur.cores.length === cores.length && cur.cores.every((c, i) => c === cores[i])) { applyEntry(cur, { openDetail }); return; }
+  const prev = cur ? (cur.comm == null && cur.cores.length === 1 ? cur.cores[0] : null) : null;
+  const entry = { cores: [...cores], comm, why: '' };
+  entry.why = why || (comm != null ? communityWhy(comm) : (cores.length === 1 ? explainStep(prev, cores[0]) : `查询聚焦 ${cores.length} 个板块：${cores.join('、')}`));
+  if (push) {
+    trail = trail.slice(0, trailIdx + 1); trail.push(entry);
+    if (trail.length > TRAIL_MAX) trail.shift();
+    trailIdx = trail.length - 1;
+  }
+  applyEntry(entry, { openDetail });
+}
+function applyEntry(en, { openDetail = true } = {}) {
+  if (en.comm != null) focusCommunity(en.comm, { openDetail }); else setFocus(en.cores, { openDetail });
+  setPStep(en.why);
+}
+function goGlobal({ keepTrail = true } = {}) {
+  if (!touring) stopTour();
+  document.getElementById('q').value = ''; document.getElementById('hints').innerHTML = '';
+  if (!keepTrail) trail = [];
+  trailIdx = -1;
+  expandOptions = []; renderExpandChips();
+  coreIds = new Set(); commFocus = null;
+  refreshFocus();
+  flyTo(HOME.target.clone(), HOME.pos.clone());
+  setPStep('');
+  renderTrail();
+}
+function goTrail(idx) {
+  if (idx < -1 || idx >= trail.length) return;
+  if (idx === -1) { goGlobal(); return; }
+  trailIdx = idx; applyEntry(trail[idx]);
+}
+const TRAIL_CAP = TRAIL_MAX + 1;
+const trailGeo = new THREE.BufferGeometry();
+trailGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(TRAIL_CAP * 6), 3));
+trailGeo.setDrawRange(0, 0);
+const trailLine = new THREE.LineSegments(trailGeo, new THREE.LineBasicMaterial({ color: 0x9ff3ff, transparent: true, opacity: 0.95, depthTest: false, depthWrite: false }));
+trailLine.renderOrder = 6; trailLine.frustumCulled = false; scene.add(trailLine);
+const trailDotGeo = new THREE.BufferGeometry();
+trailDotGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(TRAIL_CAP * 3), 3));
+trailDotGeo.setDrawRange(0, 0);
+const trailDots = new THREE.Points(trailDotGeo, new THREE.PointsMaterial({ color: 0x9ff3ff, size: 7, map: ringTex, transparent: true, depthTest: false, depthWrite: false }));
+trailDots.renderOrder = 6; trailDots.frustumCulled = false; scene.add(trailDots);
+function renderTrail() {
+  const ids = trail.slice(0, trailIdx + 1).map(en => en.comm != null ? (commById[en.comm] || {}).core : en.cores[0]).filter(id => nodeById[id]);
+  const P = trailGeo.attributes.position.array, D = trailDotGeo.attributes.position.array;
+  let seg = 0;
+  for (let k = 1; k < ids.length; k++) {
+    const a = nodeById[ids[k - 1]], b = nodeById[ids[k]]; if (ids[k - 1] === ids[k]) continue;
+    P.set([a.x, a.y, a.z, b.x, b.y, b.z], seg * 6); seg++;
+  }
+  ids.forEach((id, k) => { const n = nodeById[id]; D.set([n.x, n.y, n.z], k * 3); });
+  trailGeo.setDrawRange(0, seg * 2); trailGeo.attributes.position.needsUpdate = true;
+  trailDotGeo.setDrawRange(0, ids.length > 1 ? ids.length : 0); trailDotGeo.attributes.position.needsUpdate = true;
+  const bar = document.getElementById('trailBar'), crumbs = document.getElementById('crumbs');
+  bar.hidden = !trail.length;
+  if (!trail.length) { crumbs.innerHTML = ''; return; }
+  crumbs.innerHTML = `<span class="crumb ${trailIdx === -1 ? 'on' : ''}" data-i="-1">全局</span>` +
+    trail.map((en, i) => `<span class="crumb-sep">›</span><span class="crumb ${i === trailIdx ? 'on' : ''}" data-i="${i}" title="${(en.why || '').replace(/"/g, '&quot;')}">${entryLabel(en)}</span>`).join('');
+  crumbs.querySelectorAll('.crumb').forEach(el => el.onclick = () => goTrail(+el.dataset.i));
+  const on = crumbs.querySelector('.crumb.on'); if (on && on.scrollIntoView) on.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  document.getElementById('trBack').disabled = trailIdx < 0;
+  document.getElementById('trFwd').disabled = trailIdx >= trail.length - 1;
+}
+document.getElementById('trBack').onclick = () => goTrail(trailIdx - 1);
+document.getElementById('trFwd').onclick = () => goTrail(trailIdx + 1);
+window.addEventListener('keydown', e => {
+  if (!e.altKey || e.target.tagName === 'INPUT') return;
+  if (e.key === 'ArrowLeft') { e.preventDefault(); goTrail(trailIdx - 1); }
+  if (e.key === 'ArrowRight') { e.preventDefault(); goTrail(trailIdx + 1); }
+});
+
 // ---------------- 面板 ----------------
+{
+  const pStep = document.createElement('div'); pStep.id = 'pStep'; pStep.className = 'pstep';
+  document.getElementById('pMeta').before(pStep);
+  const pSug = document.createElement('div'); pSug.id = 'pSuggest';
+  document.getElementById('pKv').after(pSug);
+}
+function cdot(k) { const c = commById[k]; return `<span class="cdot" style="background:${c ? c.color : (GRAPH.loose_color || '#6b778c')}"></span>`; }
+function commListHtml() {
+  if (!COMM.length) return '';
+  return `<div class="sec"><span>同步图社区 ${COMM.length} 个 · 模块度 Q=${GRAPH.modularity ?? '-'}</span><span>点击进入</span></div><ul class="list">${COMM.map(c =>
+    `<li data-comm="${c.id}"><span>${cdot(c.id)}${c.name}<span class="sub2">${c.size} 个板块 · 核心 ${c.core} · 主行业 ${c.l1_top}</span></span><span>›</span></li>`).join('')}</ul>`;
+}
+// 下一步建议：簇核心 / 桥梁 / 最强未探索邻居
+function renderSuggest(id) {
+  const box = document.getElementById('pSuggest'); if (!box) return;
+  if (!id) { box.innerHTML = ''; return; }
+  const k = commOf(id), c = commById[k];
+  const visited = new Set(trail.slice(0, trailIdx + 1).flatMap(en => en.cores || []));
+  const items = [], seen = new Set([id]);
+  const push = it => { if (!it.id || seen.has(it.id) || !nodeById[it.id]) return; seen.add(it.id); items.push(it); };
+  if (c && c.core !== id) push({ id: c.core, tag: 'core', tagText: '核心', why: `「${c.name}」簇内加权度最高` });
+  const br = BRIDGES.get(id);
+  if (br) {
+    for (const lk of br.links.slice(0, 2)) {
+      let best = null, bv = -1;
+      for (const [x, r] of (ADJ[id] || new Map())) if (commOf(x) === lk && Math.abs(r) > bv) { bv = Math.abs(r); best = x; }
+      if (best) push({ id: best, tag: 'bridge', tagText: '跨簇', why: `经桥梁 ${id} 通往「${commName(lk)}」 · ρ=${rhoOf(id, best).toFixed(2)}` });
+    }
+  } else {
+    for (const b of (GRAPH.bridges || []).filter(b => b.comm === k).slice(0, 2))
+      push({ id: b.id, tag: 'bridge', tagText: '桥梁', why: `本簇通往「${b.links.map(commName).join('」「')}」` });
+  }
+  const nbs = [...(ADJ[id] || new Map()).entries()].filter(([x]) => !visited.has(x) && x !== id)
+    .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0, CFG_UI.suggest_neighbors ?? 3);
+  for (const [x, r] of nbs) push({ id: x, tag: 'nb', tagText: '邻居', why: `ρ=${r.toFixed(2)}${commOf(x) !== k ? ` · 跨簇「${commName(commOf(x))}」` : ' · 同簇'}` });
+  box.innerHTML = items.length ? `<div class="sec"><span>下一步建议</span><span>逐步参透</span></div><ul class="list sugg">${items.map(it =>
+    `<li data-id="${it.id}"><span><span class="stag ${it.tag}">${it.tagText}</span>${it.id}<span class="sub2">${it.why}</span></span><span>›</span></li>`).join('')}</ul>` : '';
+  box.querySelectorAll('li[data-id]').forEach(li => li.onclick = () => { document.getElementById('q').value = li.dataset.id; setExpandOptions([]); step([li.dataset.id]); });
+}
+function renderCommunityPanel(k) {
+  const c = commById[k]; if (!c) return;
+  document.getElementById('pTitle').textContent = `${c.name}簇`;
+  document.getElementById('pMeta').textContent = `${c.size} 个板块 · 簇核心 ${c.core} · ${GRAPH.method || ''}`;
+  document.getElementById('pKv').innerHTML = `<b>主行业</b><span>${c.l1_top}（${Math.round(c.l1_share * 100)}%）</span><b>模块度</b><span>Q=${GRAPH.modularity ?? '-'}（全图）</span>`;
+  const bs = (GRAPH.bridges || []).filter(b => b.comm === k);
+  const wd = GRAPH.wdeg || {};
+  document.getElementById('pBody').innerHTML =
+    (bs.length ? `<div class="sec"><span>桥梁（通往其他社区）</span></div><ul class="list">${bs.map(b => `<li data-id="${b.id}"><span><span class="stag bridge">桥梁</span>${b.id}<span class="sub2">→ ${b.links.map(commName).join('、')} · 介数 ${b.betweenness}</span></span><span>›</span></li>`).join('')}</ul>` : '') +
+    `<div class="sec"><span>成员（按簇内加权度）</span><span>${c.size}</span></div><ul class="list">${c.members.map(id => `<li data-id="${id}"><span>${id === c.core ? '<span class="stag core">核心</span>' : ''}${id}</span><span class="sub2">Σ|ρ| ${(wd[id] ?? 0).toFixed(2)}</span></li>`).join('')}</ul>`;
+  document.getElementById('pBody').querySelectorAll('li[data-id]').forEach(li => li.onclick = () => { document.getElementById('q').value = li.dataset.id; setExpandOptions([]); step([li.dataset.id]); });
+  renderMembers(null); renderSuggest(null);
+}
 function fmtPct(x) { if (x == null || Number.isNaN(x)) return '-'; return (x * 100).toFixed(0) + '%'; }
 function fmtLift(x) { if (x == null || Number.isNaN(x)) return '-'; return (x >= 0 ? '+' : '') + (x * 100).toFixed(0) + 'pt'; }
 function fmtPct1(x) { if (x == null || Number.isNaN(x)) return '-'; return (x * 100).toFixed(1) + '%'; }
@@ -1335,15 +1767,18 @@ function renderPanel(cores, neighborIds) {
     } else {
       const soft = DATA.edges.filter(e => e.soft).length;
       meta.textContent = `${DATA.n_sectors} 个二级 · 同步边 ${DATA.edges.length - soft} 条多年复核${soft ? ` + ${soft} 条补充` : ''}（|ρ|≥${DATA.corr_thr}）`;
-      body.innerHTML = `<div class="empty">${DATA.note || ''}</div>`;
+      body.innerHTML = `<div class="empty">${DATA.note || ''}</div>${commListHtml()}`;
+      body.querySelectorAll('li[data-comm]').forEach(li => li.onclick = () => step([], { comm: +li.dataset.comm }));
     }
-    kv.innerHTML = ''; renderMembers(null); return;
+    kv.innerHTML = ''; renderMembers(null); renderSuggest(null); return;
   }
   if (title) title.textContent = cores.length === 1 ? cores[0] : `聚焦簇（${cores.length}）`;
   if (cores.length === 1) {
     const n = nodeById[cores[0]];
-    kv.innerHTML = `<b>一级</b><span>${n.l1 || '-'}</span><b>成分</b><span>${n.n || '-'} 只</span><b>近20日</b><span class="${(n.cum20 || 0) >= 0 ? 'pos' : 'neg'}">${fmtRet(n.cum20)}</span><b>当日</b><span class="${(n.last || 0) >= 0 ? 'pos' : 'neg'}">${fmtRet(n.last)}</span>`;
+    const k = commOf(n.id);
+    kv.innerHTML = `<b>社区</b><span class="commlink" data-comm="${k}">${cdot(k)}${commName(k)}${BRIDGES.has(n.id) ? ' · 桥梁' : ''}</span><b>一级</b><span>${n.l1 || '-'}</span><b>成分</b><span>${n.n || '-'} 只</span><b>近20日</b><span class="${(n.cum20 || 0) >= 0 ? 'pos' : 'neg'}">${fmtRet(n.cum20)}</span><b>当日</b><span class="${(n.last || 0) >= 0 ? 'pos' : 'neg'}">${fmtRet(n.last)}</span>`;
     renderMembers(cores[0]);
+    const cl = kv.querySelector('.commlink'); if (cl && k >= 0) cl.onclick = () => step([], { comm: k });
   } else {
     const list = cores.join(' · ');
     kv.innerHTML = `<b>核心</b><span class="corelist" title="${list}">${list}</span>`;
@@ -1375,7 +1810,8 @@ function renderPanel(cores, neighborIds) {
         }).join('')}</ul>`
       : `<div class="empty">该簇暂无足够强的稳健相关边，仍可看空间邻近。</div>`;
   }
-  body.querySelectorAll('li[data-id]').forEach(li => li.onclick = () => { document.getElementById('q').value = li.dataset.id; setExpandOptions([]); setFocus([li.dataset.id]); });
+  body.querySelectorAll('li[data-id]').forEach(li => li.onclick = () => { document.getElementById('q').value = li.dataset.id; setExpandOptions([]); step([li.dataset.id]); });
+  renderSuggest(cores.length === 1 ? cores[0] : null);
 }
 function renderMembers(sectorId) {
   const sec = document.getElementById('memSec');
@@ -1401,7 +1837,22 @@ function renderBoard() {
     const on = coreIds.has(r.id) ? 'on' : '';
     return `<li class="${on}" data-id="${r.id}"><span>${r.id}</span><span class="${cls}">${fmtRet(r.v)}</span></li>`;
   }).join('');
-  ul.querySelectorAll('li').forEach(li => li.onclick = () => { document.getElementById('q').value = li.dataset.id; setExpandOptions([]); setFocus([li.dataset.id]); });
+  ul.querySelectorAll('li').forEach(li => li.onclick = () => { document.getElementById('q').value = li.dataset.id; setExpandOptions([]); step([li.dataset.id]); });
+}
+function renderLegend() {
+  const isComm = colorBy === 'community';
+  document.getElementById('lgRet').style.display = isComm ? 'none' : '';
+  document.getElementById('lgCommBox').style.display = isComm ? '' : 'none';
+  document.getElementById('lgSoft').style.display = DATA.edges.some(e => e.soft) ? '' : 'none';
+  document.getElementById('lgWeb').textContent = isComm
+    ? '千丝万缕 = 全部同步边：两端社区色渐变，越亮 |ρ| 越大（灰 = 负相关）'
+    : '千丝万缕 = 全部同步边：红正 / 绿负，越亮 |ρ| 越大';
+  const box = document.getElementById('lgComm');
+  if (isComm && !box.childElementCount) {
+    box.innerHTML = COMM.map(c => `<div data-comm="${c.id}" title="${c.name}：${c.size} 个板块，核心 ${c.core}">${cdot(c.id)}${c.name}</div>`).join('');
+    box.querySelectorAll('[data-comm]').forEach(el => el.onclick = () => step([], { comm: +el.dataset.comm }));
+  }
+  renderLegendScale();
 }
 function renderLegendScale() {
   const el = document.getElementById('lgScale'); if (!el) return;
@@ -1418,7 +1869,9 @@ function renderExpandChips() {
   box.querySelectorAll('button[data-id]').forEach(b => b.onclick = () => {
     const next = new Set(coreIds);
     if (next.has(b.dataset.id)) next.delete(b.dataset.id); else next.add(b.dataset.id);
-    setFocus([...next], { openDetail: false });
+    const cur = trail[trailIdx];
+    if (cur && cur.comm == null) { cur.cores = [...next]; cur.why = next.size === 1 ? explainStep(null, [...next][0]) : `查询聚焦 ${next.size} 个板块：${[...next].join('、')}`; setPStep(cur.why); }
+    setFocus([...next], { openDetail: false, origin: b.dataset.id });
   });
 }
 
@@ -1441,7 +1894,7 @@ function updateHints() {
     el.onclick = () => {
       document.getElementById('q').value = el.dataset.sector;
       setExpandOptions([]);
-      setFocus([el.dataset.sector]);
+      step([el.dataset.sector]);
       [...box.children].forEach(x => x.classList.remove('on')); el.classList.add('on');
     };
   });
@@ -1451,22 +1904,18 @@ function runQuery() {
   if (qMode === 'stock') {
     const hits = searchStocks(q); updateHints();
     if (!hits.length) { renderPanel(null, []); document.getElementById('pBody').innerHTML = `<div class="empty">未匹配到标的，试试名称或代码。</div>`; return; }
-    setExpandOptions([]); setFocus([hits[0].sector]); document.getElementById('q').value = hits[0].sector; return;
+    setExpandOptions([]); step([hits[0].sector]); document.getElementById('q').value = hits[0].sector; return;
   }
   const all = expandQuery(q);
   if (!all.length) { setExpandOptions([]); renderPanel(null, []); document.getElementById('pBody').innerHTML = `<div class="empty">未匹配到二级板块，试试「电力」「半导体」「白酒」。</div>`; return; }
   const exact = exactMatches(q);
   const cores = exact.length ? exact : all;  // 无精确匹配（如“新能源”）时聚焦整组，仍可逐个取消
   expandOptions = exact.length ? all.filter(id => !exact.includes(id)) : all;
-  setFocus(cores);
+  step(cores);
 }
 
 document.getElementById('go').onclick = runQuery;
-document.getElementById('reset').onclick = () => {
-  document.getElementById('q').value = ''; document.getElementById('hints').innerHTML = '';
-  setExpandOptions([]); setFocus([]);
-  controls.target.copy(HOME.target); camera.position.copy(HOME.pos); controls.update();
-};
+document.getElementById('reset').onclick = () => goGlobal();
 document.getElementById('q').addEventListener('keydown', e => { if (e.key === 'Enter') runQuery(); });
 document.getElementById('q').addEventListener('input', () => { if (qMode === 'stock') updateHints(); });
 document.getElementById('edgemode').onclick = e => { const b = e.target.closest('button'); if (b) setMode(b.dataset.v); };
@@ -1491,6 +1940,60 @@ document.getElementById('retmode').onclick = e => {
   leadBtn.innerHTML = LEAD_SIG_COUNT === 0 ? '领先·实验<small>0 显著</small>' : '领先·实验';
   leadBtn.title = LEAD_SIG_COUNT === 0 ? '实验功能：当前没有领先边通过 BH-FDR 显著性检验' : '实验功能：领先—滞后关系，需结合 FDR 与样本外命中阅读';
 }
+{
+  const cm = document.getElementById('colormode');
+  const sync = () => [...cm.children].forEach(x => x.classList.toggle('active', x.dataset.v === colorBy));
+  if (!COMM.length) cm.style.display = 'none';
+  sync();
+  cm.onclick = e => {
+    const b = e.target.closest('button'); if (!b) return;
+    colorBy = b.dataset.v; sync();
+    applyNodeAppearance();
+    if (!coreIds.size && commFocus == null) rebuildLabels();
+  };
+}
+// ---------------- 导览：从全局到局部（社区 → 核心 → 桥梁 → 另一社区核心） ----------------
+let tour = null;
+function buildTour() {
+  const steps = [];
+  if (!COMM.length) return steps;
+  steps.push({ cap: `全局：${COMM.length} 个同步社区（按簇着色），亮丝 = 强同步相关`, run: () => goGlobal() });
+  const A = COMM[0];
+  steps.push({ cap: `社区「${A.name}」：${A.size} 个板块，主行业 ${A.l1_top}`, run: () => step([], { comm: A.id }) });
+  steps.push({ cap: `簇核心 ${A.core}：簇内加权度最高`, run: () => step([A.core]) });
+  const br = (GRAPH.bridges || []).find(b => b.comm === A.id) || (GRAPH.bridges || [])[0];
+  if (br) {
+    steps.push({ cap: `桥梁 ${br.id}：连接「${commName(br.comm)}」与「${br.links.map(commName).join('」「')}」`, run: () => step([br.id]) });
+    const B = commById[br.comm === A.id ? br.links[0] : br.comm];
+    if (B) steps.push({ cap: `跨到「${B.name}」，簇核心 ${B.core}`, run: () => step([B.core]) });
+  }
+  return steps;
+}
+function showCap(t) { const el = document.getElementById('tourCap'); el.textContent = t; el.classList.toggle('show', !!t); }
+function nextTour() {
+  if (!tour) return;
+  tour.i++;
+  if (tour.i >= tour.steps.length) { stopTour(); return; }
+  const st = tour.steps[tour.i];
+  touring = true; try { st.run(); } finally { touring = false; }
+  showCap(`导览 ${tour.i + 1}/${tour.steps.length} · ${st.cap}`);
+  tour.timer = setTimeout(nextTour, CFG_UI.tour_step_ms ?? 4200);
+}
+function startTour() {
+  const steps = buildTour(); if (!steps.length) return;
+  stopTour(); tour = { steps, i: -1, timer: 0 };
+  document.getElementById('tourBtn').textContent = '导览 ■';
+  nextTour();
+}
+function stopTour() {
+  if (!tour) return;
+  clearTimeout(tour.timer); tour = null;
+  document.getElementById('tourBtn').textContent = '导览 ▶';
+  showCap('');
+}
+document.getElementById('tourBtn').onclick = () => { if (tour) stopTour(); else startTour(); };
+if (!COMM.length) document.getElementById('tourBtn').style.display = 'none';
+
 document.getElementById('showFailed').onclick = () => {
   showFailed = !showFailed;
   const btn = document.getElementById('showFailed');
@@ -1536,7 +2039,7 @@ canvas.addEventListener('pointerup', ev => {
   const moved = ptrDragged || Math.hypot(ev.clientX - ptrDown.x, ev.clientY - ptrDown.y) > TAP_CANCEL_PX;
   ptrDown = null; ptrDragged = false; if (moved) return;
   const i = pickNode(ev.clientX, ev.clientY);
-  if (i >= 0) { const id = DATA.nodes[i].id; document.getElementById('q').value = id; setExpandOptions([]); setFocus([id]); }
+  if (i >= 0) { const id = DATA.nodes[i].id; document.getElementById('q').value = id; setExpandOptions([]); step([id]); }
 });
 window.addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); applyViewOffset(); });
 
@@ -1570,7 +2073,7 @@ function setDockMode(next, { persist = true, fromFocus = false } = {}) {
 }
 document.getElementById('dockRail').onclick = e => {
   const b = e.target.closest('.rail-btn'); if (!b) return;
-  if (b.dataset.act === 'home') { markInteracted(); resetView(); return; }
+  if (b.dataset.act === 'home') { resetView(); return; }
   const m = b.dataset.mode;
   if (dockMode === m) setDockMode('hidden'); else setDockMode(m);
 };
@@ -1615,9 +2118,20 @@ setMode(mode);
 applyDeepLink();
 
 let frame = 0;
+const frameTimes = [];
+function fps() { if (frameTimes.length < 2) return 0; return Math.round((frameTimes.length - 1) * 1000 / (frameTimes[frameTimes.length - 1] - frameTimes[0])); }
 (function tick(now) {
   requestAnimationFrame(tick);
-  const t = (now || performance.now()) * 0.001;
+  const ms = performance.now();
+  frameTimes.push(ms); while (frameTimes.length > 2 && ms - frameTimes[0] > 2000) frameTimes.shift();
+  const t = (now || ms) * 0.001;
+  const flying = stepFlight(ms);
+  stepLit(ms);
+  stepPulses(ms);
+  if (flowFade < 1) {
+    flowFade = Math.max(0, Math.min(1, (ms - flowFadeT0) / flowFadeDur));
+    for (const ch of flowGroup.children) if (ch.material && ch.material.userData.base != null) ch.material.opacity = ch.material.userData.base * flowFade;
+  }
   for (const m of flowMats) m.dashOffset = -t * 4.5;
   for (const ch of flowGroup.children) {
     if (ch.isPoints && ch.userData && ch.userData.n) {
@@ -1631,11 +2145,18 @@ let frame = 0;
       ch.geometry.attributes.position.needsUpdate = true;
     }
   }
-  controls.update();
+  if (!flying) controls.update();
   if (++frame % 6 === 0) declutterLabels();
   renderer.render(scene, camera);
 })();
-window.__scc = { camera, controls, pickNode, get coreIds() { return [...coreIds]; }, get mode() { return mode; }, three: THREE_SOURCE };
+window.__scc = {
+  camera, controls, pickNode, three: THREE_SOURCE, fps,
+  screenOf: id => { const n = nodeById[id]; if (!n) return null; camera.updateMatrixWorld(); _v.set(n.x, n.y, n.z).project(camera); return _v.z > 1 ? null : toScreen(_v); }, step, goTrail, goGlobal, startTour, stopTour, graph: GRAPH,
+  get coreIds() { return [...coreIds]; }, get mode() { return mode; }, get colorBy() { return colorBy; },
+  get commFocus() { return commFocus; }, get trail() { return trail.map(entryLabel); }, get trailIdx() { return trailIdx; },
+  get flying() { return !!flight; }, get animating() { return performance.now() < litAnimUntil; }, get pulses() { return pulses.length; },
+  get drawCalls() { return renderer.info.render.calls; }, get webSegments() { return WEB.list.length; }, reduced: REDUCED,
+};
 </script>
 </body>
 </html>
@@ -1683,7 +2204,7 @@ def main() -> None:
         payload["lead_display"] = CFG["display"]  # 展示参数随配置即时生效，无需重算结构
         payload["stale_weeks"] = int(CFG["stale_weeks"])
         print("从缓存加载，刷新 stock_index / sector_members…")
-        payload = attach_stock_payload(payload)
+        payload = attach_graph(attach_stock_payload(payload))
         OUTPUT_JSON.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         OUTPUT_HTML.parent.mkdir(parents=True, exist_ok=True)
         OUTPUT_HTML.write_text(render_html(payload), encoding="utf-8")
@@ -1700,7 +2221,9 @@ def main() -> None:
     resid = rolling_residualize(piv, mkt, BETA_WINDOW, BETA_MIN_PERIODS)
     piv, resid = piv.loc[piv.index >= START], resid.loc[resid.index >= START]
     print(f"  板块 {piv.shape[1]} · 交易日 {piv.shape[0]} · 截止 {piv.index.max().date()}")
-    payload = pack_payload(piv, resid, meta, bench=bench)
+    payload = attach_graph(pack_payload(piv, resid, meta, bench=bench))
+    g = payload["graph"]
+    print(f"  社区 {len(g['communities'])} 个（Q={g['modularity']}）· 桥梁 {len(g['bridges'])} 个")
     print(f"  节点 {payload['n_sectors']} · 同步边 {len(payload['edges'])} · 领先边 {len(payload['lead_edges'])}")
 
     OUTPUT_JSON.parent.mkdir(parents=True, exist_ok=True)

@@ -50,5 +50,34 @@ display:
   pick_radius_touch_px: 28   # 触屏点选半径（屏幕像素）
   mobile_panel_vh: 42        # 手机底部面板最大高度（vh）；聚焦时相机按面板高度上移
   legend_open_mobile: false  # 手机端图例默认折叠
+  color_by: community        # 节点默认着色：community（同步图社区）| return（涨跌）
+  rotate_resume_ms: 1500     # 拖动/捏合松手后多久恢复自转（毫秒）
+  focus_orbit_speed: 0.3     # 聚焦时绕焦点慢速环绕的速度（auto_rotate_speed 同单位）
+  auto_rotate_reduced_motion: false  # 系统开启“减少动态效果”时是否仍自转
+  web_opacity_min: 0.07      # “千丝万缕”同步网：|ρ|=阈值时的亮度（加色混合）
+  web_opacity_max: 0.6       # |ρ|≈0.85 以上时的亮度
+  web_focus_dim: 0.12        # 聚焦时远处板块/连线压暗到的亮度
+  transition_ms: 1700        # 点击节点的过渡时长（镜头弧线 + 逐跳点亮）
+  reduced_motion_ms: 350     # prefers-reduced-motion 下的缩短过渡
+  arc_height: 0.22           # 镜头弧线抬升（相对飞行距离）
+  pulse_max: 160             # 同时存在的沿边脉冲上限（单个 Points，一次绘制）
+  trail_max: 12              # 探索路径最多保留几步
+  suggest_neighbors: 3       # 详情里“最强未探索邻居”条数
+  tour_step_ms: 4200         # “从全局到局部”导览每步停留（毫秒）
+
+graph:                       # 同步图社区与桥梁（scripts/reports/sector_graph.py）
+  min_community_size: 3      # 小于此规模的社区并入「零散」
+  resolution: 1.0            # greedy modularity 分辨率（>1 更碎，<1 更粗）
+  bridge_top_k: 8            # 标记的桥梁板块数
+  bridge_min_participation: 0.25  # 跨簇连接占比（参与系数）下限
+  name_min_share: 0.45       # 一级行业占比达标则单名，否则取前两名
+  name_overrides:            # 簇核心 → 显示名（核心变动时自动回落为行业命名）
+    食品加工: 大消费·医药
+    基础建设: 基建地产链
+    炼化及贸易: 周期原材料
+    电池: 新能源·军工电子
+    IT服务Ⅱ: TMT
+    专用设备: 中游制造
+    城商行Ⅱ: 银行保险
 
 stale_weeks: 2               # 关系样本截止日落后行情超过 N 周时，页脚标红提示重算
