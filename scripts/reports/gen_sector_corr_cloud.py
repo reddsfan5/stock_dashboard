@@ -22,17 +22,24 @@ sys.path.insert(0, str(PROJECT_DIR))
 
 from data.industry import StockInfo
 
-START = "2022-01-01"
+from scripts.reports.sector_lead_stats import build_lead_edges_sig, load_config, rolling_residualize
+
+# 参数集中在 config/sector_corr_cloud.yaml（缺省值见 sector_lead_stats.DEFAULTS）
+CFG = load_config()
+START = str(CFG["start"])
 MIN_NAMES_PER_DAY = 5
-CORR_THR = 0.42
-MAX_EDGES_PER_NODE = 8
-MIN_YEAR_CONFIRM = 2
-MAX_LAG = 4  # 周频滞后天数（约 1–4 周）
-LEAD_XCORR_THR = 0.08
-LEAD_ASYM = 0.015  # 领先方向需略强于反向
-LEAD_MAX_OUT = 4  # 每点最多指出几条领先边
-EVENT_Q = 0.80
-HORIZON = 5
+CORR_THR = float(CFG["sync"]["corr_thr"])
+MAX_EDGES_PER_NODE = int(CFG["sync"]["max_edges_per_node"])
+MIN_YEAR_CONFIRM = int(CFG["sync"]["min_year_confirm"])
+MAX_LAG = int(CFG["lead"]["max_lag"])  # 周
+LEAD_XCORR_THR = float(CFG["lead"]["xcorr_thr"])
+LEAD_ASYM = float(CFG["lead"]["asym"])  # 领先方向需略强于反向
+LEAD_MAX_OUT = int(CFG["lead"]["max_out"])  # 每点最多指出几条领先边
+EVENT_Q = float(CFG["lead"]["event_q"])
+HORIZON = 5  # 旧口径（日）；新口径的事件窗 = 边的滞后周数
+BETA_WINDOW = int(CFG["beta"]["window"])
+BETA_MIN_PERIODS = int(CFG["beta"]["min_periods"])
+KLINE_CACHE = PROJECT_DIR / "cache" / "stock_kline_cache.parquet"
 OUTPUT_HTML = PROJECT_DIR / "output" / "sector_corr_cloud.html"
 OUTPUT_JSON = PROJECT_DIR / "cache" / "sector_corr_cloud.json"
 MOM1 = PROJECT_DIR / "cache" / "indicators_mom1.parquet"
@@ -62,10 +69,32 @@ def classical_mds(dist: np.ndarray, n_components: int = 3) -> np.ndarray:
     return eigvecs[:, idx] * np.sqrt(eigvals)
 
 
-def load_sw2_returns() -> tuple[pd.DataFrame, pd.DataFrame]:
+def beta_warmup_start(start: str = START) -> pd.Timestamp:
+    """滚动 beta 需要预热：向前多取约一个窗口的交易日。"""
+    return pd.Timestamp(start) - pd.Timedelta(days=int(BETA_WINDOW * 1.6) + 30)
+
+
+def _load_daily_returns(start) -> pd.DataFrame:
+    """个股日收益（%）。优先由 stock_kline_cache 的收盘价重算（与 features.daily 的 mom1 同口径，
+    但覆盖到最新交易日）；日线缓存不可用时退回 indicators_mom1.parquet。"""
+    start = pd.Timestamp(start)
+    if KLINE_CACHE.exists():
+        try:
+            pre = start - pd.Timedelta(days=15)
+            k = pd.read_parquet(KLINE_CACHE, columns=["代码", "日期", "收盘"], filters=[("日期", ">=", pre)])
+            k["日期"] = pd.to_datetime(k["日期"])
+            close = k.pivot_table(index="日期", columns="代码", values="收盘", aggfunc="last").sort_index()
+            ret = close.pct_change(fill_method=None) * 100
+            return ret.loc[ret.index >= start]
+        except Exception as exc:
+            print(f"  读取日线缓存失败，退回 mom1: {exc}")
     mom = pd.read_parquet(MOM1)
     mom.index = pd.to_datetime(mom.index)
-    mom = mom.loc[mom.index >= START]
+    return mom.loc[mom.index >= start]
+
+
+def load_sw2_returns(start=None) -> tuple[pd.DataFrame, pd.DataFrame]:
+    mom = _load_daily_returns(beta_warmup_start() if start is None else start)
 
     info = StockInfo().df.copy()
     info = info.dropna(subset=["申万2级"])
@@ -95,26 +124,59 @@ def load_sw2_returns() -> tuple[pd.DataFrame, pd.DataFrame]:
     return piv, meta
 
 
+def load_benchmark(piv: pd.DataFrame, index_cache: pd.DataFrame | None = None) -> tuple[pd.Series, dict]:
+    """市场基准日收益（%）与说明。
+
+    旧实现调用了 IndexData 不存在的 ``get_kline()``，异常被吞掉后总是静默退回板块等权均值。
+    现直接读 ``IndexData().cache``（cache/index_kline_cache.parquet）。全部失败时仍退回等权，
+    但返回 warning，页面会显著提示。
+    """
+    bc = CFG["benchmark"]
+    codes = [str(bc["code"]), *[str(c) for c in bc.get("fallback_codes", [])]]
+    names: dict = {}
+    err = ""
+    if index_cache is None:
+        try:
+            from data.index import IndexData, INDEXES
+            names = dict(INDEXES)
+            index_cache = IndexData().cache
+        except Exception as exc:
+            err = f"{type(exc).__name__}: {exc}"
+            index_cache = None
+    min_cov = float(bc.get("min_coverage", 0.95))
+    span = piv.index[piv.notna().any(axis=1)]
+    for code in codes:
+        if index_cache is None or len(index_cache) == 0:
+            break
+        k = index_cache[index_cache["代码"] == code].copy()
+        if k.empty:
+            continue
+        k["日期"] = pd.to_datetime(k["日期"])
+        k = k.sort_values("日期").drop_duplicates("日期", keep="last").set_index("日期")
+        r = k["收盘"].astype(float).pct_change(fill_method=None) * 100
+        r = r.reindex(piv.index)
+        cov = float(r.reindex(span).notna().mean()) if len(span) else 0.0
+        if cov < min_cov:
+            err = f"{code} 覆盖率 {cov:.1%} < {min_cov:.0%}"
+            continue
+        source = str(k["来源"].iloc[-1]) if "来源" in k.columns else "ak"
+        is_primary = code == str(bc["code"])
+        name = str(bc["name"]) if is_primary else names.get(code, code)
+        warning = None
+        if not is_primary:
+            warning = f"{bc['name']}（{bc['code']}）不可用，已改用 {name}（{code}）作为市场基准"
+        elif source == "etf":
+            warning = f"{name} 使用 ETF 代理行情"
+        return r, {"code": code, "name": name, "ok": is_primary and warning is None,
+                   "coverage": round(cov, 4), "source": source, "warning": warning}
+    return piv.mean(axis=1), {
+        "code": "equal_weight", "name": "板块等权均值", "ok": False, "coverage": 1.0, "source": "fallback",
+        "warning": f"{bc['name']}（{bc['code']}）读取失败（{err or '无数据'}），已退回板块等权均值作为市场基准",
+    }
+
+
 def market_proxy(piv: pd.DataFrame) -> pd.Series:
-    try:
-        from data.index import IndexData
-        idx = IndexData()
-        for code in ("sh000300", "sh000001"):
-            try:
-                k = idx.get_kline(code) if hasattr(idx, "get_kline") else None
-            except Exception:
-                k = None
-            if k is None or len(k) == 0:
-                continue
-            k = k.copy()
-            k["日期"] = pd.to_datetime(k["日期"])
-            r = k.sort_values("日期").set_index("日期")["收盘"].pct_change() * 100
-            r = r.reindex(piv.index)
-            if r.notna().sum() > 200:
-                return r
-    except Exception:
-        pass
-    return piv.mean(axis=1)
+    return load_benchmark(piv)[0]
 
 
 def residualize(piv: pd.DataFrame, mkt: pd.Series) -> pd.DataFrame:
@@ -217,115 +279,6 @@ def _xcorr_at_lag(a: np.ndarray, b: np.ndarray, lag: int, min_n: int = 40) -> fl
     if sx < 1e-12 or sy < 1e-12:
         return np.nan
     return float(np.corrcoef(x, y)[0, 1])
-
-
-def event_follow_prob(leader: np.ndarray, follower: np.ndarray, horizon: int = HORIZON, q: float = EVENT_Q) -> dict:
-    """leader 日残差 > 分位后，follower 未来 horizon 日累计为正的条件概率 vs 基准。"""
-    n = len(leader)
-    if n < horizon + 50:
-        return {"n": 0, "p_up": None, "p_dn": None, "base_up": None, "base_dn": None, "lift_up": None, "lift_dn": None}
-    # future cum return of follower
-    fut = np.full(n, np.nan)
-    for t in range(n - horizon):
-        window = follower[t + 1 : t + 1 + horizon]
-        if np.isfinite(window).sum() < horizon:
-            continue
-        fut[t] = np.nansum(window)
-    valid = np.isfinite(leader) & np.isfinite(fut)
-    if valid.sum() < 80:
-        return {"n": int(valid.sum()), "p_up": None, "p_dn": None, "base_up": None, "base_dn": None, "lift_up": None, "lift_dn": None}
-    thr_hi = np.nanquantile(leader[valid], q)
-    thr_lo = np.nanquantile(leader[valid], 1 - q)
-    base_up = float(np.mean(fut[valid] > 0))
-    base_dn = float(np.mean(fut[valid] < 0))
-    up_mask = valid & (leader >= thr_hi)
-    dn_mask = valid & (leader <= thr_lo)
-    p_up = float(np.mean(fut[up_mask] > 0)) if up_mask.sum() >= 20 else None
-    p_dn = float(np.mean(fut[dn_mask] < 0)) if dn_mask.sum() >= 20 else None
-    return {
-        "n_up": int(up_mask.sum()),
-        "n_dn": int(dn_mask.sum()),
-        "p_up": None if p_up is None else round(p_up, 3),
-        "p_dn": None if p_dn is None else round(p_dn, 3),
-        "base_up": round(base_up, 3),
-        "base_dn": round(base_dn, 3),
-        "lift_up": None if p_up is None else round(p_up - base_up, 3),
-        "lift_dn": None if p_dn is None else round(p_dn - base_dn, 3),
-    }
-
-
-def build_lead_edges(resid: pd.DataFrame, corr: pd.DataFrame) -> list[dict]:
-    """周频残差上挖掘 A 领先 B；事件概率仍用日频残差（更贴近交易观察窗）。"""
-    names = list(resid.columns)
-    # 周频：按日历周求和，抑制日噪声，交叉相关更可读
-    weekly = resid.resample("W-FRI").sum(min_count=2)
-    warr = {n: weekly[n].values.astype(float) for n in names}
-    darr = {n: resid[n].values.astype(float) for n in names}
-
-    pair_pool = []
-    for i, a in enumerate(names):
-        for b in names[i + 1 :]:
-            c = corr.loc[a, b]
-            if np.isfinite(c) and abs(c) >= 0.20:
-                pair_pool.append((a, b, float(c)))
-    pair_pool.sort(key=lambda t: -abs(t[2]))
-    pair_pool = pair_pool[: min(len(pair_pool), 3000)]
-
-    cands = []
-    for a, b, sync in pair_pool:
-        best_ab = (-1, np.nan)
-        best_ba = (-1, np.nan)
-        for lag in range(1, MAX_LAG + 1):
-            cab = _xcorr_at_lag(warr[a], warr[b], lag)
-            cba = _xcorr_at_lag(warr[b], warr[a], lag)
-            if np.isfinite(cab) and (not np.isfinite(best_ab[1]) or abs(cab) > abs(best_ab[1])):
-                best_ab = (lag, cab)
-            if np.isfinite(cba) and (not np.isfinite(best_ba[1]) or abs(cba) > abs(best_ba[1])):
-                best_ba = (lag, cba)
-        if np.isfinite(best_ab[1]) and abs(best_ab[1]) >= LEAD_XCORR_THR:
-            rev = abs(best_ba[1]) if np.isfinite(best_ba[1]) else 0.0
-            if abs(best_ab[1]) >= rev + LEAD_ASYM:
-                cands.append((a, b, best_ab[0], float(best_ab[1]), sync))
-        if np.isfinite(best_ba[1]) and abs(best_ba[1]) >= LEAD_XCORR_THR:
-            rev = abs(best_ab[1]) if np.isfinite(best_ab[1]) else 0.0
-            if abs(best_ba[1]) >= rev + LEAD_ASYM:
-                cands.append((b, a, best_ba[0], float(best_ba[1]), sync))
-
-    cands.sort(key=lambda t: -abs(t[3]))
-    out_deg = {n: 0 for n in names}
-    edges = []
-    for src, tgt, lag, xc, sync in cands:
-        if out_deg[src] >= LEAD_MAX_OUT:
-            continue
-        ev = event_follow_prob(darr[src], darr[tgt])
-        # 必须有可交易意义的条件概率提升，避免纯噪声交叉相关
-        lift_ok = (
-            (ev.get("lift_up") is not None and ev["lift_up"] >= 0.025)
-            or (ev.get("lift_dn") is not None and ev["lift_dn"] >= 0.025)
-        )
-        if not lift_ok:
-            continue
-        edges.append({
-            "source": src,
-            "target": tgt,
-            "lag": int(lag),
-            "lag_unit": "week",
-            "xcorr": round(xc, 4),
-            "abs": round(abs(xc), 4),
-            "sign": 1 if xc >= 0 else -1,
-            "sync": round(sync, 4),
-            "p_up": ev.get("p_up"),
-            "p_dn": ev.get("p_dn"),
-            "base_up": ev.get("base_up"),
-            "base_dn": ev.get("base_dn"),
-            "lift_up": ev.get("lift_up"),
-            "lift_dn": ev.get("lift_dn"),
-            "n_up": ev.get("n_up", 0),
-            "n_dn": ev.get("n_dn", 0),
-            "horizon": HORIZON,
-        })
-        out_deg[src] += 1
-    return edges
 
 
 def expand_query(q: str, names: list[str], l1_of: dict[str, str]) -> list[str]:
@@ -504,7 +457,7 @@ def attach_stock_payload(payload: dict) -> dict:
     return payload
 
 
-def pack_payload(piv: pd.DataFrame, resid: pd.DataFrame, meta: pd.DataFrame) -> dict:
+def pack_payload(piv: pd.DataFrame, resid: pd.DataFrame, meta: pd.DataFrame, bench: dict | None = None) -> dict:
     corr = resid.corr(method="pearson", min_periods=120)
     names = [c for c in corr.columns if corr[c].notna().sum() > 10]
     corr = corr.loc[names, names]
@@ -541,9 +494,11 @@ def pack_payload(piv: pd.DataFrame, resid: pd.DataFrame, meta: pd.DataFrame) -> 
             })
     edges = edges + soft
 
-    print("  计算领先—滞后边与跟涨/跟跌概率…")
-    lead_edges = build_lead_edges(resid, corr)
-    print(f"  领先边 {len(lead_edges)} 条")
+    print("  计算领先—滞后边：循环平移零分布 + BH-FDR + 滚动样本外…")
+    lead_edges, lead_summary = build_lead_edges_sig(resid, corr, CFG)
+    oos_all = lead_summary["oos"]["all"]
+    print(f"  领先候选 {len(lead_edges)} 条 · FDR(α={lead_summary['fdr_alpha']}) 通过 {lead_summary['fdr_pass']} 条"
+          f" · 检验数 {lead_summary['m_tests']} · 样本外命中 {oos_all['hit']} vs 基准 {oos_all['base']}")
 
     last = piv[names].ffill().iloc[-1]
     cum20 = ((1 + piv[names].fillna(0) / 100).tail(20).prod() - 1) * 100
@@ -568,17 +523,9 @@ def pack_payload(piv: pd.DataFrame, resid: pd.DataFrame, meta: pd.DataFrame) -> 
     lead_out: dict[str, list] = {n: [] for n in names}
     lead_in: dict[str, list] = {n: [] for n in names}
     for e in lead_edges:
-        item = {
-            "id": e["target"], "lag": e["lag"], "xcorr": e["xcorr"], "abs": e["abs"],
-            "lift_up": e["lift_up"], "lift_dn": e["lift_dn"],
-            "p_up": e["p_up"], "p_dn": e["p_dn"],
-        }
-        lead_out[e["source"]].append(item)
-        lead_in[e["target"]].append({
-            "id": e["source"], "lag": e["lag"], "xcorr": e["xcorr"], "abs": e["abs"],
-            "lift_up": e["lift_up"], "lift_dn": e["lift_dn"],
-            "p_up": e["p_up"], "p_dn": e["p_dn"],
-        })
+        body = {k: v for k, v in e.items() if k not in ("source", "target")}
+        lead_out[e["source"]].append({"id": e["target"], **body})
+        lead_in[e["target"]].append({"id": e["source"], **body})
     for k in names:
         lead_out[k].sort(key=lambda d: -d["abs"])
         lead_in[k].sort(key=lambda d: -d["abs"])
@@ -595,8 +542,14 @@ def pack_payload(piv: pd.DataFrame, resid: pd.DataFrame, meta: pd.DataFrame) -> 
         "corr_thr": CORR_THR,
         "lead_thr": LEAD_XCORR_THR,
         "max_lag": MAX_LAG,
-        "horizon": HORIZON,
-        "note": "同步边=去beta日残差相关；箭头=周频残差交叉相关领先（滞后周数）+ 日频事件跟涨/跟跌条件概率提升。非因果，仅统计倾向。",
+        "horizon": "滞后周",
+        "note": "同步边=滚动beta去市场后的日残差相关；箭头=周频残差交叉相关领先（滞后周数），经循环平移零分布+BH-FDR检验，并做滚动样本外验证。非因果，仅统计倾向。",
+        "data_as_of": str(piv.index.max().date()),
+        "benchmark": bench or {},
+        "beta_window": BETA_WINDOW,
+        "lead_summary": lead_summary,
+        "lead_display": CFG["display"],
+        "stale_weeks": int(CFG["stale_weeks"]),
         "nodes": nodes,
         "edges": edges,
         "lead_edges": lead_edges,
@@ -682,6 +635,15 @@ button:hover,.chip:hover,.chip.active,.seg button.active{border-color:var(--acce
 .members{max-height:220px;overflow:auto}
 .foot{position:fixed;bottom:14px;left:64px;font-size:11px;color:var(--muted);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 10px;max-width:min(720px,calc(100vw - 80px));z-index:4;pointer-events:none;backdrop-filter:blur(10px)}
 .empty{color:var(--muted);font-size:12px;line-height:1.5}
+.warnbar{position:fixed;top:12px;right:12px;z-index:7;max-width:min(460px,calc(100vw - 24px));display:none;flex-direction:column;gap:4px;padding:8px 12px;border-radius:12px;background:rgba(60,12,16,.9);border:1px solid rgba(255,107,107,.55);color:#ffd5d5;font-size:12px;line-height:1.45;backdrop-filter:blur(10px)}
+.warnbar.show{display:flex}
+.warnbar code{color:#fff;font-size:11px}
+.foot .stale{color:#ff6b6b;font-weight:650}
+.sig{display:inline-block;margin-left:6px;padding:0 6px;border-radius:999px;font-size:10px;line-height:16px;vertical-align:1px}
+.sig.ok{color:#0b1220;background:var(--lead)}
+.sig.no{color:var(--muted);border:1px dashed rgba(139,155,184,.6)}
+.list li.failed{opacity:.62}
+.leadsum{font-size:11px;color:var(--muted);line-height:1.5;margin-top:8px}
 @media(max-width:900px){
   .rail{left:50%;right:auto;top:auto;bottom:calc(10px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);flex-direction:row;width:auto;padding:6px 10px;border-radius:999px;gap:4px}
   .rail-btn{width:40px;height:40px;border-radius:999px;font-size:14px}
@@ -695,6 +657,7 @@ button:hover,.chip:hover,.chip.active,.seg button.active{border-color:var(--acce
 <body>
 
 <canvas id="c"></canvas>
+<div class="warnbar" id="warnBar" role="status"></div>
 
 <nav class="rail" id="dockRail" aria-label="分析轨道">
   <button type="button" class="rail-btn active" data-mode="ctrl" id="railCtrl" title="搜索与筛选">控</button>
@@ -731,7 +694,9 @@ button:hover,.chip:hover,.chip.active,.seg button.active{border-color:var(--acce
           <button type="button" class="active" data-v="sync">同步相关</button>
           <button type="button" data-v="lead">领先传导</button>
         </div>
+        <button type="button" class="chip" id="showFailed" title="未通过 BH-FDR 的候选领先边默认隐藏；打开后以虚线显示">显示未通过FDR的边</button>
       </div>
+      <div class="leadsum" id="leadSum"></div>
       <div class="chips" id="presets"></div>
     </div>
     <div class="fly-pane" id="paneBoard" data-pane="board">
@@ -824,20 +789,27 @@ let qMode = 'sector';
 let mode = 'sync';
 let coreIds = new Set();
 let focusIds = new Set();
-const LEAD_FOCUSED_TOTAL_LIMIT = 12;
-const LEAD_PER_CORE_DIRECTION = 3;
+const LEAD_DISPLAY = DATA.lead_display || {};
+const LEAD_FOCUSED_TOTAL_LIMIT = LEAD_DISPLAY.focus_total ?? 12;
+const LEAD_PER_CORE_DIRECTION = LEAD_DISPLAY.per_core_direction ?? 3;
 const LEAD_PANEL_LIMIT = 6;
+let showFailed = !!LEAD_DISPLAY.show_failed_default;
+// 旧缓存没有 fdr_pass 字段时视为通过，保持兼容。
+function edgePass(edge) { return edge.fdr_pass !== false; }
+function leadVisible(edge) { return showFailed || edgePass(edge); }
 
 // xcorr 是传导强度主排序，事件概率提升用于同强度边的次级区分。
 function leadStrength(edge) {
-  const lift = Math.max(Math.abs(Number(edge.lift_up) || 0), Math.abs(Number(edge.lift_dn) || 0));
+  const lift = edge.lift != null ? Math.abs(Number(edge.lift) || 0)
+    : Math.max(Math.abs(Number(edge.lift_up) || 0), Math.abs(Number(edge.lift_dn) || 0));
   return (Number(edge.abs) || Math.abs(Number(edge.xcorr) || 0)) + Math.min(0.2, lift) * 0.35;
 }
+// 通过 FDR 的边优先，其次按强度。
 function sortLeadEdges(edges) {
-  return [...edges].sort((a, b) => leadStrength(b) - leadStrength(a) || (Number(b.abs) || 0) - (Number(a.abs) || 0));
+  return [...edges].sort((a, b) => (edgePass(b) - edgePass(a)) || leadStrength(b) - leadStrength(a) || (Number(b.abs) || 0) - (Number(a.abs) || 0));
 }
 function visibleLeadEdges(filterIds = null) {
-  const all = DATA.lead_edges || [];
+  const all = (DATA.lead_edges || []).filter(leadVisible);
   // 领先传导必须围绕当前中心板块解释；全局视图不绘制无关连线。
   if (!filterIds || !filterIds.size) return [];
   const picked = new Map();
@@ -883,8 +855,8 @@ function maxCorrToCores(nodeId) {
   }
   if (mode === 'lead') {
     for (const c of coreIds) {
-      for (const nb of (DATA.lead_out[c] || [])) if (nb.id === nodeId) best = Math.max(best, nb.abs ?? Math.abs(nb.xcorr || 0));
-      for (const nb of (DATA.lead_in[c] || [])) if (nb.id === nodeId) best = Math.max(best, nb.abs ?? Math.abs(nb.xcorr || 0));
+      for (const nb of (DATA.lead_out[c] || [])) if (nb.id === nodeId && leadVisible(nb)) best = Math.max(best, nb.abs ?? Math.abs(nb.xcorr || 0));
+      for (const nb of (DATA.lead_in[c] || [])) if (nb.id === nodeId && leadVisible(nb)) best = Math.max(best, nb.abs ?? Math.abs(nb.xcorr || 0));
     }
   }
   return best;
@@ -946,11 +918,20 @@ function rebuildLeadArrows(filterIds = null) {
     const strength = Math.min(1, Math.max(0, ((e.abs ?? Math.abs(e.xcorr || 0)) - 0.08) / 0.25));
     const w = 0.35 + 0.9 * (filterIds ? (0.25 + 0.75 * strength) : Math.min(1, (e.abs - 0.15) / 0.25));
     const col = e.sign >= 0 ? cPos : cNeg;
+    const pass = edgePass(e);
     const shaftOp = filterIds ? (0.25 + 0.7 * strength) : 0.55;
-    const headOp = filterIds ? (0.35 + 0.65 * strength) : 0.7;
-    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.1 * w, 0.1 * w, shaftLen, 6), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: shaftOp }));
-    shaft.position.copy(mid); shaft.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir); leadGroup.add(shaft);
-    const head = new THREE.Mesh(new THREE.ConeGeometry(0.5 * w, 2.2, 8), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: headOp }));
+    const headOp = pass ? (filterIds ? (0.35 + 0.65 * strength) : 0.7) : 0.35;
+    if (pass) {
+      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.1 * w, 0.1 * w, shaftLen, 6), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: shaftOp }));
+      shaft.position.copy(mid); shaft.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir); leadGroup.add(shaft);
+    } else {
+      // 未通过 FDR：静态虚线、降低亮度，不加流动光点。
+      const endShaft = start.clone().add(dir.clone().multiplyScalar(shaftLen));
+      const g = new THREE.BufferGeometry().setFromPoints([start, endShaft]);
+      const dash = new THREE.Line(g, new THREE.LineDashedMaterial({ color: col, transparent: true, opacity: 0.42, dashSize: 1.2, gapSize: 1.4, depthWrite: false }));
+      dash.computeLineDistances(); leadGroup.add(dash);
+    }
+    const head = new THREE.Mesh(new THREE.ConeGeometry((pass ? 0.5 : 0.36) * w, 2.2, 8), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: headOp }));
     head.position.copy(start.clone().add(dir.clone().multiplyScalar(shaftLen + 1.0)));
     head.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir); leadGroup.add(head);
   }
@@ -1010,6 +991,7 @@ function rebuildFlow() {
     for (const e of visibleLeadEdges(coreIds)) {
       if (!(coreIds.has(e.source) || coreIds.has(e.target))) continue;
       if (!(focusIds.has(e.source) || focusIds.has(e.target))) continue;
+      if (!edgePass(e)) continue;
       const a = nodeById[e.source], b = nodeById[e.target]; if (!a || !b) continue;
       const s = Math.min(1, Math.max(0, ((e.abs ?? Math.abs(e.xcorr || 0)) - 0.08) / 0.25));
       addFlow(a.x, a.y, a.z, b.x, b.y, b.z, e.sign >= 0 ? 0xffd166 : 0x7aa2ff, 0.4 + 0.55 * s);
@@ -1092,8 +1074,8 @@ function egoOf(cores) {
   const one = new Set(cores), two = new Set();
   if (mode === 'lead') {
     for (const id of cores) {
-      for (const nb of (DATA.lead_out[id] || [])) one.add(nb.id);
-      for (const nb of (DATA.lead_in[id] || [])) one.add(nb.id);
+      for (const nb of (DATA.lead_out[id] || [])) if (leadVisible(nb)) one.add(nb.id);
+      for (const nb of (DATA.lead_in[id] || [])) if (leadVisible(nb)) one.add(nb.id);
     }
   } else {
     for (const id of cores) for (const nb of (DATA.neighbors[id] || [])) one.add(nb.id);
@@ -1117,6 +1099,30 @@ function applyFocusVisual() {
 
 function fmtPct(x) { if (x == null || Number.isNaN(x)) return '-'; return (x * 100).toFixed(0) + '%'; }
 function fmtLift(x) { if (x == null || Number.isNaN(x)) return '-'; return (x >= 0 ? '+' : '') + (x * 100).toFixed(0) + 'pt'; }
+function fmtPct1(x) { if (x == null || Number.isNaN(x)) return '-'; return (x * 100).toFixed(1) + '%'; }
+function fmtLift1(x) { if (x == null || Number.isNaN(x)) return '-'; return (x >= 0 ? '+' : '') + (x * 100).toFixed(1) + 'pt'; }
+const OOS_MIN_EVENTS = ((DATA.lead_summary || {}).oos_cfg || {}).min_events ?? 6;
+function fmtQ(q) { if (q == null || Number.isNaN(+q)) return '-'; return q < 0.001 ? '<0.001' : (+q).toFixed(3); }
+function leadRow(r, arrow) {
+  const pass = edgePass(r);
+  const badge = r.q_value == null ? '' : (pass ? `<span class="sig ok">FDR✓ q=${fmtQ(r.q_value)}</span>` : `<span class="sig no">未通过 q=${fmtQ(r.q_value)}</span>`);
+  const dir = r.xcorr >= 0 ? '同向' : '反向';
+  const ins = r.hit != null
+    ? `${dir}命中 ${fmtPct(r.hit)}（基准 ${fmtPct(r.base)}，${fmtLift(r.lift)}）`
+    : `跟涨 ${fmtPct(r.p_up)}（${fmtLift(r.lift_up)}）· 跟跌 ${fmtPct(r.p_dn)}（${fmtLift(r.lift_dn)}）`;
+  let oos = '';
+  if (r.oos_n >= OOS_MIN_EVENTS) oos = `样本外 ${r.oos_n} 次/${r.oos_folds} 段 · 命中 ${fmtPct(r.oos_hit)}（基准 ${fmtPct(r.oos_base)}，${fmtLift(r.oos_lift)}）`;
+  else if (r.oos_n > 0) oos = `样本外仅 ${r.oos_n} 次事件（<${OOS_MIN_EVENTS}），样本不足`;
+  else if (r.oos_n === 0) oos = '样本外：历次训练段均未入选，无验证记录';
+  return `<li data-id="${r.id}" class="${pass ? '' : 'failed'}"><span>${r.id}${badge}<span class="sub2">滞后 ${r.lag} 周 · xcorr ${r.xcorr.toFixed(2)} · ${ins}</span>${oos ? `<span class="sub2">${oos}</span>` : ''}</span><span class="leadc">${arrow}</span></li>`;
+}
+function leadSummaryText() {
+  const s = DATA.lead_summary; if (!s) return '';
+  const o = (s.oos || {}).all || {}, f = (s.oos || {}).fdr || {};
+  const oos = o.n_events ? `滚动样本外 ${o.n_events} 次事件：命中 ${fmtPct1(o.hit)} vs 基准 ${fmtPct1(o.base)}（${fmtLift1(o.lift)}）` : '样本外暂无事件';
+  const fo = f.n_events ? `；其中训练段 FDR 通过的边 ${f.n_events} 次：${fmtPct1(f.hit)}（${fmtLift1(f.lift)}）` : '；训练段内无 FDR 通过的边';
+  return `领先候选 ${s.candidates} 条，BH-FDR（α=${s.fdr_alpha}，${s.m_tests} 个有序板块对）通过 ${s.fdr_pass} 条。${oos}${fo}。`;
+}
 function fmtRet(x) { if (x == null || Number.isNaN(+x)) return '-'; const v = +x; return (v >= 0 ? '+' : '') + v.toFixed(2) + '%'; }
 
 function renderMembers(sectorId) {
@@ -1144,7 +1150,7 @@ function renderPanel(cores, neighborIds) {
     if (title) title.textContent = '全局视图';
     if (mode === 'lead') {
       meta.textContent = `${DATA.n_sectors} 个二级 · 尚未聚焦中心板块 · 共 ${(DATA.lead_edges || []).length} 条候选领先边`;
-      body.innerHTML = `<div class="empty">请先查询或点击一个板块。聚焦后只显示该中心板块最强的入向与出向连接，避免无关连线干扰。</div>`;
+      body.innerHTML = `<div class="empty">请先查询或点击一个板块。聚焦后只显示该中心板块最强的入向与出向连接，避免无关连线干扰。<br/>${leadSummaryText()}</div>`;
     } else {
       meta.textContent = `${DATA.n_sectors} 个二级 · 同步边 ${DATA.edges.length} 条（|ρ|≥${DATA.corr_thr} 且多年复现）`;
       body.innerHTML = `<div class="empty">${DATA.note || ''}</div>`;
@@ -1164,14 +1170,18 @@ function renderPanel(cores, neighborIds) {
     const visible = visibleLeadEdges(coreIds).length;
     meta.textContent = `传导模式 · 核心 ${cores.length} · 显示最强 ${visible} 条连接 · 关联 ${neighborIds.length}`;
     const outs = [], inns = [], seenO = new Set(), seenI = new Set();
+    let hidden = 0;
     for (const c of cores) {
-      for (const nb of (DATA.lead_out[c] || [])) { if (coreIds.has(nb.id) || seenO.has(nb.id)) continue; seenO.add(nb.id); outs.push(nb); }
-      for (const nb of (DATA.lead_in[c] || [])) { if (coreIds.has(nb.id) || seenI.has(nb.id)) continue; seenI.add(nb.id); inns.push(nb); }
+      for (const nb of (DATA.lead_out[c] || [])) { if (coreIds.has(nb.id) || seenO.has(nb.id)) continue; seenO.add(nb.id); if (leadVisible(nb)) outs.push(nb); else hidden++; }
+      for (const nb of (DATA.lead_in[c] || [])) { if (coreIds.has(nb.id) || seenI.has(nb.id)) continue; seenI.add(nb.id); if (leadVisible(nb)) inns.push(nb); else hidden++; }
     }
-    outs.sort((a, b) => leadStrength(b) - leadStrength(a)); inns.sort((a, b) => leadStrength(b) - leadStrength(a));
-    const rowOut = outs.slice(0, LEAD_PANEL_LIMIT).map(r => `<li data-id="${r.id}"><span>${r.id}<span class="sub2">滞后 ${r.lag} 周 · xcorr ${r.xcorr.toFixed(2)} · 跟涨 ${fmtPct(r.p_up)}（${fmtLift(r.lift_up)}）· 跟跌 ${fmtPct(r.p_dn)}（${fmtLift(r.lift_dn)}）</span></span><span class="leadc">→</span></li>`).join('');
-    const rowIn = inns.slice(0, LEAD_PANEL_LIMIT).map(r => `<li data-id="${r.id}"><span>${r.id}<span class="sub2">滞后 ${r.lag} 周 · xcorr ${r.xcorr.toFixed(2)} · 跟涨 ${fmtPct(r.p_up)}（${fmtLift(r.lift_up)}）· 跟跌 ${fmtPct(r.p_dn)}（${fmtLift(r.lift_dn)}）</span></span><span class="leadc">←</span></li>`).join('');
-    body.innerHTML = `<div class="sec">它领先谁（箭头指出）</div>${outs.length ? `<ul class="list">${rowOut}</ul>` : `<div class="empty">暂无明显领先对象</div>`}<div class="sec">谁领先它（箭头指入）</div>${inns.length ? `<ul class="list">${rowIn}</ul>` : `<div class="empty">暂无明显领先来源</div>`}`;
+    const order = (a, b) => (edgePass(b) - edgePass(a)) || leadStrength(b) - leadStrength(a);
+    outs.sort(order); inns.sort(order);
+    const rowOut = outs.slice(0, LEAD_PANEL_LIMIT).map(r => leadRow(r, '→')).join('');
+    const rowIn = inns.slice(0, LEAD_PANEL_LIMIT).map(r => leadRow(r, '←')).join('');
+    const emptyMsg = hidden && !showFailed ? `暂无通过 FDR 的领先关系` : '暂无明显领先关系';
+    const hiddenNote = hidden && !showFailed ? `<div class="empty">另有 ${hidden} 条候选未通过 BH-FDR（α=${(DATA.lead_summary || {}).fdr_alpha ?? '-'}），已隐藏；可在「控」中打开「显示未通过FDR的边」以虚线查看。</div>` : '';
+    body.innerHTML = `<div class="sec">它领先谁（箭头指出）</div>${outs.length ? `<ul class="list">${rowOut}</ul>` : `<div class="empty">${emptyMsg}</div>`}<div class="sec">谁领先它（箭头指入）</div>${inns.length ? `<ul class="list">${rowIn}</ul>` : `<div class="empty">${emptyMsg}</div>`}${hiddenNote}<div class="leadsum">${leadSummaryText()}</div>`;
   } else {
     meta.textContent = `同步模式 · 核心 ${cores.length} · 一跳邻居 ${neighborIds.length}`;
     const rows = [], seen = new Set();
@@ -1273,6 +1283,44 @@ document.getElementById('retmode').onclick = e => {
   applyNodeAppearance(); renderBoard();
   if (coreIds.size === 1) renderPanel([...coreIds], [...focusIds].filter(id => !coreIds.has(id)));
 };
+
+function refreshLeadVisibility() {
+  const btn = document.getElementById('showFailed');
+  btn.classList.toggle('active', showFailed);
+  btn.textContent = showFailed ? '隐藏未通过FDR的边' : '显示未通过FDR的边';
+  if (coreIds.size) { const { one, two } = egoOf([...coreIds]); focusIds = new Set([...one, ...two]); }
+  applyFocusVisual();
+  if (coreIds.size) renderPanel([...coreIds], [...focusIds].filter(id => !coreIds.has(id)));
+  else renderPanel(null, []);
+}
+document.getElementById('showFailed').onclick = () => { showFailed = !showFailed; refreshLeadVisibility(); };
+document.getElementById('showFailed').classList.toggle('active', showFailed);
+document.getElementById('leadSum').textContent = leadSummaryText();
+
+// 页面告警：基准退回 / 关系样本落后行情超过 N 周（页脚标红，同时用顶部告警条覆盖移动端）。
+(function renderWarnings() {
+  const warns = [];
+  const bench = DATA.benchmark || {};
+  if (bench.warning) warns.push(`⚠ 市场基准：${bench.warning}`);
+  const end = DATA.end ? new Date(DATA.end) : null;
+  const latest = [DATA.market_as_of, DATA.data_as_of].filter(Boolean).map(d => new Date(d)).sort((a, b) => b - a)[0];
+  const staleWeeks = DATA.stale_weeks ?? 2;
+  const foot = document.querySelector('.foot');
+  if (end && latest) {
+    const lagW = (latest - end) / (7 * 86400e3);
+    if (lagW > staleWeeks) {
+      const msg = `关系样本截止 ${DATA.end}，落后行情 ${lagW.toFixed(1)} 周（>${staleWeeks} 周），请重算：python -m scripts.reports.gen_sector_corr_cloud --no-nav`;
+      warns.push(`⚠ ${msg}`);
+      if (foot) foot.insertAdjacentHTML('beforeend', ` · <span class="stale">${msg}</span>`);
+    }
+  }
+  if (foot) {
+    if (bench.name) foot.insertAdjacentHTML('beforeend', ` · 基准 ${bench.name}${bench.ok ? '' : ' <span class="stale">（非沪深300）</span>'} · 滚动 beta ${DATA.beta_window || '-'} 日`);
+    foot.innerHTML = foot.innerHTML.replace(/跟涨观察 \S+ 日/, `事件窗=滞后周 · FDR α=${(DATA.lead_summary || {}).fdr_alpha ?? '-'}`);
+  }
+  const bar = document.getElementById('warnBar');
+  if (warns.length) { bar.innerHTML = warns.map(w => `<div>${w}</div>`).join(''); bar.classList.add('show'); }
+})();
 
 const presetsEl = document.getElementById('presets');
 (DATA.presets || []).forEach(p => {
@@ -1441,13 +1489,15 @@ def main() -> None:
             update_nav()
         return
 
-    print("加载 2022→今 mom1，聚合申万二级…")
+    print(f"加载 {START}→今 日收益（含 beta 预热），聚合申万二级…")
     piv, meta = load_sw2_returns()
+    mkt, bench = load_benchmark(piv)
+    print(f"  基准 {bench['name']}（{bench['code']}）覆盖 {bench['coverage']:.1%}" + (f" ⚠ {bench['warning']}" if bench.get("warning") else ""))
+    print(f"去市场 beta（滚动 {BETA_WINDOW} 日，t-1 估计），MDS + 同步边…")
+    resid = rolling_residualize(piv, mkt, BETA_WINDOW, BETA_MIN_PERIODS)
+    piv, resid = piv.loc[piv.index >= START], resid.loc[resid.index >= START]
     print(f"  板块 {piv.shape[1]} · 交易日 {piv.shape[0]} · 截止 {piv.index.max().date()}")
-    mkt = market_proxy(piv)
-    print("去市场 beta，MDS + 同步边…")
-    resid = residualize(piv, mkt)
-    payload = pack_payload(piv, resid, meta)
+    payload = pack_payload(piv, resid, meta, bench=bench)
     print(f"  节点 {payload['n_sectors']} · 同步边 {len(payload['edges'])} · 领先边 {len(payload['lead_edges'])}")
 
     OUTPUT_JSON.parent.mkdir(parents=True, exist_ok=True)
@@ -1466,7 +1516,7 @@ def main() -> None:
     # sample lead edges for smoke
     leads = payload["lead_edges"][:5]
     for e in leads:
-        print(f"  领先样例 {e['source']} → {e['target']} lag={e['lag']} xcorr={e['xcorr']} lift_up={e['lift_up']} lift_dn={e['lift_dn']}")
+        print(f"  领先样例 {e['source']} → {e['target']} lag={e['lag']} xcorr={e['xcorr']} q={e['q_value']} fdr={e['fdr_pass']} oos_lift={e['oos_lift']}")
 
     if not args.no_nav:
         update_nav()

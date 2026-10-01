@@ -111,7 +111,7 @@ class ServiceCompatibilityTest(unittest.TestCase):
         self.assertIn("function applyDeepLink()", point_cloud)
         self.assertIn("params.get('stock') || params.get('code')", point_cloud)
         self.assertIn("已聚焦所属申万二级板块", point_cloud)
-        self.assertIn("const LEAD_PER_CORE_DIRECTION = 3", point_cloud)
+        self.assertIn("const LEAD_PER_CORE_DIRECTION = LEAD_DISPLAY.per_core_direction ?? 3", point_cloud)
         self.assertIn("if (!filterIds || !filterIds.size) return []", point_cloud)
 
 

@@ -1,0 +1,43 @@
+# 板块相关点云（scripts/reports/gen_sector_corr_cloud.py）参数
+# 缺省值见 scripts/reports/sector_lead_stats.py::DEFAULTS；此处覆盖即可。
+start: "2022-01-01"          # 关系样本起点（beta 预热会自动向前多取一个窗口）
+
+benchmark:
+  code: sh000300             # 去 beta 基准：沪深300（data/index.py 缓存）
+  name: 沪深300
+  fallback_codes: [sh000001] # 沪深300 不可用时依次尝试；全失败才退回板块等权并在页脚告警
+  min_coverage: 0.95         # 基准需覆盖关系样本交易日的比例
+
+beta:
+  window: 120                # 滚动 beta 窗口（交易日），只用 t-1 及以前数据
+  min_periods: 60
+
+sync:
+  corr_thr: 0.42
+  max_edges_per_node: 8
+  min_year_confirm: 2
+
+lead:
+  max_lag: 4                 # 周
+  xcorr_thr: 0.08            # 候选预筛（不代表显著）
+  asym: 0.015                # 领先方向需强于反向
+  max_out: 4                 # 每个领先板块最多保留几条出边
+  event_q: 0.80              # 事件分位：≥80% 为强、≤20% 为弱
+  min_events: 15             # 强/弱事件各至少多少周
+  min_lift: 0.02             # 顺向命中相对基准至少提升 2pt
+  min_weeks: 40              # 交叉相关最少有效周数
+  fdr_alpha: 0.10            # BH-FDR 水平（全部有序板块对）
+  null_min_shift: 8          # 循环平移最少偏移周数，避免同步相关泄漏进零分布
+
+oos:
+  min_train_weeks: 104       # 首个训练段长度（周）
+  test_weeks: 26             # 每个测试段长度（周）
+  step_weeks: 26             # 滚动步长（周）
+  min_events: 6              # 单边样本外事件数下限（用于 oos_ok 标记）
+
+display:
+  per_core_direction: 3      # 聚焦时每个方向最多显示几条领先边
+  focus_total: 12            # 聚焦时最多显示的领先边总数
+  show_failed_default: false # 未通过 FDR 的边默认隐藏（打开开关后以虚线显示）
+
+stale_weeks: 2               # 关系样本截止日落后行情超过 N 周时，页脚标红提示重算
