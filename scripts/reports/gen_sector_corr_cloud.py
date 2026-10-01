@@ -780,6 +780,16 @@ button:hover,.chip:hover,.chip.active,.seg button.active{border-color:var(--acce
 .lg-comm .lc.sf{cursor:pointer;border-radius:6px}
 .lg-comm .lc.sf.on{background:rgba(159,243,255,.1);color:var(--text);outline:1px solid rgba(159,243,255,.35)}
 .lg-comm .lc.sf.off{opacity:.38}
+.sw1-row{display:flex;align-items:center;gap:6px;margin-top:8px}
+.sw1-row select{flex:1;min-width:0;height:32px;border-radius:10px;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--text);padding:0 10px;font-size:13px}
+.sw1-row select.on{border-color:var(--accent);color:var(--accent)}
+.sw1-badge{height:22px;padding:0 8px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--muted);font-size:11.5px;cursor:pointer}
+.sw1-badge:hover{color:var(--text);border-color:var(--accent)}
+.sw1-badge[hidden]{display:none}
+.lg-comm.lg-scroll{max-height:min(44vh,400px);overflow:auto;padding-right:4px}
+.node-tip .tip-l1{color:var(--muted);font-size:11px}
+.sw1-list .sub2 .cdot{margin-right:3px}
+@media (max-width:900px){.lg-comm.lg-scroll{max-height:32vh}.sw1-row select{height:36px;font-size:14px}}
 .why-v{font-variant-numeric:tabular-nums;color:var(--text)}
 .short-note{display:flex;align-items:center;gap:4px;font-size:11.5px;color:var(--muted);margin-top:6px}
 #paneCtrl .sub{display:none}
@@ -951,6 +961,7 @@ button:hover,.chip:hover,.chip.active,.seg button.active{border-color:var(--acce
           <button type="button" data-v="community">按簇</button>
           <button type="button" data-v="return">按涨跌</button>
           <button type="button" data-v="style" id="cmStyle" title="风格视角：进攻 / 防御 / 周期 / 成长 / 价值">风格视角</button>
+          <button type="button" data-v="sw1" id="cmSw1" title="按申万一级行业着色">按申万一级</button>
         </div>
         <button type="button" class="info-btn" data-info="style" aria-haspopup="dialog" aria-controls="infoPop" aria-expanded="false" aria-label="着色与风格说明">ⓘ</button>
         <button type="button" class="chip" id="styleLinkBtn" hidden title="同风格板块之间的细连线">同风格连线</button>
@@ -1047,6 +1058,18 @@ function styleTag(id, full = false) {
 let styleFilter = null;
 const STYLE_DIM = 0.12;
 const sMask = new Float32Array(DATA.nodes.length).fill(1);
+// 申万一级：节点自带 l1；选中某个一级 = 一种聚焦状态（与板块聚焦、社区聚焦互斥），着色另有「按申万一级」
+const SW1_MEMBERS = {};
+for (const n of DATA.nodes) (SW1_MEMBERS[n.l1 || '未分类'] ||= []).push(n.id);
+const SW1_LIST = Object.keys(SW1_MEMBERS).sort((a, b) => SW1_MEMBERS[b].length - SW1_MEMBERS[a].length || a.localeCompare(b, 'zh'));
+const SW1_COLOR = Object.fromEntries(SW1_LIST.map((k, i) => [k, `hsl(${Math.round((i * 137.508 + 200) % 360)}, 62%, 62%)`]));
+let sw1Sel = null, sw1Sum = {};
+function sw1Of(id) { return (SW1_NODE[id] && SW1_NODE[id].l1) || '未分类'; }
+const SW1_NODE = Object.fromEntries(DATA.nodes.map(n => [n.id, n]));
+function sw1Agg(k) {
+  const vs = (SW1_MEMBERS[k] || []).map(id => retOf(SW1_NODE[id])).filter(v => v != null);
+  return vs.length ? { avg: vs.reduce((a, b) => a + b, 0) / vs.length, up: vs.filter(v => v > 0).length / vs.length, nUp: vs.filter(v => v > 0).length, n: vs.length } : null;
+}
 function styleQuery(q) { const m = String(q || '').trim().match(/^(进攻|防御|周期|成长|价值)(型|类|板块|风格)?$/); return m && STYLE ? m[1] : null; }
 let styleSum = {}, styleLinksOn = STYLE_CFG.links ?? true;
 const REDUCED = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -1082,7 +1105,7 @@ let dragging = false, resumeTimer = 0, flight = null;
 const ROTATE_ON = (CFG_UI.auto_rotate ?? true) && (!REDUCED || !!CFG_UI.auto_rotate_reduced_motion);
 function syncAutoRotate() {
   controls.autoRotate = ROTATE_ON && !dragging && !flight;
-  controls.autoRotateSpeed = (coreIds.size || commFocus != null) ? (CFG_UI.focus_orbit_speed ?? 0.3) : (CFG_UI.auto_rotate_speed ?? 0.55);
+  controls.autoRotateSpeed = (coreIds.size || commFocus != null || sw1Sel) ? (CFG_UI.focus_orbit_speed ?? 0.3) : (CFG_UI.auto_rotate_speed ?? 0.55);
 }
 function pauseRotate() { dragging = true; clearTimeout(resumeTimer); syncAutoRotate(); }
 function scheduleResume() { clearTimeout(resumeTimer); resumeTimer = setTimeout(() => { dragging = false; syncAutoRotate(); }, CFG_UI.rotate_resume_ms ?? 1500); }
@@ -1212,6 +1235,12 @@ function updateCommSummary() {
     for (const k of STYLES) { const a = acc[k]; styleSum[k] = a && a[1] ? { avg: a[0] / a[1], up: a[2] / a[1], n: a[1] } : null; }
     updateRiskAppetite();
   }
+  sw1Sum = {};
+  for (const k of SW1_LIST) {
+    let s0 = 0, n0 = 0, up = 0;
+    for (const id of SW1_MEMBERS[k]) { const i = idxOf[id]; if (i == null || !hasRet[i]) continue; s0 += retTo[i]; n0++; if (retTo[i] > 0) up++; }
+    sw1Sum[k] = n0 ? { avg: s0 / n0, up: up / n0, n: n0 } : null;
+  }
   for (const c of COMM) {
     let s0 = 0, n0 = 0, up = 0;
     for (const id of c.members) { const i = idxOf[id]; if (i == null || !hasRet[i]) continue; s0 += retTo[i]; n0++; if (retTo[i] > 0) up++; }
@@ -1267,7 +1296,7 @@ function commColor(id) { const c = commById[commOf(id)]; return new THREE.Color(
 function computeBase() {
   for (let i = 0; i < N; i++) {
     const n = DATA.nodes[i];
-    baseCol[i].copy(colorBy === 'style' ? styleColor(n.id) : commColor(n.id));
+    baseCol[i].copy(colorBy === 'style' ? styleColor(n.id) : colorBy === 'sw1' ? new THREE.Color(SW1_COLOR[n.l1 || '未分类']) : commColor(n.id));
     baseSize[i] = 2.0 + 2.6 * Math.sqrt(((GRAPH.wdeg || {})[n.id] ?? 0) / WDEG_MAX);  // 点大小 = 连接强度
   }
 }
@@ -1672,6 +1701,16 @@ function rebuildLabels() {
     setLabels(c.members.slice(0, limit0).map((id, k) => ({ id, color: id === c.core ? c.color : '#e8eefc', priority: id === c.core ? 1000 : 100 - k, pin: id === c.core })));
     return;
   }
+  if (!coreIds.size && commFocus == null && sw1Sel) {
+    const rows = (SW1_MEMBERS[sw1Sel] || []).map(id => ({ id, v: retOf(nodeById[id]) })).sort((a, b) => Math.abs(b.v ?? 0) - Math.abs(a.v ?? 0)).slice(0, limit0);
+    setLabels(rows.map((r, i) => ({ id: r.id, text: `${r.id} ${fmtRet(r.v)}`, color: r.v == null ? '#e8eefc' : r.v >= 0 ? '#ff9d9d' : '#7fe7b8', priority: 80 - i })));
+    return;
+  }
+  if (!coreIds.size && colorBy === 'sw1' && !styleFilter) {
+    const wd = GRAPH.wdeg || {};
+    setLabels(SW1_LIST.slice(0, 14).map((k, i) => ({ id: SW1_MEMBERS[k].slice().sort((a, b) => (wd[b] ?? 0) - (wd[a] ?? 0))[0], text: k, color: SW1_COLOR[k], priority: 60 - i })));
+    return;
+  }
   if (!coreIds.size && styleFilter) {
     const rows = DATA.nodes.filter(n => styleOf(n.id) === styleFilter).map(n => ({ id: n.id, v: retOf(n) }))
       .sort((a, b) => Math.abs(b.v ?? 0) - Math.abs(a.v ?? 0)).slice(0, CFG_UI.top_movers_labels ?? 8);
@@ -1842,6 +1881,7 @@ function frameCores() { const f = frameFor([...coreIds]); if (f) flyTo(f.target,
 function resetView() {
   if (coreIds.size) { frameCores(); return; }
   if (commFocus != null && commById[commFocus]) { const f = frameFor(commById[commFocus].members, false); if (f) flyTo(f.target, f.pos); return; }
+  if (sw1Sel) { const f = frameFor(SW1_MEMBERS[sw1Sel] || [], false); if (f) flyTo(f.target, f.pos); return; }
   flyTo(HOME.target.clone(), HOME.pos.clone());
 }
 function refreshFocus({ origin = null } = {}) {
@@ -1851,14 +1891,21 @@ function refreshFocus({ origin = null } = {}) {
     hop1 = new Set([...one].filter(id => !coreIds.has(id))); hop2 = two;
     focusIds = new Set([...one, ...two]);
   } else if (commFocus != null && commById[commFocus]) focusIds = new Set(commById[commFocus].members);
+  else if (sw1Sel) focusIds = new Set(SW1_MEMBERS[sw1Sel] || []);
   else focusIds = new Set();
+  syncSw1Ui();
   applyFocusVisual();
   if (coreIds.size) renderPanel([...coreIds], [...focusIds].filter(id => !coreIds.has(id)));
   else if (commFocus != null) renderCommunityPanel(commFocus);
+  else if (sw1Sel) renderSw1Panel(sw1Sel);
   else renderPanel(null, []);
   rebuildLabels();
   syncAutoRotate();
-  if (!coreIds.size && commFocus != null && commById[commFocus]) {
+  if (!coreIds.size && commFocus == null && sw1Sel) {
+    const ms = SW1_MEMBERS[sw1Sel] || [], wd = GRAPH.wdeg || {};
+    const core = ms.slice().sort((a, b) => (wd[b] ?? 0) - (wd[a] ?? 0))[0] || null;
+    startTransition({ origin: core, hop1: new Set(ms), strength: () => 0.9 });
+  } else if (!coreIds.size && commFocus != null && commById[commFocus]) {
     const c = commById[commFocus];
     startTransition({ origin: c.core, cores: new Set([c.core]), hop1: new Set(c.members.filter(id => id !== c.core)), strength: () => 0.85 });
   } else {
@@ -1867,7 +1914,7 @@ function refreshFocus({ origin = null } = {}) {
   }
 }
 function setFocus(cores, { moveCamera = true, openDetail = true, origin = null } = {}) {
-  coreIds = new Set(cores); commFocus = null;
+  coreIds = new Set(cores); commFocus = null; sw1Sel = null;
   refreshFocus({ origin: origin || cores[0] || null });
   if (moveCamera) { if (cores.length) frameCores(); else resetView(); }
   if (openDetail && cores.length) setDockMode('detail', { fromFocus: true });
@@ -1876,7 +1923,7 @@ function setFocus(cores, { moveCamera = true, openDetail = true, origin = null }
 }
 function focusCommunity(k, { openDetail = true } = {}) {
   if (!commById[k]) return;
-  coreIds = new Set(); commFocus = k; expandOptions = []; renderExpandChips();
+  coreIds = new Set(); commFocus = k; sw1Sel = null; expandOptions = []; renderExpandChips();
   refreshFocus();
   resetView();
   if (openDetail) setDockMode('detail', { fromFocus: true });
@@ -1928,7 +1975,7 @@ function goGlobal({ keepTrail = true } = {}) {
   if (!keepTrail) trail = [];
   trailIdx = -1;
   expandOptions = []; renderExpandChips();
-  coreIds = new Set(); commFocus = null;
+  coreIds = new Set(); commFocus = null; sw1Sel = null;
   refreshFocus();
   flyTo(HOME.target.clone(), HOME.pos.clone());
   setPStep('');
@@ -2194,9 +2241,19 @@ function groupRow(key, color, name, v, title, cls = '') {
 }
 function renderCommLegend() {
   const box = document.getElementById('lgComm'); if (!box) return;
-  const isStyle = colorBy === 'style' && STYLE;
-  document.getElementById('lgTitle').textContent = isStyle ? '风格' : '社区';
-  document.getElementById('lgColName').textContent = isStyle ? '风格（板块数）' : '社区';
+  const isStyle = colorBy === 'style' && STYLE, isSw1 = colorBy === 'sw1';
+  document.getElementById('lgTitle').textContent = isStyle ? '风格' : isSw1 ? '申万一级' : '社区';
+  document.getElementById('lgColName').textContent = isStyle ? '风格（板块数）' : isSw1 ? '一级（二级数）' : '社区';
+  box.classList.toggle('lg-scroll', isSw1);
+  if (isSw1) {
+    box.innerHTML = SW1_LIST.map(k => groupRow(`data-sw1="${k}" role="button" tabindex="0" aria-pressed="${sw1Sel === k}"`, SW1_COLOR[k], `${k}<small class="lc-n"> ${SW1_MEMBERS[k].length}</small>`, sw1Sum[k],
+      `${k}：${SW1_MEMBERS[k].length} 个二级（点击只看该行业，再点取消）`, `sf ${sw1Sel === k ? 'on' : (sw1Sel ? 'off' : '')}`)).join('');
+    box.querySelectorAll('[data-sw1]').forEach(el => {
+      const go = () => setSw1(sw1Sel === el.dataset.sw1 ? null : el.dataset.sw1);
+      el.onclick = go; el.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } };
+    });
+    return;
+  }
   if (isStyle) {
     box.innerHTML = STYLES.map(k => groupRow(`data-style="${k}" role="button" tabindex="0" aria-pressed="${styleFilter === k}"`, styleHex(k), `${k}<small class="lc-n"> ${STYLE.counts[k] ?? 0}</small>`, styleSum[k],
       `${k}：${STYLE.counts[k] ?? 0} 个板块（点击只看该风格，再点取消）`, `sf ${styleFilter === k ? 'on' : (styleFilter ? 'off' : '')}`)).join('');
@@ -2244,7 +2301,7 @@ function updateRiskAppetite() {
   document.getElementById('rpRA').title = `风险偏好（${periodLabel()}，${R_DATES[dayIdx] || ''}）= 进攻 ${a ? fmtRet(a.avg) : '—'} − 防御 ${b ? fmtRet(b.avg) : '—'}；窗口内累计 ${fmtRet(last)}（只到当前日期）。为正 = 偏进攻`;
 }
 function renderLegendScale() {
-  const sub = document.getElementById('lgSub'); if (sub) sub.textContent = `${periodLabel()} · ${(R_DATES[dayIdx] || '').slice(5)}${styleFilter ? ` · 仅${styleFilter}` : ''}`;
+  const sub = document.getElementById('lgSub'); if (sub) sub.textContent = `${periodLabel()} · ${(R_DATES[dayIdx] || '').slice(5)}${styleFilter ? ` · 仅${styleFilter}` : ''}${sw1Sel ? ` · ${sw1Sel}` : ''}`;
   const el = document.getElementById('lgScale'); if (!el) return;
   el.textContent = `光晕 = ${periodLabel()}涨跌（${R_DATES[dayIdx] || ''}）：红涨 / 绿跌，大小与亮度 ∝ |涨跌|，±${CLIP[curP()].toFixed(2)}% 封顶（回放窗口 ${Math.round(CLIP_Q * 100)}% 分位）；呼吸 = 强势异动`;
 }
@@ -2305,6 +2362,10 @@ function runQuery() {
     setDockMode('detail', { fromFocus: true });
     return;
   }
+  const qt = String(q || '').trim();
+  if (qt && qt !== '未分类' && SW1_MEMBERS[qt] && !exactMatches(qt).length) {  // 申万一级全名：二级精确匹配优先
+    document.getElementById('q').value = qt; setSw1(qt); return;
+  }
   const all = expandQuery(q);
   if (!all.length) { setExpandOptions([]); renderPanel(null, []); document.getElementById('pBody').innerHTML = `<div class="empty">未匹配到二级板块，试试「电力」「半导体」「白酒」。</div>`; return; }
   const exact = exactMatches(q);
@@ -2334,7 +2395,8 @@ function syncPeriodButtons() {
 }
 function afterRetChange() {
   renderBoard(); renderLegendScale(); updateRetDom(); renderSignals();
-  if (!coreIds.size && commFocus == null && colorBy !== 'community') rebuildLabels();
+  if (!coreIds.size && commFocus == null && (colorBy !== 'community' || sw1Sel)) rebuildLabels();
+  if (!coreIds.size && commFocus == null && sw1Sel) renderSw1Panel(sw1Sel);
   const rd = document.getElementById('rpDate'); if (rd) rd.textContent = (R_DATES[dayIdx] || '').slice(5);
 }
 function setPeriod(P) {
@@ -2460,13 +2522,56 @@ function setStyleFilter(k) {
 }
 {
   const t = document.getElementById('pTitle');
-  if (t && STYLE) {
+  if (t) {
     const hd = document.createElement('div'); hd.className = 'p-hd';
     t.parentNode.insertBefore(hd, t); hd.appendChild(t);
-    hd.insertAdjacentHTML('beforeend', `<button type="button" class="info-btn style-badge" id="pStyle" data-info="styleWhy" hidden aria-haspopup="dialog" aria-controls="infoPop" aria-expanded="false"></button>`);
+    if (STYLE) hd.insertAdjacentHTML('beforeend', `<button type="button" class="info-btn style-badge" id="pStyle" data-info="styleWhy" hidden aria-haspopup="dialog" aria-controls="infoPop" aria-expanded="false"></button>`);
+    hd.insertAdjacentHTML('beforeend', `<button type="button" class="sw1-badge" id="pSw1" hidden></button>`);
+    document.getElementById('pSw1').onclick = e => { const k = e.currentTarget.dataset.sw1; if (k) { document.getElementById('q').value = k; setSw1(k); } };
   }
 }
+function setSw1(k) {
+  k = k && SW1_MEMBERS[k] ? k : null;
+  if (typeof stopTour === 'function' && !touring) stopTour();
+  coreIds = new Set(); commFocus = null; expandOptions = []; renderExpandChips();
+  sw1Sel = k;
+  refreshFocus();
+  resetView();
+  if (k) setDockMode('detail', { fromFocus: true });
+  renderTrail();
+}
+function renderSw1Panel(k) {
+  const ids = SW1_MEMBERS[k] || [], a = sw1Agg(k);
+  const rows = ids.map(id => ({ id, v: retOf(nodeById[id]) })).sort((x, y) => (y.v ?? -1e9) - (x.v ?? -1e9));
+  syncStyleBadge(null);
+  document.getElementById('pTitle').textContent = k;
+  document.getElementById('pMeta').innerHTML = `申万一级 · ${ids.length} 个二级${infoBtn('sw1', '申万一级说明')}`;
+  document.getElementById('pKv').innerHTML = `<b>${periodLabel()}均值</b><span class="${a ? (a.avg >= 0 ? 'pos' : 'neg') : ''}">${a ? fmtRet(a.avg) : '—'}</span><b>上涨</b><span>${a ? `${a.nUp}/${a.n}（${Math.round(a.up * 100)}%）` : '—'}</span><b>日期</b><span data-retdate>${R_DATES[dayIdx] || '-'}</span>`;
+  const body = document.getElementById('pBody');
+  body.innerHTML = `<ul class="list sw1-list">${rows.map(r => { const c = commOf(r.id); return `<li data-id="${r.id}"><span>${r.id}${styleTag(r.id)}<span class="sub2">${cdot(c)}${commName(c)}</span></span><span class="${r.v == null ? '' : r.v >= 0 ? 'pos' : 'neg'}">${fmtRet(r.v)}</span></li>`; }).join('')}</ul>`;
+  body.querySelectorAll('li[data-id]').forEach(li => li.onclick = () => { document.getElementById('q').value = li.dataset.id; setExpandOptions([]); step([li.dataset.id]); });
+  renderMembers(null); renderSuggest(null);
+}
+{
+  const presets = document.getElementById('presets');
+  if (presets && SW1_LIST.length > 1) {
+    presets.insertAdjacentHTML('beforebegin', `<div class="sw1-row"><select id="sw1Select" aria-label="申万一级"><option value="">申万一级 · 全部（${SW1_LIST.length}）</option>${SW1_LIST.map(k => `<option value="${k}">${k}（${SW1_MEMBERS[k].length}）</option>`).join('')}</select><button type="button" class="chip" id="sw1Clear" hidden>× 清除</button>${infoBtn('sw1', '申万一级说明')}</div>`);
+    document.getElementById('sw1Select').onchange = e => { const v = e.target.value || null; if (v) document.getElementById('q').value = v; setSw1(v); };
+    document.getElementById('sw1Clear').onclick = () => setSw1(null);
+  }
+}
+function syncSw1Ui() {
+  const sel = document.getElementById('sw1Select'); if (!sel) return;
+  sel.value = sw1Sel || ''; sel.classList.toggle('on', !!sw1Sel);
+  document.getElementById('sw1Clear').hidden = !sw1Sel;
+}
+function syncSw1Badge(id) {
+  const b = document.getElementById('pSw1'); if (!b) return;
+  b.hidden = !id; if (!id) return;
+  const k = sw1Of(id); b.dataset.sw1 = k; b.textContent = `一级 · ${k}`; b.title = `申万一级「${k}」：点击查看该行业全部 ${(SW1_MEMBERS[k] || []).length} 个二级`;
+}
 function syncStyleBadge(id) {
+  syncSw1Badge(id);
   const b = document.getElementById('pStyle'); if (!b) return;
   const t = id && STYLE ? STYLE.tags[id] : null;
   b.hidden = !t; if (!t) return;
@@ -2504,7 +2609,7 @@ const nodeTip = document.createElement('div'); nodeTip.className = 'node-tip'; n
 let tipTimer = 0, hoverRaf = 0, hoverEv = null, tipId = null;
 function showNodeTip(id, x, y, ms = 0) {
   const r = retOf(nodeById[id]);
-  nodeTip.innerHTML = `<b>${escHtml(id)}</b>${styleTag(id, true)}${STYLE && STYLE.tags[id] && STYLE.tags[id].s ? `<small style="color:var(--muted)">/ ${STYLE.tags[id].s}</small>` : ''}<span class="${r == null ? '' : r >= 0 ? 'pos' : 'neg'}">${periodLabel()} ${fmtRet(r)}</span>`;
+  nodeTip.innerHTML = `<b>${escHtml(id)}</b>${styleTag(id, true)}${STYLE && STYLE.tags[id] && STYLE.tags[id].s ? `<small style="color:var(--muted)">/ ${STYLE.tags[id].s}</small>` : ''}<span class="tip-l1">${escHtml(sw1Of(id))}</span><span class="${r == null ? '' : r >= 0 ? 'pos' : 'neg'}">${periodLabel()} ${fmtRet(r)}</span>`;
   nodeTip.classList.add('show'); tipId = id;
   const w = nodeTip.offsetWidth, h = nodeTip.offsetHeight;
   if (ms && MOBILE_MQ.matches) {  // 手机点按：镜头会飞走、抽屉会弹出，提示固定放在顶部浮层下方居中
@@ -2578,6 +2683,18 @@ const INFO = {
     STYLE ? '进攻 / 防御由风险分划分（beta、波动、回撤），周期 / 成长 / 价值来自行业属性与估值；风格标签为结构描述，不是投资建议。' : '',
   ]) },
 };
+INFO.sw1 = { title: '申万一级', html: () => {
+  const a = sw1Sel ? sw1Agg(sw1Sel) : null;
+  return infoList([
+    `申万一级 = 板块所属的申万一级行业（${SW1_LIST.length} 个，来自成分股的行业映射）；点云里每个点仍是申万二级。`,
+    '选择一个一级行业：高亮它的二级板块、其余变暗，镜头飞过去取景；详情列出各二级的区间涨跌、风格标签和所属同步社区。',
+    '一级汇总 = 所含二级板块的等权平均涨跌与上涨占比（二级之间不按市值加权）；回放时随日期更新。',
+    '再点同一行业、选「全部」、点「× 清除」或「全局」即取消；点其中一个二级会转为聚焦该板块。',
+    '「按申万一级」着色：节点色 = 一级行业；图例每行是一个一级（二级数 | 上涨占比 | 均值），点击行与上面的选择相同。',
+    '搜索框输入一级全名（如「电力设备」「医药生物」）即选中该行业；若输入同时是某个二级名（忽略末尾「Ⅱ」）或查询扩展里的精确项，按原规则聚焦二级；其余模糊词（如「新能源」）仍走查询扩展。',
+    a ? `当前：<b>${sw1Sel}</b> · ${periodLabel()}均值 ${fmtRet(a.avg)} · 上涨 ${a.nUp}/${a.n}（${R_DATES[dayIdx] || ''}）` : '',
+  ]);
+} };
 INFO.styleWhy = { title: '风格判定依据', html: () => { const id = (document.getElementById('pStyle') || {}).dataset?.id || [...coreIds][0]; return id ? `<p><b>${escHtml(id)}</b></p>${styleWhyHtml(id)}` : '<p>请先聚焦一个板块</p>'; } };
 const infoPop = document.getElementById('infoPop');
 const infoState = { key: null, btn: null, moved: null, downKey: null, dismissAt: -1e9 };
@@ -2857,7 +2974,7 @@ window.__scc = {
   camera, controls, pickNode, three: THREE_SOURCE, fps,
   screenOf: id => { const n = nodeById[id]; if (!n) return null; camera.updateMatrixWorld(); _v.set(n.x, n.y, n.z).project(camera); return _v.z > 1 ? null : toScreen(_v); }, step, goTrail, goGlobal, startTour, stopTour, graph: GRAPH,
   get coreIds() { return [...coreIds]; }, get mode() { return mode; }, get colorBy() { return colorBy; },
-  setColorBy: v => window.__setColorBy(v), get riskAppetite() { return raNow; }, get styleSum() { return styleSum; }, get styleLinkCount() { return styleLinks ? styleLinks.userData.n : 0; }, info: () => window.__scc_info, setStyleFilter: k => setStyleFilter(k), get styleFilter() { return styleFilter; }, styleWhy: id => styleWhyHtml(id), get tipId() { return tipId; }, nodeScreen: id => { const n = nodeById[id]; _v.set(n.x, n.y, n.z).project(camera); return toScreen(_v); },
+  setColorBy: v => window.__setColorBy(v), get riskAppetite() { return raNow; }, get styleSum() { return styleSum; }, get styleLinkCount() { return styleLinks ? styleLinks.userData.n : 0; }, info: () => window.__scc_info, setStyleFilter: k => setStyleFilter(k), get styleFilter() { return styleFilter; }, styleWhy: id => styleWhyHtml(id), get tipId() { return tipId; }, setSw1: k => setSw1(k), get sw1Sel() { return sw1Sel; }, sw1List: () => SW1_LIST.map(k => [k, SW1_MEMBERS[k].length]), sw1Agg: k => sw1Agg(k), nodeScreen: id => { const n = nodeById[id]; _v.set(n.x, n.y, n.z).project(camera); return toScreen(_v); },
   get commFocus() { return commFocus; }, get trail() { return trail.map(entryLabel); }, get trailIdx() { return trailIdx; },
   get flying() { return !!flight; }, get animating() { return performance.now() < litAnimUntil; }, get pulses() { return pulses.length; },
   get drawCalls() { return renderer.info.render.calls; }, get dayIdx() { return dayIdx; }, get period() { return curP(); },

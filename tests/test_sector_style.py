@@ -87,6 +87,10 @@ class SectorStyleTest(unittest.TestCase):
         for needle in ("function styleTag(", "function setStyleFilter(", "INFO.styleWhy", "function styleWhyHtml(", "function styleQuery(",
                        "function showNodeTip(", "id=\"pStyle\"", "sMask[i]", "仅${styleFilter}"):
             self.assertIn(needle, html, needle)
+        # 第十轮：申万一级选择 / 着色 / 图例筛选 / 搜索 / 徽章与提示
+        for needle in ('data-v="sw1"', 'id="cmSw1"', "function setSw1(", "function renderSw1Panel(", "const SW1_MEMBERS", "INFO.sw1",
+                       'id="sw1Select"', 'id="pSw1"', "data-sw1=", "SW1_MEMBERS[qt] && !exactMatches(qt).length", "tip-l1"):
+            self.assertIn(needle, html, needle)
         cfg = sls.load_config()
         st = cfg["style"]
         for key in ("lookback_days", "risk_hi", "risk_lo", "cyclical_l1", "growth_pe_pct", "l1_overrides", "overrides", "links", "colors"):
