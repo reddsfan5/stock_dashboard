@@ -1846,35 +1846,56 @@ function applyFocusVisual() {
   renderBoard();
 }
 // 面板遮挡时偏移投影中心：桌面左侧面板 → 向右；手机底部抽屉 → 向上，让聚焦点落在可见区域中央。
-function applyViewOffset() {
-  const W = innerWidth, H = innerHeight;
-  const fly = document.getElementById('flyout');
-  let ox = 0, oy = 0;
-  if (fly.classList.contains('open')) {
-    const r = fly.getBoundingClientRect();
-    if (MOBILE_MQ.matches) oy = Math.max(0, H - r.top) / 2;
-    else ox = -Math.min(r.right, W * 0.45) / 2;
+// 可见区域：扣掉浮层（手机：顶部图例 / 回放条 / 异动观察 + 底部抽屉与轨道；桌面：左侧轨道与面板、右栏、底部回放条）。
+// 抽屉用 offsetTop（布局位置，不受滑入动画 transform 影响），所以抽屉刚打开时也能算准。
+function visibleRect() {
+  const W = innerWidth, H = innerHeight, m = 8, mob = MOBILE_MQ.matches;
+  const fly = document.getElementById('flyout'), open = fly.classList.contains('open');
+  const box = id => { const e = document.getElementById(id); if (!e || e.hidden) return null; const r = e.getBoundingClientRect(); return r.width && r.height ? r : null; };
+  let L = 0, T = 0, R = W, B = H;
+  if (mob) {
+    for (const id of ['trailBar', 'legend', 'replayBar', 'sigPanel']) { const r = box(id); if (r && r.top < H * 0.4) T = Math.max(T, Math.min(r.bottom, H * 0.45)); }
+    const rail = box('dockRail'); if (rail) B = Math.min(B, rail.top);
+    if (open && fly.offsetHeight) B = Math.min(B, fly.offsetTop);
+  } else {
+    const rail = box('dockRail'); if (rail) L = Math.max(L, rail.right);
+    if (open && fly.offsetWidth) L = Math.max(L, fly.offsetLeft + fly.offsetWidth);
+    for (const id of ['legend', 'sigPanel']) { const r = box(id); if (r && r.left > W * 0.5) R = Math.min(R, r.left); }
+    const rp = box('replayBar'); if (rp && rp.top > H * 0.5) B = Math.min(B, rp.top);
   }
-  if (ox || oy) camera.setViewOffset(W, H, ox, oy, W, H); else camera.clearViewOffset();
+  if (B - T < 120) { const c = (T + B) / 2; T = Math.max(0, c - 60); B = Math.min(H, c + 60); }
+  return { L: L + m, T: T + m, R: R - m, B: B - m, W, H };
+}
+// 投影中心对准可见区域中心（setViewOffset），取景时按可见区域大小算距离。
+function applyViewOffset() {
+  const v = visibleRect(), W = v.W, H = v.H;
+  const ox = W / 2 - (v.L + v.R) / 2, oy = H / 2 - (v.T + v.B) / 2;
+  if (Math.abs(ox) > 0.5 || Math.abs(oy) > 0.5) camera.setViewOffset(W, H, ox, oy, W, H); else camera.clearViewOffset();
   camera.aspect = W / H; camera.updateProjectionMatrix();
 }
 function frameFor(ids, oneHop = true) {
-  const pts = ids.map(id => nodeById[id]).filter(Boolean);
-  if (!pts.length) return null;
-  const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
-  const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length;
-  const cz = pts.reduce((s, p) => s + p.z, 0) / pts.length;
-  // 取景覆盖核心 + 一跳邻居（距离 80% 分位，避免个别远点把镜头拉太远）
-  const pool = oneHop ? [...egoOf(ids).one] : ids;
-  const ds = pool.map(id => nodeById[id]).filter(Boolean)
-    .map(p => Math.hypot(p.x - cx, p.y - cy, p.z - cz)).sort((a, b) => a - b);
-  const r = Math.max(18, ds.length ? ds[Math.min(ds.length - 1, Math.floor(ds.length * (oneHop ? 0.8 : 0.9)))] : 18);
-  const dist = Math.min(260, r / Math.tan(camera.fov * Math.PI / 360) * 1.08);
+  // 被高亮的点（核心 + 一跳邻居，或整组）全部放进可见区域（扣掉顶部浮层 / 底部抽屉 / 侧栏后的矩形）
+  const pool = [...new Set(oneHop ? [...ids, ...egoOf(ids).one] : ids)].map(id => nodeById[id]).filter(Boolean);
+  if (!pool.length) return null;
+  const cx = pool.reduce((s, p) => s + p.x, 0) / pool.length;
+  const cy = pool.reduce((s, p) => s + p.y, 0) / pool.length;
+  const cz = pool.reduce((s, p) => s + p.z, 0) / pool.length;
+  const v = visibleRect(), tpp = Math.tan(camera.fov * Math.PI / 360) / (v.H / 2);  // 每像素的视角正切
+  // 横向再留 ~60px、纵向 ~12px 给居中显示的标签，避免点在区域内而标签压到侧栏
+  const tX = Math.max(0.05, ((v.R - v.L) / 2 - Math.min(60, (v.R - v.L) * 0.12)) * tpp), tY = Math.max(0.05, ((v.B - v.T) / 2 - 12) * tpp);
   // 保持当前观察方向，从当前状态连续飞过去（不先复位）
   const dir = camera.position.clone().sub(controls.target);
   if (dir.lengthSq() < 1) dir.set(55, 28, 95);
   dir.normalize();
-  const target = new THREE.Vector3(cx, cy, cz);
+  // 在该方向下逐点收紧：把包围盒中心对准可见区域中心，每个点都满足 |x|/(d−z) ≤ tanX、|y|/(d−z) ≤ tanY
+  const rt = new THREE.Vector3().crossVectors(camera.up, dir).normalize(), up = new THREE.Vector3().crossVectors(dir, rt);
+  const loc = pool.map(p => { const q = new THREE.Vector3(p.x - cx, p.y - cy, p.z - cz); return [q.dot(rt), q.dot(up), q.dot(dir)]; });
+  const mx = (Math.min(...loc.map(a => a[0])) + Math.max(...loc.map(a => a[0]))) / 2, my = (Math.min(...loc.map(a => a[1])) + Math.max(...loc.map(a => a[1]))) / 2;
+  let need = 0;
+  for (const [x, y, z] of loc) need = Math.max(need, z + (Math.abs(x - mx) + 3) / tX, z + (Math.abs(y - my) + 3) / tY);
+  const dist = Math.min(900, Math.max(24, need * 1.04));
+  controls.maxDistance = Math.max(380, dist * 1.05);  // 可见区域很小（手机）时允许拉远，否则 controls 会把镜头拽回 380
+  const target = new THREE.Vector3(cx, cy, cz).addScaledVector(rt, mx).addScaledVector(up, my);
   return { target, pos: target.clone().addScaledVector(dir, dist) };
 }
 function frameCores() { const f = frameFor([...coreIds]); if (f) flyTo(f.target, f.pos); }
@@ -1882,6 +1903,8 @@ function resetView() {
   if (coreIds.size) { frameCores(); return; }
   if (commFocus != null && commById[commFocus]) { const f = frameFor(commById[commFocus].members, false); if (f) flyTo(f.target, f.pos); return; }
   if (sw1Sel) { const f = frameFor(SW1_MEMBERS[sw1Sel] || [], false); if (f) flyTo(f.target, f.pos); return; }
+  if (styleFilter) { const f = frameFor(DATA.nodes.filter(n => styleOf(n.id) === styleFilter).map(n => n.id), false); if (f) flyTo(f.target, f.pos); return; }
+  controls.maxDistance = 380;
   flyTo(HOME.target.clone(), HOME.pos.clone());
 }
 function refreshFocus({ origin = null } = {}) {
@@ -1916,8 +1939,8 @@ function refreshFocus({ origin = null } = {}) {
 function setFocus(cores, { moveCamera = true, openDetail = true, origin = null } = {}) {
   coreIds = new Set(cores); commFocus = null; sw1Sel = null;
   refreshFocus({ origin: origin || cores[0] || null });
-  if (moveCamera) { if (cores.length) frameCores(); else resetView(); }
   if (openDetail && cores.length) setDockMode('detail', { fromFocus: true });
+  if (moveCamera) { if (cores.length) frameCores(); else resetView(); }
   renderExpandChips();
   renderTrail();
 }
@@ -1925,8 +1948,8 @@ function focusCommunity(k, { openDetail = true } = {}) {
   if (!commById[k]) return;
   coreIds = new Set(); commFocus = k; sw1Sel = null; expandOptions = []; renderExpandChips();
   refreshFocus();
-  resetView();
   if (openDetail) setDockMode('detail', { fromFocus: true });
+  resetView();
   renderTrail();
 }
 
@@ -1977,6 +2000,7 @@ function goGlobal({ keepTrail = true } = {}) {
   expandOptions = []; renderExpandChips();
   coreIds = new Set(); commFocus = null; sw1Sel = null;
   refreshFocus();
+  controls.maxDistance = 380;
   flyTo(HOME.target.clone(), HOME.pos.clone());
   setPStep('');
   renderTrail();
@@ -2358,8 +2382,8 @@ function runQuery() {
     if (coreIds.size || commFocus != null) goGlobal();
     document.getElementById('q').value = sk;
     if (colorBy !== 'style') window.__setColorBy('style');
-    setStyleFilter(sk);
     setDockMode('detail', { fromFocus: true });
+    setStyleFilter(sk);
     return;
   }
   const qt = String(q || '').trim();
@@ -2518,7 +2542,7 @@ function setStyleFilter(k) {
   }
   for (let i = 0; i < N; i++) paintNode(i);
   paintRings(); updateWebColors(); renderCommLegend(); renderLegendScale(); renderBoard();
-  if (!coreIds.size && commFocus == null) { renderPanel(null, []); rebuildLabels(); } else updateLabelOpacity();
+  if (!coreIds.size && commFocus == null && !sw1Sel) { renderPanel(null, []); rebuildLabels(); resetView(); } else updateLabelOpacity();
 }
 {
   const t = document.getElementById('pTitle');
@@ -2536,8 +2560,8 @@ function setSw1(k) {
   coreIds = new Set(); commFocus = null; expandOptions = []; renderExpandChips();
   sw1Sel = k;
   refreshFocus();
-  resetView();
   if (k) setDockMode('detail', { fromFocus: true });
+  resetView();
   renderTrail();
 }
 function renderSw1Panel(k) {
@@ -2891,7 +2915,7 @@ document.getElementById('dockRail').onclick = e => {
   if (dockMode === m) setDockMode('hidden'); else setDockMode(m);
 };
 document.getElementById('flyClose').onclick = () => setDockMode('hidden');
-if (window.ResizeObserver) new ResizeObserver(() => applyViewOffset()).observe(document.getElementById('flyout'));
+if (window.ResizeObserver) { const ro = new ResizeObserver(() => applyViewOffset()); for (const id of ['flyout', 'legend', 'sigPanel', 'replayBar']) { const e = document.getElementById(id); if (e) ro.observe(e); } }
 
 // ---------------- 告警（基准退回 / 关系样本过期） ----------------
 (function renderWarnings() {
@@ -2974,7 +2998,7 @@ window.__scc = {
   camera, controls, pickNode, three: THREE_SOURCE, fps,
   screenOf: id => { const n = nodeById[id]; if (!n) return null; camera.updateMatrixWorld(); _v.set(n.x, n.y, n.z).project(camera); return _v.z > 1 ? null : toScreen(_v); }, step, goTrail, goGlobal, startTour, stopTour, graph: GRAPH,
   get coreIds() { return [...coreIds]; }, get mode() { return mode; }, get colorBy() { return colorBy; },
-  setColorBy: v => window.__setColorBy(v), get riskAppetite() { return raNow; }, get styleSum() { return styleSum; }, get styleLinkCount() { return styleLinks ? styleLinks.userData.n : 0; }, info: () => window.__scc_info, setStyleFilter: k => setStyleFilter(k), get styleFilter() { return styleFilter; }, styleWhy: id => styleWhyHtml(id), get tipId() { return tipId; }, setSw1: k => setSw1(k), get sw1Sel() { return sw1Sel; }, sw1List: () => SW1_LIST.map(k => [k, SW1_MEMBERS[k].length]), sw1Agg: k => sw1Agg(k), nodeScreen: id => { const n = nodeById[id]; _v.set(n.x, n.y, n.z).project(camera); return toScreen(_v); },
+  setColorBy: v => window.__setColorBy(v), get riskAppetite() { return raNow; }, get styleSum() { return styleSum; }, get styleLinkCount() { return styleLinks ? styleLinks.userData.n : 0; }, info: () => window.__scc_info, setStyleFilter: k => setStyleFilter(k), get styleFilter() { return styleFilter; }, styleWhy: id => styleWhyHtml(id), get tipId() { return tipId; }, visibleRect: () => visibleRect(), frameIds: () => coreIds.size ? [...new Set([...coreIds, ...egoOf([...coreIds]).one])] : commFocus != null && commById[commFocus] ? commById[commFocus].members.slice() : sw1Sel ? (SW1_MEMBERS[sw1Sel] || []).slice() : styleFilter ? DATA.nodes.filter(n => styleOf(n.id) === styleFilter).map(n => n.id) : [], setSw1: k => setSw1(k), get sw1Sel() { return sw1Sel; }, sw1List: () => SW1_LIST.map(k => [k, SW1_MEMBERS[k].length]), sw1Agg: k => sw1Agg(k), nodeScreen: id => { const n = nodeById[id]; _v.set(n.x, n.y, n.z).project(camera); return toScreen(_v); },
   get commFocus() { return commFocus; }, get trail() { return trail.map(entryLabel); }, get trailIdx() { return trailIdx; },
   get flying() { return !!flight; }, get animating() { return performance.now() < litAnimUntil; }, get pulses() { return pulses.length; },
   get drawCalls() { return renderer.info.render.calls; }, get dayIdx() { return dayIdx; }, get period() { return curP(); },

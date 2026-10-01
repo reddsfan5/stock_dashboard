@@ -91,6 +91,9 @@ class SectorStyleTest(unittest.TestCase):
         for needle in ('data-v="sw1"', 'id="cmSw1"', "function setSw1(", "function renderSw1Panel(", "const SW1_MEMBERS", "INFO.sw1",
                        'id="sw1Select"', 'id="pSw1"', "data-sw1=", "SW1_MEMBERS[qt] && !exactMatches(qt).length", "tip-l1"):
             self.assertIn(needle, html, needle)
+        # 第十一轮：按可见区域（扣掉顶部浮层 / 底部抽屉）取景
+        for needle in ("function visibleRect(", "visibleRect: () => visibleRect()", "frameIds: () =>", "controls.maxDistance = Math.max(380"):
+            self.assertIn(needle, html, needle)
         cfg = sls.load_config()
         st = cfg["style"]
         for key in ("lookback_days", "risk_hi", "risk_lo", "cyclical_l1", "growth_pe_pct", "l1_overrides", "overrides", "links", "colors"):
