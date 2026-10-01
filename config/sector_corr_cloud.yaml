@@ -39,5 +39,16 @@ display:
   per_core_direction: 3      # 聚焦时每个方向最多显示几条领先边
   focus_total: 12            # 聚焦时最多显示的领先边总数
   show_failed_default: false # 未通过 FDR 的边默认隐藏（打开开关后以虚线显示）
+  default_mode: sync         # 默认连线模式；领先传导为实验功能（当前无边通过 FDR）
+  auto_rotate: true          # 初始自转；任何用户操作或聚焦后停止
+  auto_rotate_speed: 0.55
+  top_movers_labels: 8       # 全局视图标注涨跌幅前 N 的板块（一半涨、一半跌）
+  label_limit: 18            # 聚焦时最多标注的邻居数（另做屏幕空间去重叠）
+  color_clip_pct: 0.90       # 颜色/大小按 |涨跌| 的该分位封顶，抗离群值
+  min_ret_scale: 0.5         # 封顶值下限（%）
+  pick_radius_px: 14         # 鼠标点选半径（屏幕像素）
+  pick_radius_touch_px: 28   # 触屏点选半径（屏幕像素）
+  mobile_panel_vh: 42        # 手机底部面板最大高度（vh）；聚焦时相机按面板高度上移
+  legend_open_mobile: false  # 手机端图例默认折叠
 
 stale_weeks: 2               # 关系样本截止日落后行情超过 N 周时，页脚标红提示重算

@@ -644,25 +644,71 @@ button:hover,.chip:hover,.chip.active,.seg button.active{border-color:var(--acce
 .sig.no{color:var(--muted);border:1px dashed rgba(139,155,184,.6)}
 .list li.failed{opacity:.62}
 .leadsum{font-size:11px;color:var(--muted);line-height:1.5;margin-top:8px}
+.legend{position:fixed;right:14px;bottom:14px;z-index:5;width:262px;font-size:11px;color:var(--muted);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:6px 10px 8px;backdrop-filter:blur(10px)}
+.legend summary{cursor:pointer;color:var(--text);font-weight:600;list-style:none;padding:2px 0}
+.legend summary::-webkit-details-marker{display:none}
+.legend summary::after{content:' ▾';color:var(--muted)}
+.legend:not([open]) summary::after{content:' ▸'}
+.lg-row{display:flex;align-items:center;gap:8px;margin-top:6px;line-height:1.35}
+.lg-sw{flex:0 0 46px;display:flex;align-items:center;justify-content:center;gap:5px}
+.lg-grad{width:46px;height:8px;border-radius:4px;background:linear-gradient(90deg,#2ee6a0,#1f3a33 46%,#3b2428 54%,#ff5a5a)}
+.lg-dot{display:inline-block;border-radius:50%;background:#ff7a7a;box-shadow:0 0 6px rgba(255,122,122,.6)}
+.lg-dot.gray{background:#5a6679;box-shadow:none}
+.lg-line{width:46px;height:0;border-top:2px solid rgba(255,122,122,.85)}
+.lg-line.soft{border-top:2px dashed rgba(143,163,196,.8)}
+.lg-arrow{width:38px;height:0;border-top:2px solid #ffd166;position:relative}
+.lg-arrow::after{content:'';position:absolute;right:-6px;top:-5px;border-left:7px solid #ffd166;border-top:4px solid transparent;border-bottom:4px solid transparent}
+.lg-arrow.neg{border-top-color:#7aa2ff}.lg-arrow.neg::after{border-left-color:#7aa2ff}
+.lg-arrow.fail{border-top-style:dashed;opacity:.6}
+.chips.expand{align-items:center}
+.exp-hd{font-size:11px;color:var(--muted);margin-right:2px;white-space:nowrap}
+.seg button.exp{border:1px dashed rgba(255,209,102,.45);color:var(--muted)}
+.seg button.exp small{margin-left:4px;font-size:10px;color:#ffd166}
+.exp-note{font-size:11px;line-height:1.5;color:#ffd166;background:rgba(255,209,102,.08);border:1px dashed rgba(255,209,102,.4);border-radius:10px;padding:6px 8px;margin-bottom:8px}
+.from{display:inline-block;margin-left:6px;font-size:10px;color:var(--accent);opacity:.85}
+.tag-ok{display:inline-block;margin-left:6px;font-size:10px;color:#ffb3b3;border:1px solid rgba(255,122,122,.4);border-radius:999px;padding:0 5px;line-height:15px}
+.kv .corelist{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.rail-btn.home{font-size:17px}
 @media(max-width:900px){
   .rail{left:50%;right:auto;top:auto;bottom:calc(10px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);flex-direction:row;width:auto;padding:6px 10px;border-radius:999px;gap:4px}
   .rail-btn{width:40px;height:40px;border-radius:999px;font-size:14px}
-  .flyout{left:10px;right:10px;top:auto;bottom:calc(64px + env(safe-area-inset-bottom,0px));width:auto;max-height:42vh;border-radius:16px 16px 14px 14px}
+  .flyout{left:10px;right:10px;top:auto;bottom:calc(64px + env(safe-area-inset-bottom,0px));width:auto;max-height:var(--fly-mvh,42vh);border-radius:16px 16px 14px 14px}
+  #paneCtrl .title,#paneCtrl .sub{display:none}
+  .fly-hd{padding:8px 12px 6px}
+  .fly-body{padding:8px 12px 10px}
+  .search{margin-top:0;gap:6px}
+  .search input{padding:8px 10px;min-width:0;flex:1 1 110px}
+  .row{margin-top:6px;gap:6px}
+  #presets,.chips.expand{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-bottom:2px}
+  #presets::-webkit-scrollbar,.chips.expand::-webkit-scrollbar{display:none}
+  #presets .chip,.chips.expand .chip{flex:0 0 auto}
+  .legend{right:auto;left:10px;bottom:auto;top:calc(10px + env(safe-area-inset-top,0px));width:auto;max-width:calc(100vw - 20px)}
+  .legend[open]{width:min(290px,calc(100vw - 20px))}
   .rail-tip{left:50%;bottom:calc(72px + env(safe-area-inset-bottom,0px));transform:translateX(-50%) translateY(6px);text-align:center}
   .rail-tip.show{transform:translateX(-50%)}
   .foot{display:none}
 }
 </style>
+<script src="/assets/chart-touch.js"></script>
 </head>
 <body>
 
 <canvas id="c"></canvas>
 <div class="warnbar" id="warnBar" role="status"></div>
+<details class="legend" id="legend" open>
+  <summary>图例</summary>
+  <div class="lg-row"><span class="lg-sw"><span class="lg-grad"></span></span><span id="lgScale">红涨 · 绿跌</span></div>
+  <div class="lg-row"><span class="lg-sw"><span class="lg-dot" style="width:6px;height:6px"></span><span class="lg-dot" style="width:12px;height:12px"></span></span><span>点大小 = |涨跌|（非成交额/市值）；灰点 = 无行情</span></div>
+  <div class="lg-row"><span class="lg-sw"><span class="lg-line"></span></span><span>同步边 · 多年方向复核（红正 / 绿负，越亮越强）</span></div>
+  <div class="lg-row"><span class="lg-sw"><span class="lg-line soft"></span></span><span>同步边 · 补充（未复核，仅让孤立板块有参照）</span></div>
+  <div class="lg-row"><span class="lg-sw"><span class="lg-arrow"></span></span><span>领先箭头（实验）：金 = 同向，蓝 = 反向；虚线 = 未通过 FDR</span></div>
+</details>
 
 <nav class="rail" id="dockRail" aria-label="分析轨道">
   <button type="button" class="rail-btn active" data-mode="ctrl" id="railCtrl" title="搜索与筛选">控</button>
   <button type="button" class="rail-btn" data-mode="board" id="railBoard" title="涨跌榜">榜</button>
   <button type="button" class="rail-btn" data-mode="detail" id="railDetail" title="聚焦详情">详</button>
+  <button type="button" class="rail-btn home" data-act="home" id="railHome" title="复位视角" aria-label="复位视角">⟲</button>
 </nav>
 <div class="rail-tip" id="zenTip">再点轨道图标可收起面板</div>
 
@@ -685,6 +731,7 @@ button:hover,.chip:hover,.chip.active,.seg button.active{border-color:var(--acce
         <button id="reset" type="button">全局</button>
       </div>
       <div class="hints" id="hints"></div>
+      <div class="chips expand" id="expandBox" style="display:none"></div>
       <div class="row">
         <div class="seg" id="retmode">
           <button type="button" class="active" data-v="last">当日</button>
@@ -717,10 +764,54 @@ button:hover,.chip:hover,.chip.active,.seg button.active{border-color:var(--acce
 <div class="foot">数据 __START__ → __END__ · __N_SECTORS__ 二级 · 同步边 |ρ|≥__CORR_THR__ · 领先周频 |xcorr|≥__LEAD_THR__ · 跟涨观察 __HORIZON__ 日 · 生成 __GENERATED_AT__</div>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 <script type="module">
-import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-
 const DATA = __DATA_JSON__;
+const LEAD_DISPLAY = DATA.lead_display || {};
+const CFG_UI = LEAD_DISPLAY;  // 展示参数（config/sector_corr_cloud.yaml → display）
+
+// three.js：优先本地 /assets/vendor/three（随仓库提供），失败才回落 jsDelivr，避免 CDN 故障导致白屏。
+const THREE_SOURCES = [
+  { name: 'local', three: '/assets/vendor/three/three.module.min.js', orbit: '/assets/vendor/three/OrbitControls.js' },
+  { name: 'cdn', three: 'https://cdn.jsdelivr.net/npm/three@0.160.0/+esm', orbit: 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js/+esm' },
+];
+let THREE = null, OrbitControls = null, THREE_SOURCE = '';
+for (const src of THREE_SOURCES) {
+  try {
+    const t = await import(src.three);
+    const o = await import(src.orbit);
+    THREE = t; OrbitControls = o.OrbitControls; THREE_SOURCE = src.name; break;
+  } catch (e) { console.warn(`three.js ${src.name} 加载失败，尝试下一来源`, e && e.message); }
+}
+if (!THREE) {
+  const bar = document.getElementById('warnBar');
+  bar.innerHTML = '<div>⚠ 3D 组件 three.js 本地与 CDN 均加载失败，无法绘制点云。</div>'; bar.classList.add('show');
+  throw new Error('three.js unavailable');
+}
+document.documentElement.dataset.three = THREE_SOURCE;
+
+// 粗指针判断沿用共享 chart-touch.js（缺失时本地兜底，口径一致）。
+function isCoarse() {
+  if (window.ChartTouch && typeof window.ChartTouch.isCoarse === 'function') return window.ChartTouch.isCoarse();
+  return !!(window.matchMedia && (matchMedia('(pointer:coarse)').matches || matchMedia('(max-width:760px)').matches));
+}
+const MOBILE_MQ = window.matchMedia('(max-width:900px)');
+const TAP_CANCEL_PX = 10;  // 与 chart-touch.js 的 MOVE_CANCEL_PX 一致
+document.documentElement.style.setProperty('--fly-mvh', (CFG_UI.mobile_panel_vh ?? 42) + 'vh');
+
+// ---------------- 状态 ----------------
+let retWindow = 'last';
+let qMode = 'sector';
+let mode = CFG_UI.default_mode === 'lead' ? 'lead' : 'sync';
+let coreIds = new Set();
+let focusIds = new Set();
+let expandOptions = [];      // 查询扩展出的可选板块（默认不聚焦）
+let userInteracted = false;
+const LEAD_FOCUSED_TOTAL_LIMIT = LEAD_DISPLAY.focus_total ?? 12;
+const LEAD_PER_CORE_DIRECTION = LEAD_DISPLAY.per_core_direction ?? 3;
+const LEAD_PANEL_LIMIT = 6;
+let showFailed = !!LEAD_DISPLAY.show_failed_default;
+const LEAD_SIG_COUNT = (DATA.lead_summary || {}).fdr_pass;
+
+// ---------------- 场景 ----------------
 const canvas = document.getElementById('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -729,24 +820,24 @@ renderer.setClearColor(0x070b14, 1);
 const scene = new THREE.Scene();
 scene.fog = new THREE.FogExp2(0x070b14, 0.0018);
 const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 2000);
-camera.position.set(0, 45, 145);
+const HOME = { pos: new THREE.Vector3(0, 45, 145), target: new THREE.Vector3(0, 0, 0) };
+camera.position.copy(HOME.pos);
 const controls = new OrbitControls(camera, canvas);
 controls.enableDamping = true;
-controls.autoRotate = true;
-controls.autoRotateSpeed = 0.55;
+controls.autoRotateSpeed = CFG_UI.auto_rotate_speed ?? 0.55;
 controls.minDistance = 35;
 controls.maxDistance = 380;
-scene.add(new THREE.AmbientLight(0x9eb7ff, 0.8));
-const keyLight = new THREE.PointLight(0x5ad1ff, 1.15, 700); keyLight.position.set(80, 110, 70); scene.add(keyLight);
-const fillLight = new THREE.PointLight(0xff6b6b, 0.32, 700); fillLight.position.set(-90, -30, -80); scene.add(fillLight);
+function syncAutoRotate() { controls.autoRotate = (CFG_UI.auto_rotate ?? true) && !userInteracted && !coreIds.size; }
+function markInteracted() { if (!userInteracted) { userInteracted = true; syncAutoRotate(); } }
+controls.addEventListener('start', markInteracted);
+canvas.addEventListener('wheel', markInteracted, { passive: true });
+canvas.addEventListener('touchstart', markInteracted, { passive: true });
+canvas.addEventListener('pointerdown', markInteracted);
+syncAutoRotate();
 
 {
   const n = 900, pos = new Float32Array(n * 3);
-  for (let i = 0; i < n; i++) {
-    pos[i * 3] = (Math.random() - 0.5) * 520;
-    pos[i * 3 + 1] = (Math.random() - 0.5) * 520;
-    pos[i * 3 + 2] = (Math.random() - 0.5) * 520;
-  }
+  for (let i = 0; i < n * 3; i++) pos[i] = (Math.random() - 0.5) * 520;
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   scene.add(new THREE.Points(g, new THREE.PointsMaterial({ color: 0x243552, size: 0.55, transparent: true, opacity: 0.5 })));
@@ -754,93 +845,54 @@ const fillLight = new THREE.PointLight(0xff6b6b, 0.32, 700); fillLight.position.
 
 const nodeById = Object.fromEntries(DATA.nodes.map(n => [n.id, n]));
 const N = DATA.nodes.length;
-const positions = new Float32Array(N * 3);
-const colors = new Float32Array(N * 3);
-for (let i = 0; i < N; i++) {
-  const n = DATA.nodes[i];
-  positions[i * 3] = n.x; positions[i * 3 + 1] = n.y; positions[i * 3 + 2] = n.z;
-  colors[i * 3] = 0.5; colors[i * 3 + 1] = 0.55; colors[i * 3 + 2] = 0.65;
-}
-const pointsGeo = new THREE.BufferGeometry();
-pointsGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-pointsGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-const pointsMat = new THREE.PointsMaterial({ size: 9.5, vertexColors: true, transparent: true, opacity: 1, sizeAttenuation: true, depthWrite: false });
-const points = new THREE.Points(pointsGeo, pointsMat); scene.add(points);
 
-const glowTex = (() => {
+function radialTexture(stops) {
   const c = document.createElement('canvas'); c.width = c.height = 64;
   const ctx = c.getContext('2d');
-  const g = ctx.createRadialGradient(32, 32, 2, 32, 32, 30);
-  g.addColorStop(0, 'rgba(255,255,255,1)');
-  g.addColorStop(0.4, 'rgba(255,255,255,.45)');
-  g.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = g; ctx.fillRect(0, 0, 64, 64);
+  const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 31);
+  for (const [o, col] of stops) g.addColorStop(o, col);
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(32, 32, 31, 0, Math.PI * 2); ctx.fill();
   return new THREE.CanvasTexture(c);
-})();
-const sprites = [];
+}
+// 圆形节点：实心圆盘（边缘轻微羽化）+ 叠加光晕。
+const discTex = radialTexture([[0, 'rgba(255,255,255,1)'], [0.78, 'rgba(255,255,255,1)'], [1, 'rgba(255,255,255,0)']]);
+const glowTex = radialTexture([[0, 'rgba(255,255,255,1)'], [0.4, 'rgba(255,255,255,.45)'], [1, 'rgba(255,255,255,0)']]);
+const discs = [], glows = [];
 for (let i = 0; i < N; i++) {
-  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0x88aacc, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.3 }));
-  s.position.set(DATA.nodes[i].x, DATA.nodes[i].y, DATA.nodes[i].z);
-  s.scale.set(10, 10, 1); scene.add(s); sprites.push(s);
+  const n = DATA.nodes[i];
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0x88aacc, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.3 }));
+  glow.position.set(n.x, n.y, n.z); scene.add(glow); glows.push(glow);
+  const disc = new THREE.Sprite(new THREE.SpriteMaterial({ map: discTex, color: 0x8899aa, transparent: true, depthWrite: false }));
+  disc.position.set(n.x, n.y, n.z); disc.renderOrder = 2; scene.add(disc); discs.push(disc);
 }
 
-let retWindow = 'last';
-let qMode = 'sector';
-let mode = 'sync';
-let coreIds = new Set();
-let focusIds = new Set();
-const LEAD_DISPLAY = DATA.lead_display || {};
-const LEAD_FOCUSED_TOTAL_LIMIT = LEAD_DISPLAY.focus_total ?? 12;
-const LEAD_PER_CORE_DIRECTION = LEAD_DISPLAY.per_core_direction ?? 3;
-const LEAD_PANEL_LIMIT = 6;
-let showFailed = !!LEAD_DISPLAY.show_failed_default;
-// 旧缓存没有 fdr_pass 字段时视为通过，保持兼容。
-function edgePass(edge) { return edge.fdr_pass !== false; }
-function leadVisible(edge) { return showFailed || edgePass(edge); }
-
-// xcorr 是传导强度主排序，事件概率提升用于同强度边的次级区分。
-function leadStrength(edge) {
-  const lift = edge.lift != null ? Math.abs(Number(edge.lift) || 0)
-    : Math.max(Math.abs(Number(edge.lift_up) || 0), Math.abs(Number(edge.lift_dn) || 0));
-  return (Number(edge.abs) || Math.abs(Number(edge.xcorr) || 0)) + Math.min(0.2, lift) * 0.35;
-}
-// 通过 FDR 的边优先，其次按强度。
-function sortLeadEdges(edges) {
-  return [...edges].sort((a, b) => (edgePass(b) - edgePass(a)) || leadStrength(b) - leadStrength(a) || (Number(b.abs) || 0) - (Number(a.abs) || 0));
-}
-function visibleLeadEdges(filterIds = null) {
-  const all = (DATA.lead_edges || []).filter(leadVisible);
-  // 领先传导必须围绕当前中心板块解释；全局视图不绘制无关连线。
-  if (!filterIds || !filterIds.size) return [];
-  const picked = new Map();
-  for (const core of filterIds) {
-    const outgoing = sortLeadEdges(all.filter(edge => edge.source === core)).slice(0, LEAD_PER_CORE_DIRECTION);
-    const incoming = sortLeadEdges(all.filter(edge => edge.target === core)).slice(0, LEAD_PER_CORE_DIRECTION);
-    for (const edge of [...outgoing, ...incoming]) picked.set(`${edge.source}|${edge.target}`, edge);
-  }
-  return sortLeadEdges([...picked.values()]).slice(0, LEAD_FOCUSED_TOTAL_LIMIT);
-}
-
+// ---------------- 收益 → 颜色/大小（分位截断，抗离群值） ----------------
 function retOf(n) {
   const v = retWindow === 'cum20' ? (n.cum20 ?? n.cum_20 ?? n.ret20) : (n.last ?? n.ret1 ?? n.day);
   return (v == null || Number.isNaN(+v)) ? null : +v;
 }
-function retScale() {
-  let m = 1e-6;
-  for (const n of DATA.nodes) { const v = retOf(n); if (v != null) m = Math.max(m, Math.abs(v)); }
-  return Math.max(1.5, m * 0.85);
+function quantile(arr, q) {
+  if (!arr.length) return 0;
+  const a = [...arr].sort((x, y) => x - y), pos = (a.length - 1) * q, lo = Math.floor(pos), hi = Math.ceil(pos);
+  return a[lo] + (a[hi] - a[lo]) * (pos - lo);
+}
+const CLIP_Q = CFG_UI.color_clip_pct ?? 0.9;
+let RET_SCALE = 1;
+function computeRetScale() {
+  const v = DATA.nodes.map(retOf).filter(x => x != null).map(Math.abs);
+  RET_SCALE = Math.max(CFG_UI.min_ret_scale ?? 0.5, quantile(v, CLIP_Q));
 }
 function colorFromRet(v, dim = 1) {
   const c = new THREE.Color();
   if (v == null) { c.setRGB(0.35 * dim, 0.4 * dim, 0.48 * dim); return c; }
-  const t = Math.max(-1, Math.min(1, v / retScale()));
+  const t = Math.max(-1, Math.min(1, v / RET_SCALE));
   if (t >= 0) c.setRGB((0.45 + 0.55 * t) * dim, (0.18 + 0.05 * (1 - t)) * dim, (0.18 + 0.05 * (1 - t)) * dim);
   else { const u = -t; c.setRGB((0.12 + 0.05 * (1 - u)) * dim, (0.45 + 0.5 * u) * dim, (0.32 + 0.2 * u) * dim); }
   return c;
 }
 function sizeFromRet(v) {
   if (v == null) return 3.2;
-  return 5.5 + 10.0 * Math.min(1, Math.abs(v) / retScale());
+  return 5.5 + 10.0 * Math.min(1, Math.abs(v) / RET_SCALE);
 }
 function maxCorrToCores(nodeId) {
   let best = 0;
@@ -862,115 +914,138 @@ function maxCorrToCores(nodeId) {
   return best;
 }
 function applyNodeAppearance() {
-  const colAttr = pointsGeo.getAttribute('color');
+  computeRetScale();
   const has = focusIds.size > 0;
   for (let i = 0; i < N; i++) {
     const n = DATA.nodes[i], id = n.id, v = retOf(n);
-    let dim = 1, sizeMul = 1, spro = 0.28, scale = sizeFromRet(v) * 1.35;
+    let dim = 1, sizeMul = 1, gOp = 0.28;
+    const base = sizeFromRet(v);
     if (has) {
-      if (coreIds.has(id)) { dim = 1; sizeMul = 1.55; spro = 0.95; scale *= 1.4; }
+      if (coreIds.has(id)) { sizeMul = 1.5; gOp = 0.95; }
       else if (focusIds.has(id)) {
         const s = maxCorrToCores(id);
         const t = Math.min(1, Math.max(0, s <= 0 ? 0.2 : (s - 0.2) / 0.55));
-        dim = 0.35 + 0.65 * t; sizeMul = 0.85 + 0.55 * t; spro = 0.16 + 0.7 * t; scale *= sizeMul;
-      } else { dim = 0.16; sizeMul = 0.55; spro = 0.03; scale = 2.1; }
+        dim = 0.35 + 0.65 * t; sizeMul = 0.85 + 0.45 * t; gOp = 0.16 + 0.7 * t;
+      } else { dim = 0.16; sizeMul = 0.45; gOp = 0.03; }
     }
     const c = colorFromRet(v, dim);
-    colAttr.setXYZ(i, c.r, c.g, c.b);
-    pointsMat.size = 3.6; // global base; per-point via sprite scale primarily
-    sprites[i].material.color.copy(c);
-    sprites[i].material.opacity = spro;
-    sprites[i].scale.set(scale * sizeMul, scale * sizeMul, 1);
+    discs[i].material.color.copy(c);
+    discs[i].material.opacity = has && !focusIds.has(id) ? 0.5 : 1;
+    const ds = Math.max(1.4, base * 0.34 * sizeMul);
+    discs[i].scale.set(ds, ds, 1);
+    glows[i].material.color.copy(c);
+    glows[i].material.opacity = gOp;
+    const gs = base * 1.35 * sizeMul;
+    glows[i].scale.set(gs, gs, 1);
   }
-  colAttr.needsUpdate = true;
-  // also encode size via points material size isn't per-vertex with PointsMaterial —
-  // approximate by keeping color/glow; optionally rebuild later.
+  renderLegendScale();
 }
 
-const syncLines = (() => {
-  const edgePos = [], edgeCol = [];
-  const cPos = new THREE.Color(0xff7a7a), cNeg = new THREE.Color(0x3ddc97);
+// ---------------- 同步边：多年复核 = 实线，补充（soft）= 暗色虚线 ----------------
+function buildSyncLines(soft) {
+  const pos = [], col = [];
+  const cPos = new THREE.Color(0xff7a7a), cNeg = new THREE.Color(0x3ddc97), cSoft = new THREE.Color(0x8fa3c4);
   for (const e of DATA.edges) {
+    if (!!e.soft !== soft) continue;
     const a = nodeById[e.source], b = nodeById[e.target]; if (!a || !b) continue;
-    edgePos.push(a.x, a.y, a.z, b.x, b.y, b.z);
-    const col = e.sign >= 0 ? cPos : cNeg;
-    const w = 0.18 + 0.55 * Math.min(1, (e.abs - 0.35) / 0.4);
-    edgeCol.push(col.r * w, col.g * w, col.b * w, col.r * w, col.g * w, col.b * w);
+    pos.push(a.x, a.y, a.z, b.x, b.y, b.z);
+    const base = soft ? cSoft : (e.sign >= 0 ? cPos : cNeg);
+    const w = soft ? 0.55 : 0.18 + 0.55 * Math.max(0, Math.min(1, (e.abs - 0.35) / 0.4));
+    col.push(base.r * w, base.g * w, base.b * w, base.r * w, base.g * w, base.b * w);
   }
   const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(edgePos, 3));
-  geo.setAttribute('color', new THREE.Float32BufferAttribute(edgeCol, 3));
-  return new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.28, depthWrite: false }));
-})();
-scene.add(syncLines);
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  const mat = soft
+    ? new THREE.LineDashedMaterial({ vertexColors: true, transparent: true, opacity: 0.32, dashSize: 1.1, gapSize: 1.6, depthWrite: false })
+    : new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.3, depthWrite: false });
+  const line = new THREE.LineSegments(geo, mat);
+  if (soft) line.computeLineDistances();
+  return line;
+}
+const syncLines = buildSyncLines(false); scene.add(syncLines);
+const softLines = buildSyncLines(true); scene.add(softLines);
 
+// ---------------- 领先边（实验） ----------------
+function edgePass(edge) { return edge.fdr_pass !== false; }
+function leadVisible(edge) { return showFailed || edgePass(edge); }
+function leadStrength(edge) {
+  const lift = edge.lift != null ? Math.abs(Number(edge.lift) || 0)
+    : Math.max(Math.abs(Number(edge.lift_up) || 0), Math.abs(Number(edge.lift_dn) || 0));
+  return (Number(edge.abs) || Math.abs(Number(edge.xcorr) || 0)) + Math.min(0.2, lift) * 0.35;
+}
+function sortLeadEdges(edges) {
+  return [...edges].sort((a, b) => (edgePass(b) - edgePass(a)) || leadStrength(b) - leadStrength(a) || (Number(b.abs) || 0) - (Number(a.abs) || 0));
+}
+function visibleLeadEdges(filterIds = null) {
+  const all = (DATA.lead_edges || []).filter(leadVisible);
+  // 领先传导必须围绕当前中心板块解释；全局视图不绘制无关连线。
+  if (!filterIds || !filterIds.size) return [];
+  const picked = new Map();
+  for (const core of filterIds) {
+    const outgoing = sortLeadEdges(all.filter(edge => edge.source === core)).slice(0, LEAD_PER_CORE_DIRECTION);
+    const incoming = sortLeadEdges(all.filter(edge => edge.target === core)).slice(0, LEAD_PER_CORE_DIRECTION);
+    for (const edge of [...outgoing, ...incoming]) picked.set(`${edge.source}|${edge.target}`, edge);
+  }
+  return sortLeadEdges([...picked.values()]).slice(0, LEAD_FOCUSED_TOTAL_LIMIT);
+}
 const leadGroup = new THREE.Group(); scene.add(leadGroup); leadGroup.visible = false;
+function disposeChildren(group) {
+  while (group.children.length) { const ch = group.children.pop(); ch.geometry?.dispose?.(); ch.material?.map?.dispose?.(); ch.material?.dispose?.(); }
+}
 function rebuildLeadArrows(filterIds = null) {
-  while (leadGroup.children.length) { const ch = leadGroup.children.pop(); ch.geometry?.dispose?.(); ch.material?.dispose?.(); }
+  disposeChildren(leadGroup);
   const cPos = new THREE.Color(0xffd166), cNeg = new THREE.Color(0x7aa2ff);
   for (const e of visibleLeadEdges(filterIds)) {
-    if (filterIds && filterIds.size && !filterIds.has(e.source) && !filterIds.has(e.target)) continue;
     const a = nodeById[e.source], b = nodeById[e.target]; if (!a || !b) continue;
     const start = new THREE.Vector3(a.x, a.y, a.z), end = new THREE.Vector3(b.x, b.y, b.z);
     const dir = end.clone().sub(start); const len = dir.length(); if (len < 1e-3) continue; dir.normalize();
     const shaftLen = Math.max(0.1, len - 3.2);
     const mid = start.clone().add(dir.clone().multiplyScalar(shaftLen / 2));
     const strength = Math.min(1, Math.max(0, ((e.abs ?? Math.abs(e.xcorr || 0)) - 0.08) / 0.25));
-    const w = 0.35 + 0.9 * (filterIds ? (0.25 + 0.75 * strength) : Math.min(1, (e.abs - 0.15) / 0.25));
+    const w = 0.35 + 0.9 * (0.25 + 0.75 * strength);
     const col = e.sign >= 0 ? cPos : cNeg;
     const pass = edgePass(e);
-    const shaftOp = filterIds ? (0.25 + 0.7 * strength) : 0.55;
-    const headOp = pass ? (filterIds ? (0.35 + 0.65 * strength) : 0.7) : 0.35;
     if (pass) {
-      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.1 * w, 0.1 * w, shaftLen, 6), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: shaftOp }));
+      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.1 * w, 0.1 * w, shaftLen, 6), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.25 + 0.7 * strength }));
       shaft.position.copy(mid); shaft.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir); leadGroup.add(shaft);
     } else {
       // 未通过 FDR：静态虚线、降低亮度，不加流动光点。
-      const endShaft = start.clone().add(dir.clone().multiplyScalar(shaftLen));
-      const g = new THREE.BufferGeometry().setFromPoints([start, endShaft]);
+      const g = new THREE.BufferGeometry().setFromPoints([start, start.clone().add(dir.clone().multiplyScalar(shaftLen))]);
       const dash = new THREE.Line(g, new THREE.LineDashedMaterial({ color: col, transparent: true, opacity: 0.42, dashSize: 1.2, gapSize: 1.4, depthWrite: false }));
       dash.computeLineDistances(); leadGroup.add(dash);
     }
-    const head = new THREE.Mesh(new THREE.ConeGeometry((pass ? 0.5 : 0.36) * w, 2.2, 8), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: headOp }));
+    const head = new THREE.Mesh(new THREE.ConeGeometry((pass ? 0.5 : 0.36) * w, 2.2, 8), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: pass ? 0.35 + 0.65 * strength : 0.35 }));
     head.position.copy(start.clone().add(dir.clone().multiplyScalar(shaftLen + 1.0)));
     head.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir); leadGroup.add(head);
   }
 }
-rebuildLeadArrows();
 
+// ---------------- 流动光点 ----------------
 const flowGroup = new THREE.Group(); scene.add(flowGroup);
 const flowMats = [];
-function clearFlow() {
-  while (flowGroup.children.length) {
-    const ch = flowGroup.children.pop();
-    ch.geometry?.dispose?.();
-    if (ch.material && !flowMats.includes(ch.material)) ch.material.dispose?.();
-  }
-  for (const m of flowMats) m.dispose();
-  flowMats.length = 0;
-}
-function addFlow(ax, ay, az, bx, by, bz, color, opacity) {
+function clearFlow() { disposeChildren(flowGroup); flowMats.length = 0; }
+function addFlow(a, b, color, opacity) {
   const segs = 14, pos = [];
-  for (let i = 0; i <= segs; i++) { const t = i / segs; pos.push(ax + (bx - ax) * t, ay + (by - ay) * t, az + (bz - az) * t); }
+  for (let i = 0; i <= segs; i++) { const t = i / segs; pos.push(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t); }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   const mat = new THREE.LineDashedMaterial({ color, transparent: true, opacity, dashSize: 2.2, gapSize: 1.35, depthWrite: false });
   flowMats.push(mat);
   const line = new THREE.Line(geo, mat); line.computeLineDistances(); flowGroup.add(line);
-  const ppos = []; for (let i = 0; i < 7; i++) { const t = (i + 0.35) / 7; ppos.push(ax + (bx - ax) * t, ay + (by - ay) * t, az + (bz - az) * t); }
-  const pg = new THREE.BufferGeometry(); pg.setAttribute('position', new THREE.Float32BufferAttribute(ppos, 3));
-  const pts = new THREE.Points(pg, new THREE.PointsMaterial({ color, size: 1.7, transparent: true, opacity: opacity * 0.9, depthWrite: false, blending: THREE.AdditiveBlending }));
-  pts.userData = { ax, ay, az, bx, by, bz, n: 7, phase: Math.random() };
+  const pg = new THREE.BufferGeometry(); pg.setAttribute('position', new THREE.Float32BufferAttribute(new Array(21).fill(0), 3));
+  const pts = new THREE.Points(pg, new THREE.PointsMaterial({ color, size: 1.7, map: discTex, alphaTest: 0.3, transparent: true, opacity: opacity * 0.9, depthWrite: false, blending: THREE.AdditiveBlending }));
+  pts.userData = { ax: a.x, ay: a.y, az: a.z, bx: b.x, by: b.y, bz: b.z, n: 7, phase: Math.random() };
   flowGroup.add(pts);
 }
 function rebuildFlow() {
   clearFlow();
   if (!focusIds.size) {
     if (mode === 'sync') {
-      const top = [...DATA.edges].sort((a, b) => b.abs - a.abs).slice(0, 36);
+      const top = DATA.edges.filter(e => !e.soft).sort((a, b) => b.abs - a.abs).slice(0, 36);
       for (const e of top) {
         const a = nodeById[e.source], b = nodeById[e.target]; if (!a || !b) continue;
-        addFlow(a.x, a.y, a.z, b.x, b.y, b.z, e.sign >= 0 ? 0xff7a7a : 0x3ddc97, 0.2 + 0.22 * Math.min(1, (e.abs - 0.4) / 0.4));
+        addFlow(a, b, e.sign >= 0 ? 0xff7a7a : 0x3ddc97, 0.2 + 0.22 * Math.min(1, (e.abs - 0.4) / 0.4));
       }
     }
     return;
@@ -985,43 +1060,84 @@ function rebuildFlow() {
       let a = nodeById[e.source], b = nodeById[e.target];
       if (coreIds.has(e.target) && !coreIds.has(e.source)) { const t = a; a = b; b = t; }
       const s = Math.min(1, Math.max(0, ((e.abs ?? Math.abs(e.corr || 0)) - 0.35) / 0.45));
-      addFlow(a.x, a.y, a.z, b.x, b.y, b.z, e.sign >= 0 ? 0xff8a8a : 0x3ddc97, 0.45 + 0.5 * s);
+      const color = e.soft ? 0x8fa3c4 : (e.sign >= 0 ? 0xff8a8a : 0x3ddc97);
+      addFlow(a, b, color, e.soft ? 0.3 : 0.45 + 0.5 * s);
     }
   } else {
     for (const e of visibleLeadEdges(coreIds)) {
-      if (!(coreIds.has(e.source) || coreIds.has(e.target))) continue;
-      if (!(focusIds.has(e.source) || focusIds.has(e.target))) continue;
       if (!edgePass(e)) continue;
       const a = nodeById[e.source], b = nodeById[e.target]; if (!a || !b) continue;
       const s = Math.min(1, Math.max(0, ((e.abs ?? Math.abs(e.xcorr || 0)) - 0.08) / 0.25));
-      addFlow(a.x, a.y, a.z, b.x, b.y, b.z, e.sign >= 0 ? 0xffd166 : 0x7aa2ff, 0.4 + 0.55 * s);
+      addFlow(a, b, e.sign >= 0 ? 0xffd166 : 0x7aa2ff, 0.4 + 0.55 * s);
     }
   }
 }
 
+// ---------------- 标签（含屏幕空间去重叠） ----------------
 const labelGroup = new THREE.Group(); scene.add(labelGroup);
-function makeLabel(text, color = '#e8eefc') {
+function makeLabel(text, color, priority) {
   const c = document.createElement('canvas'); const ctx = c.getContext('2d');
   ctx.font = '600 28px sans-serif'; const w = Math.ceil(ctx.measureText(text).width) + 28;
   c.width = w; c.height = 48; ctx.font = '600 28px sans-serif';
-  ctx.fillStyle = 'rgba(8,12,22,0.72)';
+  ctx.fillStyle = 'rgba(8,12,22,0.74)';
   ctx.beginPath(); const r = 12; ctx.moveTo(r, 4); ctx.arcTo(w, 4, w, 44, r); ctx.arcTo(w, 44, 0, 44, r); ctx.arcTo(0, 44, 0, 4, r); ctx.arcTo(0, 4, w, 4, r); ctx.closePath(); ctx.fill();
   ctx.fillStyle = color; ctx.textBaseline = 'middle'; ctx.fillText(text, 14, 26);
   const tex = new THREE.CanvasTexture(c); tex.minFilter = THREE.LinearFilter;
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
-  sp.scale.set(w / 10, 4.8, 1); return sp;
+  sp.scale.set(w / 10, 4.8, 1); sp.renderOrder = 5; sp.userData.priority = priority;
+  return sp;
 }
-function clearLabels() { while (labelGroup.children.length) { const ch = labelGroup.children.pop(); ch.material.map?.dispose(); ch.material.dispose(); } }
-function rebuildLabels(cores, neighbors) {
-  clearLabels();
-  const show = [...new Set([...(cores || []), ...(neighbors || [])])].slice(0, 22);
-  for (const id of show) {
-    const n = nodeById[id]; if (!n) continue;
-    const lab = makeLabel(n.name, coreIds.has(id) ? '#5ad1ff' : '#e8eefc');
+function setLabels(items) {
+  disposeChildren(labelGroup);
+  for (const it of items) {
+    const n = nodeById[it.id]; if (!n) continue;
+    const lab = makeLabel(it.text || n.name, it.color || '#e8eefc', it.priority || 0);
     lab.position.set(n.x, n.y + 4.5, n.z); labelGroup.add(lab);
+  }
+  declutterLabels();
+}
+function topMovers() {
+  const k = CFG_UI.top_movers_labels ?? 8;
+  const rows = DATA.nodes.map(n => ({ id: n.id, v: retOf(n) })).filter(r => r.v != null);
+  const up = rows.filter(r => r.v > 0).sort((a, b) => b.v - a.v).slice(0, Math.ceil(k / 2));
+  const dn = rows.filter(r => r.v < 0).sort((a, b) => a.v - b.v).slice(0, Math.floor(k / 2));
+  return [...up, ...dn];
+}
+function rebuildLabels() {
+  if (!coreIds.size) {
+    setLabels(topMovers().map((r, i) => ({ id: r.id, text: `${r.id} ${fmtRet(r.v)}`, color: r.v >= 0 ? '#ff9d9d' : '#7fe7b8', priority: 50 - i })));
+    return;
+  }
+  const limit = CFG_UI.label_limit ?? 18;
+  const neighbors = [...focusIds].filter(id => !coreIds.has(id))
+    .map(id => ({ id, s: maxCorrToCores(id) })).sort((a, b) => b.s - a.s).slice(0, limit);
+  setLabels([
+    ...[...coreIds].map(id => ({ id, color: '#5ad1ff', priority: 1000 })),
+    ...neighbors.map((r, i) => ({ id: r.id, color: '#e8eefc', priority: 100 - i - (r.s < 0.3 ? 20 : 0) })),
+  ]);
+}
+const _v = new THREE.Vector3(), _e = new THREE.Vector3(), _right = new THREE.Vector3(), _up = new THREE.Vector3();
+function toScreen(vec) { return [(vec.x + 1) / 2 * innerWidth, (1 - vec.y) / 2 * innerHeight]; }
+function declutterLabels() {
+  camera.updateMatrixWorld();
+  _right.setFromMatrixColumn(camera.matrixWorld, 0); _up.setFromMatrixColumn(camera.matrixWorld, 1);
+  const placed = [];
+  const items = [...labelGroup.children].sort((a, b) => b.userData.priority - a.userData.priority);
+  for (const sp of items) {
+    _v.copy(sp.position).project(camera);
+    if (_v.z > 1 || Math.abs(_v.x) > 1.05 || Math.abs(_v.y) > 1.05) { sp.visible = false; continue; }
+    const [cx, cy] = toScreen(_v);
+    const [rx] = toScreen(_e.copy(sp.position).addScaledVector(_right, sp.scale.x / 2).project(camera));
+    const [, uy] = toScreen(_e.copy(sp.position).addScaledVector(_up, sp.scale.y / 2).project(camera));
+    const hw = Math.abs(rx - cx), hh = Math.abs(cy - uy);
+    const rect = [cx - hw, cy - hh, cx + hw, cy + hh];
+    const overlap = placed.some(p => !(rect[2] < p[0] || rect[0] > p[2] || rect[3] < p[1] || rect[1] > p[3]));
+    if (overlap && sp.userData.priority < 1000) { sp.visible = false; continue; }
+    sp.visible = true; placed.push(rect);
   }
 }
 
+// ---------------- 查询 ----------------
 function expandQuery(q) {
   q = (q || '').trim(); if (!q) return [];
   const hit = new Set();
@@ -1038,6 +1154,15 @@ function expandQuery(q) {
     if ((n.l1 || '').includes(q)) hit.add(n.id);
   }
   return [...hit];
+}
+// 精确匹配：板块名相同（忽略末尾“Ⅱ”），或扩展规则里的 exact 项。
+function exactMatches(q) {
+  q = (q || '').trim(); if (!q) return [];
+  const out = new Set();
+  for (const n of DATA.nodes) if (n.name === q || n.name.replace(/Ⅱ$/, '') === q) out.add(n.id);
+  const rule = (DATA.expand_rules || {})[q];
+  if (!out.size && rule) for (const ex of (rule.exact || [])) if (nodeById[ex]) out.add(ex);
+  return [...out];
 }
 function searchStocks(q) {
   q = (q || '').trim().toLowerCase(); if (!q) return [];
@@ -1063,6 +1188,7 @@ function applyDeepLink() {
     document.getElementById('pBody').innerHTML = '<div class="empty">点云索引中暂未找到该标的，仍可手动查询板块。</div>';
     return;
   }
+  setExpandOptions([]);
   setFocus([hit.sector]);
   const source = params.get('from');
   const title = document.getElementById('pTitle');
@@ -1087,22 +1213,78 @@ function egoOf(cores) {
   return { one, two };
 }
 
+// ---------------- 视图 ----------------
 function applyFocusVisual() {
   applyNodeAppearance();
   const has = focusIds.size > 0;
   syncLines.visible = mode === 'sync' && !has;
+  softLines.visible = mode === 'sync' && !has;
   leadGroup.visible = mode === 'lead';
   if (mode === 'lead') rebuildLeadArrows(has ? coreIds : null);
   rebuildFlow();
   renderBoard();
 }
+// 面板遮挡时偏移投影中心：桌面左侧面板 → 向右；手机底部抽屉 → 向上，让聚焦点落在可见区域中央。
+function applyViewOffset() {
+  const W = innerWidth, H = innerHeight;
+  const fly = document.getElementById('flyout');
+  let ox = 0, oy = 0;
+  if (fly.classList.contains('open')) {
+    const r = fly.getBoundingClientRect();
+    if (MOBILE_MQ.matches) oy = Math.max(0, H - r.top) / 2;
+    else ox = -Math.min(r.right, W * 0.45) / 2;
+  }
+  if (ox || oy) camera.setViewOffset(W, H, ox, oy, W, H); else camera.clearViewOffset();
+  camera.aspect = W / H; camera.updateProjectionMatrix();
+}
+function frameCores() {
+  const pts = [...coreIds].map(id => nodeById[id]).filter(Boolean);
+  if (!pts.length) return;
+  const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
+  const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length;
+  const cz = pts.reduce((s, p) => s + p.z, 0) / pts.length;
+  // 取景覆盖核心 + 一跳邻居（按距离 80% 分位，避免个别远点把镜头拉太远）
+  const { one } = egoOf([...coreIds]);
+  const ds = [...one].map(id => nodeById[id]).filter(Boolean)
+    .map(p => Math.hypot(p.x - cx, p.y - cy, p.z - cz)).sort((a, b) => a - b);
+  const r = Math.max(18, ds.length ? ds[Math.min(ds.length - 1, Math.floor(ds.length * 0.8))] : 18);
+  const fov = camera.fov * Math.PI / 180;
+  const dist = Math.min(260, r / Math.tan(fov / 2) * 1.08);
+  const dir = new THREE.Vector3(55, 28, 95).normalize();
+  controls.target.set(cx, cy, cz);
+  camera.position.set(cx + dir.x * dist, cy + dir.y * dist, cz + dir.z * dist);
+  controls.update();
+}
+function resetView() {
+  if (coreIds.size) { frameCores(); return; }
+  controls.target.copy(HOME.target); camera.position.copy(HOME.pos); controls.update();
+}
+function refreshFocus() {
+  if (coreIds.size) { const { one, two } = egoOf([...coreIds]); focusIds = new Set([...one, ...two]); }
+  else focusIds = new Set();
+  applyFocusVisual();
+  if (coreIds.size) renderPanel([...coreIds], [...focusIds].filter(id => !coreIds.has(id)));
+  else renderPanel(null, []);
+  rebuildLabels();
+  syncAutoRotate();
+}
+function setFocus(cores, { moveCamera = true, openDetail = true } = {}) {
+  coreIds = new Set(cores);
+  refreshFocus();
+  if (moveCamera) { if (cores.length) frameCores(); else resetView(); }
+  if (openDetail && cores.length) setDockMode('detail', { fromFocus: true });
+  renderExpandChips();
+}
 
+// ---------------- 面板 ----------------
 function fmtPct(x) { if (x == null || Number.isNaN(x)) return '-'; return (x * 100).toFixed(0) + '%'; }
 function fmtLift(x) { if (x == null || Number.isNaN(x)) return '-'; return (x >= 0 ? '+' : '') + (x * 100).toFixed(0) + 'pt'; }
 function fmtPct1(x) { if (x == null || Number.isNaN(x)) return '-'; return (x * 100).toFixed(1) + '%'; }
 function fmtLift1(x) { if (x == null || Number.isNaN(x)) return '-'; return (x >= 0 ? '+' : '') + (x * 100).toFixed(1) + 'pt'; }
 const OOS_MIN_EVENTS = ((DATA.lead_summary || {}).oos_cfg || {}).min_events ?? 6;
 function fmtQ(q) { if (q == null || Number.isNaN(+q)) return '-'; return q < 0.001 ? '<0.001' : (+q).toFixed(3); }
+function fmtRet(x) { if (x == null || Number.isNaN(+x)) return '-'; const v = +x; return (v >= 0 ? '+' : '') + v.toFixed(2) + '%'; }
+function fromTag(from) { return from && coreIds.size > 1 ? `<span class="from">来自 ${from}</span>` : ''; }
 function leadRow(r, arrow) {
   const pass = edgePass(r);
   const badge = r.q_value == null ? '' : (pass ? `<span class="sig ok">FDR✓ q=${fmtQ(r.q_value)}</span>` : `<span class="sig no">未通过 q=${fmtQ(r.q_value)}</span>`);
@@ -1114,7 +1296,7 @@ function leadRow(r, arrow) {
   if (r.oos_n >= OOS_MIN_EVENTS) oos = `样本外 ${r.oos_n} 次/${r.oos_folds} 段 · 命中 ${fmtPct(r.oos_hit)}（基准 ${fmtPct(r.oos_base)}，${fmtLift(r.oos_lift)}）`;
   else if (r.oos_n > 0) oos = `样本外仅 ${r.oos_n} 次事件（<${OOS_MIN_EVENTS}），样本不足`;
   else if (r.oos_n === 0) oos = '样本外：历次训练段均未入选，无验证记录';
-  return `<li data-id="${r.id}" class="${pass ? '' : 'failed'}"><span>${r.id}${badge}<span class="sub2">滞后 ${r.lag} 周 · xcorr ${r.xcorr.toFixed(2)} · ${ins}</span>${oos ? `<span class="sub2">${oos}</span>` : ''}</span><span class="leadc">${arrow}</span></li>`;
+  return `<li data-id="${r.id}" class="${pass ? '' : 'failed'}"><span>${r.id}${badge}${fromTag(r._from)}<span class="sub2">滞后 ${r.lag} 周 · xcorr ${r.xcorr.toFixed(2)} · ${ins}</span>${oos ? `<span class="sub2">${oos}</span>` : ''}</span><span class="leadc">${arrow}</span></li>`;
 }
 function leadSummaryText() {
   const s = DATA.lead_summary; if (!s) return '';
@@ -1123,8 +1305,78 @@ function leadSummaryText() {
   const fo = f.n_events ? `；其中训练段 FDR 通过的边 ${f.n_events} 次：${fmtPct1(f.hit)}（${fmtLift1(f.lift)}）` : '；训练段内无 FDR 通过的边';
   return `领先候选 ${s.candidates} 条，BH-FDR（α=${s.fdr_alpha}，${s.m_tests} 个有序板块对）通过 ${s.fdr_pass} 条。${oos}${fo}。`;
 }
-function fmtRet(x) { if (x == null || Number.isNaN(+x)) return '-'; const v = +x; return (v >= 0 ? '+' : '') + v.toFixed(2) + '%'; }
-
+function leadNotice() {
+  if (LEAD_SIG_COUNT == null) return '';
+  return LEAD_SIG_COUNT === 0
+    ? `<div class="exp-note">实验功能：当前没有任何领先边通过 BH-FDR，样本外命中与基准持平。箭头仅供提出假设，请以「同步相关」为主。</div>`
+    : `<div class="exp-note">实验功能：仅 ${LEAD_SIG_COUNT} 条领先边通过 BH-FDR，请结合样本外命中阅读。</div>`;
+}
+function collectFrom(lists) {
+  // lists: [[coreId, rows]] → 去重并记录来源核心（取强度最高的来源）
+  const best = new Map();
+  for (const [core, rows] of lists) for (const r of rows) {
+    if (coreIds.has(r.id)) continue;
+    const cur = best.get(r.id);
+    if (!cur || (r.abs ?? 0) > (cur.abs ?? 0)) best.set(r.id, { ...r, _from: core });
+  }
+  return [...best.values()];
+}
+function renderPanel(cores, neighborIds) {
+  const title = document.getElementById('pTitle');
+  const meta = document.getElementById('pMeta');
+  const kv = document.getElementById('pKv');
+  const body = document.getElementById('pBody');
+  if (!meta || !kv || !body) return;
+  if (!cores || !cores.length) {
+    if (title) title.textContent = '全局视图';
+    if (mode === 'lead') {
+      meta.textContent = `${DATA.n_sectors} 个二级 · 尚未聚焦中心板块 · 共 ${(DATA.lead_edges || []).length} 条候选领先边`;
+      body.innerHTML = `${leadNotice()}<div class="empty">请先查询或点击一个板块。聚焦后只显示该中心板块最强的入向与出向连接。<br/>${leadSummaryText()}</div>`;
+    } else {
+      const soft = DATA.edges.filter(e => e.soft).length;
+      meta.textContent = `${DATA.n_sectors} 个二级 · 同步边 ${DATA.edges.length - soft} 条多年复核${soft ? ` + ${soft} 条补充` : ''}（|ρ|≥${DATA.corr_thr}）`;
+      body.innerHTML = `<div class="empty">${DATA.note || ''}</div>`;
+    }
+    kv.innerHTML = ''; renderMembers(null); return;
+  }
+  if (title) title.textContent = cores.length === 1 ? cores[0] : `聚焦簇（${cores.length}）`;
+  if (cores.length === 1) {
+    const n = nodeById[cores[0]];
+    kv.innerHTML = `<b>一级</b><span>${n.l1 || '-'}</span><b>成分</b><span>${n.n || '-'} 只</span><b>近20日</b><span class="${(n.cum20 || 0) >= 0 ? 'pos' : 'neg'}">${fmtRet(n.cum20)}</span><b>当日</b><span class="${(n.last || 0) >= 0 ? 'pos' : 'neg'}">${fmtRet(n.last)}</span>`;
+    renderMembers(cores[0]);
+  } else {
+    const list = cores.join(' · ');
+    kv.innerHTML = `<b>核心</b><span class="corelist" title="${list}">${list}</span>`;
+    renderMembers(null);
+  }
+  if (mode === 'lead') {
+    const visible = visibleLeadEdges(coreIds).length;
+    meta.textContent = `领先·实验 · 核心 ${cores.length} · 显示最强 ${visible} 条连接 · 关联 ${neighborIds.length}`;
+    let hidden = 0;
+    const filt = rows => rows.filter(r => { if (leadVisible(r)) return true; hidden++; return false; });
+    const outs = collectFrom(cores.map(c => [c, filt(DATA.lead_out[c] || [])]));
+    const inns = collectFrom(cores.map(c => [c, filt(DATA.lead_in[c] || [])]));
+    const order = (a, b) => (edgePass(b) - edgePass(a)) || leadStrength(b) - leadStrength(a);
+    outs.sort(order); inns.sort(order);
+    const rowOut = outs.slice(0, LEAD_PANEL_LIMIT).map(r => leadRow(r, '→')).join('');
+    const rowIn = inns.slice(0, LEAD_PANEL_LIMIT).map(r => leadRow(r, '←')).join('');
+    const emptyMsg = hidden && !showFailed ? `暂无通过 FDR 的领先关系` : '暂无明显领先关系';
+    const hiddenNote = hidden && !showFailed ? `<div class="empty">另有 ${hidden} 条候选未通过 BH-FDR（α=${(DATA.lead_summary || {}).fdr_alpha ?? '-'}），已隐藏；可在「控」中打开「显示未通过FDR的边」以虚线查看。</div>` : '';
+    body.innerHTML = `${leadNotice()}<div class="sec">它领先谁（箭头指出）</div>${outs.length ? `<ul class="list">${rowOut}</ul>` : `<div class="empty">${emptyMsg}</div>`}<div class="sec">谁领先它（箭头指入）</div>${inns.length ? `<ul class="list">${rowIn}</ul>` : `<div class="empty">${emptyMsg}</div>`}${hiddenNote}<div class="leadsum">${leadSummaryText()}</div>`;
+  } else {
+    meta.textContent = `同步相关 · 核心 ${cores.length} · 一跳邻居 ${neighborIds.length}`;
+    const verified = new Set(DATA.edges.filter(e => !e.soft).flatMap(e => [`${e.source}|${e.target}`, `${e.target}|${e.source}`]));
+    const rows = collectFrom(cores.map(c => [c, DATA.neighbors[c] || []]));
+    rows.sort((a, b) => b.abs - a.abs);
+    body.innerHTML = rows.length
+      ? `<ul class="list">${rows.slice(0, 24).map(r => {
+          const ok = verified.has(`${r._from}|${r.id}`);
+          return `<li data-id="${r.id}"><span>${r.id}${fromTag(r._from)}${ok ? '<span class="tag-ok" title="多年方向复核通过">复核</span>' : ''}</span><span class="${r.corr >= 0 ? 'pos' : 'neg'}">ρ ${r.corr.toFixed(2)}</span></li>`;
+        }).join('')}</ul>`
+      : `<div class="empty">该簇暂无足够强的稳健相关边，仍可看空间邻近。</div>`;
+  }
+  body.querySelectorAll('li[data-id]').forEach(li => li.onclick = () => { document.getElementById('q').value = li.dataset.id; setExpandOptions([]); setFocus([li.dataset.id]); });
+}
 function renderMembers(sectorId) {
   const sec = document.getElementById('memSec');
   const list = document.getElementById('memList');
@@ -1139,61 +1391,6 @@ function renderMembers(sectorId) {
     return `<li><span>${r.name}<span class="sub2">${r.code}</span></span><span class="${cls}">${fmtRet(r.last)}</span></li>`;
   }).join('');
 }
-
-function renderPanel(cores, neighborIds) {
-  const title = document.getElementById('pTitle');
-  const meta = document.getElementById('pMeta');
-  const kv = document.getElementById('pKv');
-  const body = document.getElementById('pBody');
-  if (!meta || !kv || !body) return;
-  if (!cores || !cores.length) {
-    if (title) title.textContent = '全局视图';
-    if (mode === 'lead') {
-      meta.textContent = `${DATA.n_sectors} 个二级 · 尚未聚焦中心板块 · 共 ${(DATA.lead_edges || []).length} 条候选领先边`;
-      body.innerHTML = `<div class="empty">请先查询或点击一个板块。聚焦后只显示该中心板块最强的入向与出向连接，避免无关连线干扰。<br/>${leadSummaryText()}</div>`;
-    } else {
-      meta.textContent = `${DATA.n_sectors} 个二级 · 同步边 ${DATA.edges.length} 条（|ρ|≥${DATA.corr_thr} 且多年复现）`;
-      body.innerHTML = `<div class="empty">${DATA.note || ''}</div>`;
-    }
-    kv.innerHTML = ''; renderMembers(null); return;
-  }
-  if (title) title.textContent = cores.length === 1 ? cores[0] : `聚焦簇（${cores.length}）`;
-  if (cores.length === 1) {
-    const n = nodeById[cores[0]];
-    kv.innerHTML = `<b>一级</b><span>${n.l1 || '-'}</span><b>成分</b><span>${n.n || '-'} 只</span><b>近20日</b><span class="${(n.cum20 || 0) >= 0 ? 'pos' : 'neg'}">${fmtRet(n.cum20)}</span><b>当日</b><span class="${(n.last || 0) >= 0 ? 'pos' : 'neg'}">${fmtRet(n.last)}</span>`;
-    renderMembers(cores[0]);
-  } else {
-    kv.innerHTML = cores.slice(0, 10).map(id => `<b>核心</b><span>${id}</span>`).join('');
-    renderMembers(null);
-  }
-  if (mode === 'lead') {
-    const visible = visibleLeadEdges(coreIds).length;
-    meta.textContent = `传导模式 · 核心 ${cores.length} · 显示最强 ${visible} 条连接 · 关联 ${neighborIds.length}`;
-    const outs = [], inns = [], seenO = new Set(), seenI = new Set();
-    let hidden = 0;
-    for (const c of cores) {
-      for (const nb of (DATA.lead_out[c] || [])) { if (coreIds.has(nb.id) || seenO.has(nb.id)) continue; seenO.add(nb.id); if (leadVisible(nb)) outs.push(nb); else hidden++; }
-      for (const nb of (DATA.lead_in[c] || [])) { if (coreIds.has(nb.id) || seenI.has(nb.id)) continue; seenI.add(nb.id); if (leadVisible(nb)) inns.push(nb); else hidden++; }
-    }
-    const order = (a, b) => (edgePass(b) - edgePass(a)) || leadStrength(b) - leadStrength(a);
-    outs.sort(order); inns.sort(order);
-    const rowOut = outs.slice(0, LEAD_PANEL_LIMIT).map(r => leadRow(r, '→')).join('');
-    const rowIn = inns.slice(0, LEAD_PANEL_LIMIT).map(r => leadRow(r, '←')).join('');
-    const emptyMsg = hidden && !showFailed ? `暂无通过 FDR 的领先关系` : '暂无明显领先关系';
-    const hiddenNote = hidden && !showFailed ? `<div class="empty">另有 ${hidden} 条候选未通过 BH-FDR（α=${(DATA.lead_summary || {}).fdr_alpha ?? '-'}），已隐藏；可在「控」中打开「显示未通过FDR的边」以虚线查看。</div>` : '';
-    body.innerHTML = `<div class="sec">它领先谁（箭头指出）</div>${outs.length ? `<ul class="list">${rowOut}</ul>` : `<div class="empty">${emptyMsg}</div>`}<div class="sec">谁领先它（箭头指入）</div>${inns.length ? `<ul class="list">${rowIn}</ul>` : `<div class="empty">${emptyMsg}</div>`}${hiddenNote}<div class="leadsum">${leadSummaryText()}</div>`;
-  } else {
-    meta.textContent = `同步模式 · 核心 ${cores.length} · 一跳邻居 ${neighborIds.length}`;
-    const rows = [], seen = new Set();
-    for (const c of cores) for (const nb of (DATA.neighbors[c] || [])) { if (coreIds.has(nb.id) || seen.has(nb.id)) continue; seen.add(nb.id); rows.push(nb); }
-    rows.sort((a, b) => b.abs - a.abs);
-    body.innerHTML = rows.length
-      ? `<ul class="list">${rows.slice(0, 24).map(r => `<li data-id="${r.id}"><span>${r.id}</span><span class="${r.corr >= 0 ? 'pos' : 'neg'}">ρ ${r.corr.toFixed(2)}</span></li>`).join('')}</ul>`
-      : `<div class="empty">该簇暂无足够强的稳健相关边，仍可看空间邻近。</div>`;
-  }
-  body.querySelectorAll('li[data-id]').forEach(li => li.onclick = () => { document.getElementById('q').value = li.dataset.id; setFocus([li.dataset.id]); });
-}
-
 function renderBoard() {
   const ul = document.getElementById('boardList');
   document.getElementById('boardLabel').textContent = retWindow === 'cum20' ? '近20日' : '当日';
@@ -1204,36 +1401,33 @@ function renderBoard() {
     const on = coreIds.has(r.id) ? 'on' : '';
     return `<li class="${on}" data-id="${r.id}"><span>${r.id}</span><span class="${cls}">${fmtRet(r.v)}</span></li>`;
   }).join('');
-  ul.querySelectorAll('li').forEach(li => li.onclick = () => { document.getElementById('q').value = li.dataset.id; setFocus([li.dataset.id]); });
+  ul.querySelectorAll('li').forEach(li => li.onclick = () => { document.getElementById('q').value = li.dataset.id; setExpandOptions([]); setFocus([li.dataset.id]); });
+}
+function renderLegendScale() {
+  const el = document.getElementById('lgScale'); if (!el) return;
+  el.textContent = `红涨 · 绿跌（${retWindow === 'cum20' ? '近20日' : '当日'}，颜色在 ±${RET_SCALE.toFixed(2)}% 封顶 = |涨跌| 的 ${Math.round(CLIP_Q * 100)}% 分位）`;
+}
+
+// ---------------- 扩展选项（查询时只聚焦精确匹配，其余可选加入） ----------------
+function setExpandOptions(ids) { expandOptions = ids; renderExpandChips(); }
+function renderExpandChips() {
+  const box = document.getElementById('expandBox');
+  if (!expandOptions.length) { box.innerHTML = ''; box.style.display = 'none'; return; }
+  box.style.display = 'flex';
+  box.innerHTML = `<span class="exp-hd">相关扩展</span>` + expandOptions.map(id => `<button type="button" class="chip ${coreIds.has(id) ? 'active' : ''}" data-id="${id}">${coreIds.has(id) ? '✓ ' : '+ '}${id}</button>`).join('');
+  box.querySelectorAll('button[data-id]').forEach(b => b.onclick = () => {
+    const next = new Set(coreIds);
+    if (next.has(b.dataset.id)) next.delete(b.dataset.id); else next.add(b.dataset.id);
+    setFocus([...next], { openDetail: false });
+  });
 }
 
 function setMode(m) {
   mode = m;
   [...document.getElementById('edgemode').querySelectorAll('button')].forEach(b => b.classList.toggle('active', b.dataset.v === m));
-  applyFocusVisual();
-  if (coreIds.size) renderPanel([...coreIds], [...focusIds].filter(id => !coreIds.has(id)));
-  else renderPanel(null, []);
-}
-
-function setFocus(cores) {
-  coreIds = new Set(cores);
-  if (!cores.length) { focusIds = new Set(); applyFocusVisual(); clearLabels(); renderPanel(null, []); return; }
-  const { one, two } = egoOf(cores);
-  focusIds = new Set([...one, ...two]);
-  applyFocusVisual();
-  const pts = cores.map(id => nodeById[id]).filter(Boolean);
-  if (pts.length) {
-    const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
-    const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length;
-    const cz = pts.reduce((s, p) => s + p.z, 0) / pts.length;
-    controls.target.set(cx, cy, cz);
-    camera.position.set(cx + 55, cy + 28, cz + 95);
-  }
-  const neighbors = [...one].filter(id => !coreIds.has(id));
-  renderPanel(cores, neighbors);
-  rebuildLabels(cores, neighbors.slice(0, 18));
-  // 聚焦节点时自动切到「详」，仍可手动切走 / 再点收起
-  setDockMode('detail', { fromFocus: true });
+  document.getElementById('showFailed').style.display = m === 'lead' ? '' : 'none';
+  document.getElementById('leadSum').style.display = m === 'lead' ? '' : 'none';
+  refreshFocus();
 }
 
 function updateHints() {
@@ -1246,26 +1440,33 @@ function updateHints() {
   box.querySelectorAll('div[data-sector]').forEach(el => {
     el.onclick = () => {
       document.getElementById('q').value = el.dataset.sector;
+      setExpandOptions([]);
       setFocus([el.dataset.sector]);
       [...box.children].forEach(x => x.classList.remove('on')); el.classList.add('on');
     };
   });
 }
-
 function runQuery() {
   const q = document.getElementById('q').value;
   if (qMode === 'stock') {
     const hits = searchStocks(q); updateHints();
     if (!hits.length) { renderPanel(null, []); document.getElementById('pBody').innerHTML = `<div class="empty">未匹配到标的，试试名称或代码。</div>`; return; }
-    setFocus([hits[0].sector]); document.getElementById('q').value = hits[0].sector; return;
+    setExpandOptions([]); setFocus([hits[0].sector]); document.getElementById('q').value = hits[0].sector; return;
   }
-  const cores = expandQuery(q);
-  if (!cores.length) { renderPanel(null, []); document.getElementById('pBody').innerHTML = `<div class="empty">未匹配到二级板块，试试「电力」「半导体」「白酒」。</div>`; return; }
+  const all = expandQuery(q);
+  if (!all.length) { setExpandOptions([]); renderPanel(null, []); document.getElementById('pBody').innerHTML = `<div class="empty">未匹配到二级板块，试试「电力」「半导体」「白酒」。</div>`; return; }
+  const exact = exactMatches(q);
+  const cores = exact.length ? exact : all;  // 无精确匹配（如“新能源”）时聚焦整组，仍可逐个取消
+  expandOptions = exact.length ? all.filter(id => !exact.includes(id)) : all;
   setFocus(cores);
 }
 
 document.getElementById('go').onclick = runQuery;
-document.getElementById('reset').onclick = () => { document.getElementById('q').value = ''; document.getElementById('hints').innerHTML = ''; setFocus([]); };
+document.getElementById('reset').onclick = () => {
+  document.getElementById('q').value = ''; document.getElementById('hints').innerHTML = '';
+  setExpandOptions([]); setFocus([]);
+  controls.target.copy(HOME.target); camera.position.copy(HOME.pos); controls.update();
+};
 document.getElementById('q').addEventListener('keydown', e => { if (e.key === 'Enter') runQuery(); });
 document.getElementById('q').addEventListener('input', () => { if (qMode === 'stock') updateHints(); });
 document.getElementById('edgemode').onclick = e => { const b = e.target.closest('button'); if (b) setMode(b.dataset.v); };
@@ -1281,23 +1482,102 @@ document.getElementById('retmode').onclick = e => {
   retWindow = b.dataset.v;
   [...document.getElementById('retmode').children].forEach(x => x.classList.toggle('active', x === b));
   applyNodeAppearance(); renderBoard();
+  if (!coreIds.size) rebuildLabels();
   if (coreIds.size === 1) renderPanel([...coreIds], [...focusIds].filter(id => !coreIds.has(id)));
 };
-
-function refreshLeadVisibility() {
+{
+  const leadBtn = document.querySelector('#edgemode button[data-v="lead"]');
+  leadBtn.classList.add('exp');
+  leadBtn.innerHTML = LEAD_SIG_COUNT === 0 ? '领先·实验<small>0 显著</small>' : '领先·实验';
+  leadBtn.title = LEAD_SIG_COUNT === 0 ? '实验功能：当前没有领先边通过 BH-FDR 显著性检验' : '实验功能：领先—滞后关系，需结合 FDR 与样本外命中阅读';
+}
+document.getElementById('showFailed').onclick = () => {
+  showFailed = !showFailed;
   const btn = document.getElementById('showFailed');
   btn.classList.toggle('active', showFailed);
   btn.textContent = showFailed ? '隐藏未通过FDR的边' : '显示未通过FDR的边';
-  if (coreIds.size) { const { one, two } = egoOf([...coreIds]); focusIds = new Set([...one, ...two]); }
-  applyFocusVisual();
-  if (coreIds.size) renderPanel([...coreIds], [...focusIds].filter(id => !coreIds.has(id)));
-  else renderPanel(null, []);
-}
-document.getElementById('showFailed').onclick = () => { showFailed = !showFailed; refreshLeadVisibility(); };
+  refreshFocus();
+};
 document.getElementById('showFailed').classList.toggle('active', showFailed);
 document.getElementById('leadSum').textContent = leadSummaryText();
 
-// 页面告警：基准退回 / 关系样本落后行情超过 N 周（页脚标红，同时用顶部告警条覆盖移动端）。
+const presetsEl = document.getElementById('presets');
+(DATA.presets || []).forEach(p => {
+  const b = document.createElement('button'); b.className = 'chip'; b.type = 'button'; b.textContent = p;
+  b.onclick = () => {
+    [...presetsEl.children].forEach(x => x.classList.remove('active')); b.classList.add('active');
+    qMode = 'sector'; [...document.getElementById('qmode').children].forEach(x => x.classList.toggle('active', x.dataset.v === 'sector'));
+    document.getElementById('q').value = p; runQuery();
+  };
+  presetsEl.appendChild(b);
+});
+
+// ---------------- 拾取：屏幕像素距离（手指半径更大） ----------------
+function pickNode(clientX, clientY) {
+  const r = isCoarse() ? (CFG_UI.pick_radius_touch_px ?? 28) : (CFG_UI.pick_radius_px ?? 14);
+  let best = -1, bestD = r * r;
+  for (let i = 0; i < N; i++) {
+    const n = DATA.nodes[i];
+    _v.set(n.x, n.y, n.z).project(camera);
+    if (_v.z > 1) continue;
+    const [sx, sy] = toScreen(_v);
+    let d = (sx - clientX) ** 2 + (sy - clientY) ** 2;
+    if (focusIds.size && !focusIds.has(n.id)) d *= 1.6;  // 暗化节点略降优先级
+    if (d < bestD) { bestD = d; best = i; }
+  }
+  return best;
+}
+let ptrDown = null, ptrDragged = false;
+canvas.addEventListener('pointerdown', ev => { if (ev.button != null && ev.button !== 0) return; ptrDown = { x: ev.clientX, y: ev.clientY }; ptrDragged = false; });
+canvas.addEventListener('pointermove', ev => { if (!ptrDown) return; if (Math.hypot(ev.clientX - ptrDown.x, ev.clientY - ptrDown.y) > TAP_CANCEL_PX) ptrDragged = true; });
+canvas.addEventListener('pointercancel', () => { ptrDown = null; ptrDragged = false; });
+canvas.addEventListener('pointerup', ev => {
+  if (!ptrDown) return;
+  const moved = ptrDragged || Math.hypot(ev.clientX - ptrDown.x, ev.clientY - ptrDown.y) > TAP_CANCEL_PX;
+  ptrDown = null; ptrDragged = false; if (moved) return;
+  const i = pickNode(ev.clientX, ev.clientY);
+  if (i >= 0) { const id = DATA.nodes[i].id; document.getElementById('q').value = id; setExpandOptions([]); setFocus([id]); }
+});
+window.addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); applyViewOffset(); });
+
+// ---------------- 停靠面板 ----------------
+const DOCK_KEY = 'scc_dock_mode';
+const ZEN_TIP_KEY = 'scc_zen_tip_seen';
+const MODE_TITLE = { ctrl: '搜索与筛选', board: '涨跌榜', detail: '聚焦详情' };
+let dockMode = 'ctrl';
+function maybeShowZenTip() {
+  try {
+    if (sessionStorage.getItem(ZEN_TIP_KEY) === '1') return;
+    if (dockMode === 'hidden') return;
+    const tip = document.getElementById('zenTip');
+    tip.classList.add('show');
+    sessionStorage.setItem(ZEN_TIP_KEY, '1');
+    setTimeout(() => tip.classList.remove('show'), 3200);
+  } catch (e) {}
+}
+function setDockMode(next, { persist = true, fromFocus = false } = {}) {
+  if (!fromFocus && next === dockMode && next !== 'hidden') next = 'hidden';
+  dockMode = next;
+  const fly = document.getElementById('flyout');
+  const open = dockMode !== 'hidden';
+  fly.classList.toggle('open', open);
+  document.querySelectorAll('.rail-btn[data-mode]').forEach(b => b.classList.toggle('active', open && b.dataset.mode === dockMode));
+  document.querySelectorAll('.fly-pane').forEach(p => p.classList.toggle('active', open && p.dataset.pane === dockMode));
+  if (open) document.getElementById('flyTitle').textContent = MODE_TITLE[dockMode] || '';
+  if (persist) { try { sessionStorage.setItem(DOCK_KEY, dockMode); } catch (e) {} }
+  applyViewOffset();
+  maybeShowZenTip();
+}
+document.getElementById('dockRail').onclick = e => {
+  const b = e.target.closest('.rail-btn'); if (!b) return;
+  if (b.dataset.act === 'home') { markInteracted(); resetView(); return; }
+  const m = b.dataset.mode;
+  if (dockMode === m) setDockMode('hidden'); else setDockMode(m);
+};
+document.getElementById('flyClose').onclick = () => setDockMode('hidden');
+if (window.ResizeObserver) new ResizeObserver(() => applyViewOffset()).observe(document.getElementById('flyout'));
+
+// ---------------- 告警（基准退回 / 关系样本过期） ----------------
 (function renderWarnings() {
   const warns = [];
   const bench = DATA.benchmark || {};
@@ -1322,100 +1602,19 @@ document.getElementById('leadSum').textContent = leadSummaryText();
   if (warns.length) { bar.innerHTML = warns.map(w => `<div>${w}</div>`).join(''); bar.classList.add('show'); }
 })();
 
-const presetsEl = document.getElementById('presets');
-(DATA.presets || []).forEach(p => {
-  const b = document.createElement('button'); b.className = 'chip'; b.type = 'button'; b.textContent = p;
-  b.onclick = () => {
-    [...presetsEl.children].forEach(x => x.classList.remove('active')); b.classList.add('active');
-    qMode = 'sector'; [...document.getElementById('qmode').children].forEach(x => x.classList.toggle('active', x.dataset.v === 'sector'));
-    document.getElementById('q').value = p; runQuery();
-  };
-  presetsEl.appendChild(b);
-});
-
-const raycaster = new THREE.Raycaster(); raycaster.params.Points.threshold = 2.8;
-const mouse = new THREE.Vector2();
-const CLICK_PX = 6; let ptrDown = null, ptrDragged = false;
-canvas.addEventListener('pointerdown', ev => { if (ev.button != null && ev.button !== 0) return; ptrDown = { x: ev.clientX, y: ev.clientY }; ptrDragged = false; });
-canvas.addEventListener('pointermove', ev => { if (!ptrDown) return; if (Math.hypot(ev.clientX - ptrDown.x, ev.clientY - ptrDown.y) > CLICK_PX) ptrDragged = true; });
-function clearPtr() { ptrDown = null; ptrDragged = false; }
-canvas.addEventListener('pointercancel', clearPtr);
-canvas.addEventListener('pointerup', ev => {
-  if (!ptrDown) return;
-  const moved = ptrDragged || Math.hypot(ev.clientX - ptrDown.x, ev.clientY - ptrDown.y) > CLICK_PX;
-  clearPtr(); if (moved) return;
-  mouse.x = (ev.clientX / innerWidth) * 2 - 1; mouse.y = -(ev.clientY / innerHeight) * 2 + 1;
-  raycaster.setFromCamera(mouse, camera);
-  const hits = raycaster.intersectObject(points);
-  if (hits.length) { const id = DATA.nodes[hits[0].index].id; document.getElementById('q').value = id; setFocus([id]); }
-});
-window.addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
-
-applyNodeAppearance(); rebuildFlow(); renderBoard(); renderPanel(null, []);
-
-const DOCK_KEY = 'scc_dock_mode';
-const ZEN_TIP_KEY = 'scc_zen_tip_seen';
-const MODE_TITLE = { ctrl: '搜索与筛选', board: '涨跌榜', detail: '聚焦详情' };
-let dockMode = 'ctrl';
-
-function maybeShowZenTip() {
-  try {
-    if (sessionStorage.getItem(ZEN_TIP_KEY) === '1') return;
-    if (dockMode === 'hidden') return;
-    const tip = document.getElementById('zenTip');
-    tip.classList.add('show');
-    sessionStorage.setItem(ZEN_TIP_KEY, '1');
-    setTimeout(() => tip.classList.remove('show'), 3200);
-  } catch (e) {}
-}
-
-function setDockMode(next, { persist = true, fromFocus = false } = {}) {
-  if (!fromFocus && next === dockMode && next !== 'hidden') next = 'hidden';
-  dockMode = next;
-  const fly = document.getElementById('flyout');
-  const open = dockMode !== 'hidden';
-  fly.classList.toggle('open', open);
-  document.querySelectorAll('.rail-btn').forEach(b => {
-    b.classList.toggle('active', open && b.dataset.mode === dockMode);
-  });
-  document.querySelectorAll('.fly-pane').forEach(p => {
-    p.classList.toggle('active', open && p.dataset.pane === dockMode);
-  });
-  if (open) document.getElementById('flyTitle').textContent = MODE_TITLE[dockMode] || '';
-  if (persist) {
-    try { sessionStorage.setItem(DOCK_KEY, dockMode); } catch (e) {}
-  }
-  maybeShowZenTip();
-}
-
-document.getElementById('dockRail').onclick = e => {
-  const b = e.target.closest('.rail-btn'); if (!b) return;
-  const m = b.dataset.mode;
-  if (dockMode === m) setDockMode('hidden');
-  else setDockMode(m);
-};
-document.getElementById('flyClose').onclick = () => setDockMode('hidden');
-
+// ---------------- 初始化 ----------------
 (function initDock() {
   let saved = null;
   try { saved = sessionStorage.getItem(DOCK_KEY); } catch (e) {}
-  if (!saved) {
-    try {
-      const top = sessionStorage.getItem('scc_top_collapsed');
-      const side = sessionStorage.getItem('scc_side_collapsed');
-      if (top === '1' && side === '1') saved = 'hidden';
-    } catch (e) {}
-  }
   if (!['ctrl', 'board', 'detail', 'hidden'].includes(saved)) saved = 'ctrl';
   dockMode = '__init__';
   setDockMode(saved, { persist: false });
 })();
-
+if (MOBILE_MQ.matches && !CFG_UI.legend_open_mobile) document.getElementById('legend').open = false;
+setMode(mode);
 applyDeepLink();
 
-applyNodeAppearance();
-rebuildFlow();
-
+let frame = 0;
 (function tick(now) {
   requestAnimationFrame(tick);
   const t = (now || performance.now()) * 0.001;
@@ -1432,9 +1631,11 @@ rebuildFlow();
       ch.geometry.attributes.position.needsUpdate = true;
     }
   }
-  controls.update(); renderer.render(scene, camera);
+  controls.update();
+  if (++frame % 6 === 0) declutterLabels();
+  renderer.render(scene, camera);
 })();
-
+window.__scc = { camera, controls, pickNode, get coreIds() { return [...coreIds]; }, get mode() { return mode; }, three: THREE_SOURCE };
 </script>
 </body>
 </html>
@@ -1479,6 +1680,8 @@ def main() -> None:
         if not OUTPUT_JSON.exists():
             raise SystemExit(f"缺少缓存: {OUTPUT_JSON}")
         payload = json.loads(OUTPUT_JSON.read_text(encoding="utf-8"))
+        payload["lead_display"] = CFG["display"]  # 展示参数随配置即时生效，无需重算结构
+        payload["stale_weeks"] = int(CFG["stale_weeks"])
         print("从缓存加载，刷新 stock_index / sector_members…")
         payload = attach_stock_payload(payload)
         OUTPUT_JSON.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")

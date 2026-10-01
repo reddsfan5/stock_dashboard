@@ -1,4 +1,5 @@
 import unittest
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -116,6 +117,34 @@ class PageTest(unittest.TestCase):
         self.assertIn("LEAD_DISPLAY.per_core_direction ?? 3", html)
         self.assertIn("if (!filterIds || !filterIds.size) return []", html)
         self.assertIn("python -m scripts.reports.gen_sector_corr_cloud --no-nav", html)
+
+
+    def test_page_ux_controls_legend_and_local_three(self):
+        html = render_html({"start": "2022-01-01", "end": "2026-08-14", "n_sectors": 0, "nodes": [], "edges": []})
+        for needle in ('id="legend"', 'id="railHome"', 'id="expandBox"', 'id="lgScale"',
+                       '/assets/chart-touch.js', '/assets/vendor/three/three.module.min.js',
+                       'cdn.jsdelivr.net/npm/three@0.160.0/+esm', 'function exactMatches(q)',
+                       'function refreshFocus()', 'camera.setViewOffset', 'LineDashedMaterial',
+                       "CFG_UI.default_mode === 'lead' ? 'lead' : 'sync'", '领先·实验'):
+            self.assertIn(needle, html, needle)
+
+    def test_vendored_three_is_self_contained(self):
+        root = Path(__file__).resolve().parents[1] / "scripts" / "services" / "static" / "vendor" / "three"
+        self.assertTrue((root / "three.module.min.js").stat().st_size > 100_000)
+        self.assertTrue((root / "LICENSE").exists())
+        orbit = (root / "OrbitControls.js").read_text(encoding="utf-8")
+        self.assertIn("from './three.module.min.js'", orbit)
+        self.assertNotIn("from 'three'", orbit)
+
+    def test_display_config_defaults_to_sync(self):
+        cfg = sls.load_config()
+        disp = cfg["display"]
+        self.assertEqual(disp["default_mode"], "sync")
+        for key in ("top_movers_labels", "label_limit", "color_clip_pct", "pick_radius_px",
+                    "pick_radius_touch_px", "mobile_panel_vh", "auto_rotate"):
+            self.assertIn(key, disp)
+        self.assertGreater(disp["pick_radius_touch_px"], disp["pick_radius_px"])
+        self.assertTrue(0.5 < disp["color_clip_pct"] <= 1)
 
 
 if __name__ == "__main__":

@@ -45,7 +45,22 @@ DEFAULTS: dict[str, Any] = {
         "null_min_shift": 8,
     },
     "oos": {"min_train_weeks": 104, "test_weeks": 26, "step_weeks": 26, "min_events": 6},
-    "display": {"per_core_direction": 3, "focus_total": 12, "show_failed_default": False},
+    "display": {
+        "per_core_direction": 3,
+        "focus_total": 12,
+        "show_failed_default": False,
+        "default_mode": "sync",
+        "auto_rotate": True,
+        "auto_rotate_speed": 0.55,
+        "top_movers_labels": 8,
+        "label_limit": 18,
+        "color_clip_pct": 0.90,
+        "min_ret_scale": 0.5,
+        "pick_radius_px": 14,
+        "pick_radius_touch_px": 28,
+        "mobile_panel_vh": 42,
+        "legend_open_mobile": False,
+    },
     "stale_weeks": 2,
 }
 
