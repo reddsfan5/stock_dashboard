@@ -749,18 +749,30 @@ button:hover,.chip:hover,.chip.active,.seg button.active{border-color:var(--acce
 .legend summary{display:flex;align-items:center;gap:6px}
 .legend summary::after{order:9}
 .lg-sub{font-weight:400;color:var(--muted);font-size:10.5px;font-variant-numeric:tabular-nums}
-.guide-btn{margin-left:auto;font-size:10.5px;line-height:18px;padding:0 8px;border-radius:999px;border:1px solid rgba(159,243,255,.45);background:rgba(159,243,255,.08);color:#9ff3ff;cursor:pointer;white-space:nowrap}
-.guide-btn:hover{background:rgba(159,243,255,.18)}
+.info-btn{display:inline-flex;align-items:center;justify-content:center;gap:3px;min-width:20px;height:20px;padding:0 5px;margin-left:4px;border-radius:999px;border:1px solid rgba(159,243,255,.4);background:rgba(159,243,255,.07);color:#9ff3ff;font-size:11px;line-height:1;cursor:pointer;vertical-align:middle;white-space:nowrap;pointer-events:auto;flex-shrink:0}
+.info-btn:hover,.info-btn[aria-expanded="true"]{background:rgba(159,243,255,.2)}
+.info-btn.pill{margin-left:auto;padding:0 8px;font-size:10.5px;height:18px}
+.info-btn::before{content:'';position:absolute;inset:-8px}
+.info-btn{position:relative}
 .lg-colhd{display:grid;grid-template-columns:9px minmax(0,1fr) 44px 40px 60px;column-gap:8px;font-size:10px;color:var(--muted);opacity:.8;margin:4px 0 1px 2px}
 .lg-colhd .c-up{grid-column:3 / 5;text-align:center}
 .lg-colhd .c-avg{text-align:right;padding-left:6px}
-.guide{margin:auto;width:min(440px,calc(100vw - 24px));max-height:min(78vh,640px);overflow:auto;padding:10px 14px 12px;border-radius:14px;border:1px solid var(--line);background:rgba(12,18,32,.97);color:var(--muted);font-size:12px;box-shadow:0 18px 60px rgba(0,0,0,.55)}
-.guide::backdrop{background:rgba(3,6,14,.45)}
-.guide:not(:popover-open):not(.open){display:none}
-.guide-hd{display:flex;align-items:center;justify-content:space-between;color:var(--text);font-size:13px;margin-bottom:4px;position:sticky;top:-10px;background:rgba(12,18,32,.97);padding:4px 0}
-.guide-x{width:28px;height:28px;border-radius:50%;border:1px solid var(--line);background:transparent;color:var(--text);font-size:16px;cursor:pointer}
-.guide .lg-row{margin-top:8px}
-.guide-note{margin-top:10px;font-size:11px;opacity:.85;border-top:1px dashed var(--line);padding-top:6px}
+.infopop{position:fixed;inset:auto;margin:0;box-sizing:border-box;width:min(380px,calc(100vw - 20px));max-height:min(70vh,560px);overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:0 14px 12px;border-radius:14px;border:1px solid var(--line);background:rgba(12,18,32,.97);color:var(--muted);font-size:12px;line-height:1.6;box-shadow:0 18px 50px rgba(0,0,0,.55);z-index:30}
+.infopop::backdrop{background:transparent}
+.infopop:not(:popover-open):not(.open){display:none}
+.ip-hd{display:flex;align-items:center;justify-content:space-between;gap:8px;color:var(--text);font-size:13px;position:sticky;top:0;background:rgba(12,18,32,.98);padding:10px 0 6px;margin-bottom:2px;border-bottom:1px solid rgba(255,255,255,.06);z-index:1}
+.ip-x{width:28px;height:28px;flex-shrink:0;border-radius:50%;border:1px solid var(--line);background:transparent;color:var(--text);font-size:16px;cursor:pointer}
+.ip-body p{margin:8px 0 0}.ip-body .lg-row{margin-top:8px}
+.ip-list{margin:6px 0 0;padding-left:18px}.ip-list li{margin-top:3px}
+.ip-body b{color:var(--text);font-weight:600}
+.ip-kv{color:var(--text);font-variant-numeric:tabular-nums}
+.exp-tag{display:flex;align-items:center;gap:4px;margin:4px 0 8px;font-size:11.5px;color:#ffcf7a}
+.short-note{display:flex;align-items:center;gap:4px;font-size:11.5px;color:var(--muted);margin-top:6px}
+#paneCtrl .sub{display:none}
+.fly-hd h3{margin-right:0}.fly-hd .info-btn{margin-right:auto}
+.foot .info-btn{pointer-events:auto}
+.leadsum .info-btn{margin-left:4px}
+@media (min-width:901px){.warnbar{right:326px}}
 .ra-mini{font-weight:700;color:#ff9f43}
 .rp-ra{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;padding-left:8px;border-left:1px solid var(--line)}
 .rp-ra[hidden]{display:none}
@@ -788,7 +800,6 @@ button:hover,.chip:hover,.chip.active,.seg button.active{border-color:var(--acce
 .sg-body b{color:var(--text);font-weight:600;margin-right:4px}
 .sg-body b.pos{color:var(--up,#ff4d4f)}.sg-body b.neg{color:var(--dn,#22d38a)}
 .sg-n{display:inline-block;font-size:10px;color:#0b1220;background:#9ff3ff;border-radius:999px;padding:0 5px;line-height:15px;margin-right:4px;vertical-align:1px}
-.sg-note{margin-top:6px;font-size:10.5px;line-height:1.45;color:var(--muted);opacity:.85;border-top:1px dashed var(--line);padding-top:5px}
 .lg-ring{display:inline-block;width:14px;height:14px;border-radius:50%;border:1.5px dashed #ffe9a8}
 .lg-line.web{border-top:1px solid rgba(170,205,255,.8);box-shadow:0 0 5px rgba(170,205,255,.6)}
 .lg-line.trailc{border-top:2px solid #9ff3ff}
@@ -829,7 +840,8 @@ button:hover,.chip:hover,.chip.active,.seg button.active{border-color:var(--acce
   .rcol{display:contents}
   .legend{position:fixed;z-index:6;right:auto;left:10px;bottom:auto;top:calc(10px + env(safe-area-inset-top,0px));width:auto;max-width:calc(100vw - 20px);max-height:70vh}
   .legend[open]{width:min(330px,calc(100vw - 20px))}
-  .guide{font-size:13px;max-height:80vh}
+  .infopop{font-size:13px}
+  .info-btn{min-width:24px;height:24px}
   .sigp{position:fixed;z-index:5;left:10px;right:10px;top:calc(var(--rp-bottom,98px) + 6px);max-height:var(--sig-mvh,46vh);font-size:12.5px;padding:6px 12px 8px}
   .sigp:not([open]){padding:4px 12px}
   .sg-list li{padding:6px 4px}
@@ -847,19 +859,18 @@ button:hover,.chip:hover,.chip.active,.seg button.active{border-color:var(--acce
 <div class="warnbar" id="warnBar" role="status"></div>
 <div class="rcol" id="rcol">
 <details class="legend" id="legend" open>
-  <summary><span id="lgTitle">社区</span><span class="lg-sub" id="lgSub"></span><button type="button" class="guide-btn" id="guideBtn" aria-haspopup="dialog" aria-controls="readGuide" title="读图说明：光晕、颜色、大小、连线等编码">ⓘ 读图说明</button></summary>
+  <summary><span id="lgTitle">社区</span><span class="lg-sub" id="lgSub"></span><button type="button" class="info-btn pill" id="guideBtn" data-info="legend" aria-haspopup="dialog" aria-controls="infoPop" aria-expanded="false" title="读图说明：光晕、颜色、大小、连线等编码">ⓘ 读图</button></summary>
   <div class="lg-colhd" aria-hidden="true"><span></span><span id="lgColName">名称</span><span class="c-up">上涨占比</span><span class="c-avg">均值</span></div>
   <div class="lg-comm" id="lgComm"></div>
 </details>
 <details class="sigp" id="sigPanel" open>
-  <summary><span>异动观察</span><span class="sg-date" id="sgDate"></span><span class="sg-peek" id="sgPeek"></span></summary>
+  <summary><span>异动观察</span><button type="button" class="info-btn" data-info="signals" aria-haspopup="dialog" aria-controls="infoPop" aria-expanded="false" aria-label="异动观察说明">ⓘ</button><span class="sg-date" id="sgDate"></span><span class="sg-peek" id="sgPeek"></span></summary>
   <ol class="sg-list" id="sgList"></ol>
-  <div class="sg-note">描述性信号，不是预测：每天只用当日及之前的板块日收益，说明「发生了什么」；ρ、社区与桥梁为全样本结构估计。点击条目聚焦。</div>
 </details>
 </div>
 
-<div id="readGuide" class="guide" popover="auto" role="dialog" aria-modal="false" aria-labelledby="guideTitle">
-  <div class="guide-hd"><b id="guideTitle">读图说明</b><button type="button" class="guide-x" id="guideClose" aria-label="关闭">×</button></div>
+<div id="infoPop" class="infopop" popover="auto" role="dialog" aria-modal="false" aria-labelledby="infoTitle"><div class="ip-hd"><b id="infoTitle"></b><button type="button" class="ip-x" id="infoClose" aria-label="关闭">×</button></div><div class="ip-body" id="infoBody"></div></div>
+<div id="infoSrc" hidden><div id="lgGuideSrc">
   <div class="lg-row"><span class="lg-sw"><span class="lg-halo up"></span><span class="lg-halo dn"></span></span><span id="lgScale">光晕 = 涨跌（红涨 / 绿跌）</span></div>
   <div class="lg-row" id="lgRet"><span class="lg-sw"><span class="lg-grad"></span></span><span>节点色 = 涨跌（「按涨跌」模式）</span></div>
   <div id="lgCommBox"><div class="lg-row"><span class="lg-sw"><span class="cdot" style="background:#5ad1ff"></span><span class="cdot" style="background:#ffb347"></span></span><span id="lgCommHd">节点色 = 同步图社区 · 条 = 上涨占比，右为均值（点击进入该簇）</span></div></div>
@@ -869,10 +880,8 @@ button:hover,.chip:hover,.chip.active,.seg button.active{border-color:var(--acce
   <div class="lg-row"><span class="lg-sw"><span class="lg-ring"></span></span><span>虚线环 = 桥梁板块（跨社区、介数高）</span></div>
   <div class="lg-row"><span class="lg-sw"><span class="lg-line trailc"></span></span><span>青色折线 = 探索路径</span></div>
   <div class="lg-row"><span class="lg-sw"><span class="lg-arrow"></span></span><span>领先箭头（实验）：金 = 同向，蓝 = 反向；虚线 = 未通过 FDR</span></div>
-  <div class="lg-row" id="lgStyleRow"><span class="lg-sw"><span class="cdot" style="background:#ff9f43"></span><span class="cdot" style="background:#5ad1ff"></span></span><span>风格视角：节点色 = 风格（进攻 / 防御 / 周期 / 成长 / 价值），细线连接最近的同风格板块；图例换成各风格的均值与上涨占比</span></div>
-  <div class="lg-row"><span class="lg-sw"><span class="ra-mini">±</span></span><span>风险偏好 = 进攻板块均值 − 防御板块均值（所选区间）；为正 = 偏进攻（risk-on）。小折线 = 回放窗口内逐日价差的累计，只画到当前日期</span></div>
-  <div class="guide-note">右侧（手机在回放条下方）「异动观察」为描述性信号，不是预测；按 Esc 或点击空白处关闭。</div>
-</div>
+  <div class="lg-row" id="lgStyleRow"><span class="lg-sw"><span class="cdot" style="background:#ff9f43"></span><span class="cdot" style="background:#5ad1ff"></span></span><span>风格视角：节点色 = 风格，细线 = 最近的同风格板块（规则见「着色」ⓘ）</span></div>
+</div></div>
 <nav class="rail" id="dockRail" aria-label="分析轨道">
   <button type="button" class="rail-btn active" data-mode="ctrl" id="railCtrl" title="搜索与筛选">控</button>
   <button type="button" class="rail-btn" data-mode="board" id="railBoard" title="涨跌榜">榜</button>
@@ -895,7 +904,7 @@ button:hover,.chip:hover,.chip.active,.seg button.active{border-color:var(--acce
     <button type="button" data-v="5">5日</button>
     <button type="button" data-v="20">20日</button>
   </div>
-  <span class="rp-ra" id="rpRA" hidden title="风险偏好 = 进攻均值 − 防御均值；折线 = 回放窗口内逐日价差累计（只到当前日期）"><span class="ra-lbl">风险偏好</span><b id="raVal">—</b><svg id="raSpark" viewBox="0 0 64 18" width="64" height="18" aria-hidden="true"></svg></span>
+  <span class="rp-ra" id="rpRA" hidden title="风险偏好 = 进攻均值 − 防御均值；折线 = 回放窗口内逐日价差累计（只到当前日期）"><span class="ra-lbl">风险偏好</span><b id="raVal">—</b><svg id="raSpark" viewBox="0 0 64 18" width="64" height="18" aria-hidden="true"></svg><button type="button" class="info-btn" data-info="risk" aria-haspopup="dialog" aria-controls="infoPop" aria-expanded="false" aria-label="风险偏好说明">ⓘ</button></span>
 </div>
 
 <aside class="flyout open" id="flyout" data-mode="ctrl">
@@ -929,6 +938,7 @@ button:hover,.chip:hover,.chip.active,.seg button.active{border-color:var(--acce
           <button type="button" data-v="return">按涨跌</button>
           <button type="button" data-v="style" id="cmStyle" title="风格视角：进攻 / 防御 / 周期 / 成长 / 价值">风格视角</button>
         </div>
+        <button type="button" class="info-btn" data-info="style" aria-haspopup="dialog" aria-controls="infoPop" aria-expanded="false" aria-label="着色与风格说明">ⓘ</button>
         <button type="button" class="chip" id="styleLinkBtn" hidden title="同风格板块之间的细连线">同风格连线</button>
         <button type="button" class="chip" id="tourBtn" title="从全局到局部：社区 → 核心 → 桥梁">导览 ▶</button>
         <div class="seg" id="edgemode">
@@ -2018,11 +2028,15 @@ function leadSummaryText() {
   const fo = f.n_events ? `；其中训练段 FDR 通过的边 ${f.n_events} 次：${fmtPct1(f.hit)}（${fmtLift1(f.lift)}）` : '；训练段内无 FDR 通过的边';
   return `领先候选 ${s.candidates} 条，BH-FDR（α=${s.fdr_alpha}，${s.m_tests} 个有序板块对）通过 ${s.fdr_pass} 条。${oos}${fo}。`;
 }
-function leadNotice() {
+function leadNoticeText() {
   if (LEAD_SIG_COUNT == null) return '';
   return LEAD_SIG_COUNT === 0
-    ? `<div class="exp-note">实验功能：当前没有任何领先边通过 BH-FDR，样本外命中与基准持平。箭头仅供提出假设，请以「同步相关」为主。</div>`
-    : `<div class="exp-note">实验功能：仅 ${LEAD_SIG_COUNT} 条领先边通过 BH-FDR，请结合样本外命中阅读。</div>`;
+    ? '实验功能：当前没有任何领先边通过 BH-FDR，样本外命中与基准持平。箭头仅供提出假设，请以「同步相关」为主。'
+    : `实验功能：仅 ${LEAD_SIG_COUNT} 条领先边通过 BH-FDR，请结合样本外命中阅读。`;
+}
+function leadNotice() {
+  if (LEAD_SIG_COUNT == null) return '';
+  return `<div class="exp-tag">实验 · ${LEAD_SIG_COUNT} 条通过 FDR${infoBtn('lead', '领先传导说明')}</div>`;
 }
 function collectFrom(lists) {
   // lists: [[coreId, rows]] → 去重并记录来源核心（取强度最高的来源）
@@ -2043,12 +2057,12 @@ function renderPanel(cores, neighborIds) {
   if (!cores || !cores.length) {
     if (title) title.textContent = '全局视图';
     if (mode === 'lead') {
-      meta.textContent = `${DATA.n_sectors} 个二级 · 尚未聚焦中心板块 · 共 ${(DATA.lead_edges || []).length} 条候选领先边`;
-      body.innerHTML = `${leadNotice()}<div class="empty">请先查询或点击一个板块。聚焦后只显示该中心板块最强的入向与出向连接。<br/>${leadSummaryText()}</div>`;
+      meta.textContent = `${DATA.n_sectors} 板块 · ${(DATA.lead_edges || []).length} 候选领先边`;
+      body.innerHTML = `${leadNotice()}<div class="empty">请先查询或点击一个板块</div>`;
     } else {
       const soft = DATA.edges.filter(e => e.soft).length;
-      meta.textContent = `${DATA.n_sectors} 个二级 · 同步边 ${DATA.edges.length - soft} 条多年复核${soft ? ` + ${soft} 条补充` : ''}（|ρ|≥${DATA.corr_thr}）`;
-      body.innerHTML = `<div class="empty">${DATA.note || ''}</div>${commListHtml()}`;
+      meta.textContent = `${DATA.n_sectors} 板块 · ${DATA.edges.length - soft} 同步边${soft ? ` · ${soft} 补充` : ''}`;
+      body.innerHTML = commListHtml();
       body.querySelectorAll('li[data-comm]').forEach(li => li.onclick = () => step([], { comm: +li.dataset.comm }));
       updateRetDom();
     }
@@ -2079,8 +2093,8 @@ function renderPanel(cores, neighborIds) {
     const rowOut = outs.slice(0, LEAD_PANEL_LIMIT).map(r => leadRow(r, '→')).join('');
     const rowIn = inns.slice(0, LEAD_PANEL_LIMIT).map(r => leadRow(r, '←')).join('');
     const emptyMsg = hidden && !showFailed ? `暂无通过 FDR 的领先关系` : '暂无明显领先关系';
-    const hiddenNote = hidden && !showFailed ? `<div class="empty">另有 ${hidden} 条候选未通过 BH-FDR（α=${(DATA.lead_summary || {}).fdr_alpha ?? '-'}），已隐藏；可在「控」中打开「显示未通过FDR的边」以虚线查看。</div>` : '';
-    body.innerHTML = `${leadNotice()}<div class="sec">它领先谁（箭头指出）</div>${outs.length ? `<ul class="list">${rowOut}</ul>` : `<div class="empty">${emptyMsg}</div>`}<div class="sec">谁领先它（箭头指入）</div>${inns.length ? `<ul class="list">${rowIn}</ul>` : `<div class="empty">${emptyMsg}</div>`}${hiddenNote}<div class="leadsum">${leadSummaryText()}</div>`;
+    const hiddenNote = hidden && !showFailed ? `<div class="short-note">另有 ${hidden} 条未通过 FDR，已隐藏${infoBtn('lead', '领先传导说明')}</div>` : '';
+    body.innerHTML = `${leadNotice()}<div class="sec">它领先谁（箭头指出）</div>${outs.length ? `<ul class="list">${rowOut}</ul>` : `<div class="empty">${emptyMsg}</div>`}<div class="sec">谁领先它（箭头指入）</div>${inns.length ? `<ul class="list">${rowIn}</ul>` : `<div class="empty">${emptyMsg}</div>`}${hiddenNote}`;
   } else {
     meta.textContent = `同步相关 · 核心 ${cores.length} · 一跳邻居 ${neighborIds.length}`;
     const verified = new Set(DATA.edges.filter(e => !e.soft).flatMap(e => [`${e.source}|${e.target}`, `${e.target}|${e.source}`]));
@@ -2376,21 +2390,115 @@ setRetTargets(1); stepRet(performance.now() + 10);
   linkBtn.onclick = () => { styleLinksOn = !styleLinksOn; syncLink(); updateWebColors(); };
   syncLink();
 }
-// ---------------- 读图说明（popover：点外部 / Esc 关闭；不支持 popover 时退回 class 切换） ----------------
+// ---------------- 上下文说明（共享 ⓘ popover：点外部 / Esc 关闭；不支持 popover 时退回 class 切换） ----------------
+function infoBtn(key, label) {
+  return `<button type="button" class="info-btn" data-info="${key}" aria-haspopup="dialog" aria-controls="infoPop" aria-expanded="false" aria-label="${label || '说明'}">ⓘ</button>`;
+}
+let footFullHtml = '';
+const infoList = items => `<ul class="ip-list">${items.filter(Boolean).map(x => `<li>${x}</li>`).join('')}</ul>`;
+const INFO = {
+  legend: { title: '读图说明 · 图例编码', node: 'lgGuideSrc' },
+  ctrl: { title: '关于这张图', html: () => {
+    const sub = (document.querySelector('#paneCtrl .sub') || {}).textContent || '';
+    return `<p>${escHtml(sub.trim())}</p><p>${escHtml(DATA.note || '')}</p>`;
+  } },
+  board: { title: '涨跌榜说明', html: () => `<p>按当前收益窗口（<b>${periodLabel()}</b>）排序，行情日期 <b>${DATA.market_as_of || DATA.end || '-'}</b>；红涨绿跌。点击条目聚焦该板块，回放时随日期变化。</p>` },
+  detail: { title: '方法与口径', html: () => {
+    const soft = DATA.edges.filter(e => e.soft).length;
+    return infoList([
+      `${DATA.n_sectors} 个申万二级板块；同步边 <b>${DATA.edges.length - soft}</b> 条多年复核${soft ? `，另 <b>${soft}</b> 条补充（未复核，仅让孤立板块有参照）` : ''}；阈值 |ρ|≥${DATA.corr_thr}`,
+      escHtml(DATA.note || ''),
+      '全局视图下点击社区进入该簇；聚焦后显示核心板块与一跳邻居。',
+    ]) + (footFullHtml ? `<p><b>数据与样本</b></p>${infoList(footFullHtml.split(' · '))}` : '');
+  } },
+  data: { title: '数据与样本', html: () => infoList(footFullHtml.split(' · ')) },
+  lead: { title: '领先传导（实验）', html: () => infoList([
+    escHtml(leadNoticeText()),
+    escHtml(leadSummaryText()),
+    `箭头 = 周频残差交叉相关领先（滞后周数），循环平移零分布 + BH-FDR（α=${(DATA.lead_summary || {}).fdr_alpha ?? '-'}）检验，并做滚动样本外验证。非因果，仅统计倾向。`,
+    '只显示当前中心板块最强的入向与出向连接；未通过 FDR 的候选默认隐藏，可在「控」中打开「显示未通过FDR的边」以虚线查看。',
+  ]) },
+  signals: { title: '异动观察 · 说明', html: () => `<p>描述性信号，不是预测：每天只用当日及之前的板块日收益，说明「发生了什么」；ρ、社区与桥梁为全样本结构估计。点击条目聚焦。</p>` + infoList([
+    '<b>逆簇</b>：方向与所在社区多数相反',
+    '<b>脱钩</b>：长期高 ρ 的搭档近几日累计收益背离',
+    '<b>持续</b>：同向连涨/连跌且放大，或其后的首个反向日',
+    '<b>桥梁</b>：桥梁板块大幅波动，观察远端社区 1–2 日内是否跟随',
+    '<b>分化</b>：社区中位数接近 0 但内部离散度高',
+    '<b>风格</b>：进攻 − 防御价差一方连续占优后被反超，或处于近期极值',
+    '分数折算为当日横截面稳健 σ 的倍数后统一排序；严格阈值下条目不足时放宽阈值补足（淡色显示）；「第 N 天」= 连续出现天数。',
+  ]) },
+  risk: { title: '风险偏好', html: () => {
+    const now = (document.getElementById('rpRA') || {}).title || '';
+    return `<p>风险偏好 = 进攻板块均值 − 防御板块均值（所选收益区间）；为正 = 偏进攻（risk-on）。小折线 = 回放窗口内逐日价差的累计，只画到当前日期。</p>${now ? `<p class="ip-kv">${escHtml(now)}</p>` : ''}<p>进攻 / 防御标签的划分见「着色与风格」说明。</p>`;
+  } },
+  style: { title: '着色与风格', html: () => infoList([
+    '<b>按簇</b>：节点色 = 同步图社区；<b>按涨跌</b>：节点色 = 所选区间涨跌（红涨绿跌）。',
+    STYLE ? `<b>风格视角</b>：节点色 = 风格（${STYLES.map(k => `${k} ${STYLE.counts[k] ?? 0}`).join(' / ')}），「同风格连线」连接最近的同风格板块；图例换成各风格的均值与上涨占比。` : '',
+    STYLE && STYLE.note ? escHtml(STYLE.note) : '',
+    STYLE ? '进攻 / 防御由风险分划分（beta、波动、回撤），周期 / 成长 / 价值来自行业属性与估值；风格标签为结构描述，不是投资建议。' : '',
+  ]) },
+};
+const infoPop = document.getElementById('infoPop');
+const infoState = { key: null, btn: null, moved: null, downKey: null, dismissAt: -1e9 };
 {
-  const g = document.getElementById('readGuide'), btn = document.getElementById('guideBtn');
-  const native = typeof g.showPopover === 'function';
-  const isOpen = () => native ? g.matches(':popover-open') : g.classList.contains('open');
-  const open = () => { if (native) g.showPopover(); else g.classList.add('open'); };
-  const close = () => { if (native) { if (isOpen()) g.hidePopover(); } else g.classList.remove('open'); };
-  btn.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); isOpen() ? close() : open(); });
-  document.getElementById('guideClose').onclick = close;
-  // 原生 popover 已有轻触关闭；再补一层 pointerdown/touchstart，兼容触屏模拟与旧版 Safari
-  const outside = e => { if (isOpen() && !g.contains(e.target) && !btn.contains(e.target)) close(); };
+  const pop = infoPop, body = document.getElementById('infoBody'), title = document.getElementById('infoTitle');
+  const native = typeof pop.showPopover === 'function';
+  const isOpen = () => native ? pop.matches(':popover-open') : pop.classList.contains('open');
+  const resolve = (k) => k === 'pane' ? ((document.querySelector('.fly-pane.active') || {}).dataset || {}).pane || 'ctrl' : k;
+  const restore = () => {
+    if (infoState.moved) { document.getElementById('infoSrc').appendChild(infoState.moved); infoState.moved = null; }
+    if (infoState.btn) infoState.btn.setAttribute('aria-expanded', 'false');
+  };
+  const place = (anchor) => {
+    const vw = innerWidth, vh = (window.visualViewport && visualViewport.height) || innerHeight, m = 10, mobile = vw <= 900;
+    const w = Math.min(mobile ? vw - 2 * m : 380, vw - 2 * m);
+    pop.style.width = w + 'px';
+    const r = anchor && anchor.isConnected ? anchor.getBoundingClientRect() : { left: vw / 2, right: vw / 2, width: 0, top: vh / 3, bottom: vh / 3 };
+    const below = vh - r.bottom - m - 8, above = r.top - m - 8;
+    const useBelow = below >= 240 || below >= above;
+    pop.style.maxHeight = Math.max(140, Math.min(useBelow ? below : above, vh * (mobile ? 0.62 : 0.7), 560)) + 'px';
+    pop.style.left = (mobile ? m : Math.min(Math.max(m, r.left + r.width / 2 - w / 2), vw - w - m)) + 'px';
+    const h = pop.offsetHeight;
+    pop.style.top = (useBelow ? Math.min(r.bottom + 8, vh - h - m) : Math.max(m, r.top - 8 - h)) + 'px';
+  };
+  const close = () => { if (native) { if (isOpen()) pop.hidePopover(); } else if (isOpen()) { pop.classList.remove('open'); onClosed(); } };
+  const onClosed = () => { if (isOpen()) return; restore(); infoState.key = null; infoState.btn = null; };
+  const open = (key, anchor) => {
+    const k = resolve(key), def = INFO[k]; if (!def) return;
+    restore();
+    title.textContent = def.title; body.innerHTML = '';
+    if (def.node) { const n = document.getElementById(def.node); if (n) { body.appendChild(n); infoState.moved = n; } }
+    else body.innerHTML = def.html();
+    infoState.key = k; infoState.btn = anchor || null;
+    if (anchor) anchor.setAttribute('aria-expanded', 'true');
+    if (!isOpen()) { if (native) pop.showPopover(); else pop.classList.add('open'); }
+    pop.scrollTop = 0; place(anchor);
+  };
+  if (native) pop.addEventListener('toggle', e => { if (e.newState === 'closed') onClosed(); });
+  document.addEventListener('click', e => {
+    const b = e.target.closest && e.target.closest('.info-btn'); if (!b) return;
+    e.preventDefault(); e.stopPropagation();
+    const k = resolve(b.dataset.info);
+    // 原生轻触关闭在 pointerup 时已收起弹层：按下时若同一说明正开着，这次点击就只负责关闭
+    const wasOpen = infoState.downKey === k || (infoState.key === k && isOpen());
+    infoState.downKey = null;
+    if (wasOpen) { close(); if (!native || !isOpen()) onClosed(); return; }
+    open(b.dataset.info, b);
+  }, true);
+  document.getElementById('infoClose').onclick = close;
+  // 原生 popover 已有轻触关闭；再补一层 pointerdown/touchstart，兼容触屏与旧版 Safari（点 ⓘ 由 click 处理）
+  const outside = e => {
+    const b = e.target.closest && e.target.closest('.info-btn');
+    if (b) { infoState.downKey = isOpen() && infoState.key === resolve(b.dataset.info) ? infoState.key : null; return; }
+    if (isOpen() && !pop.contains(e.target)) { infoState.dismissAt = performance.now(); close(); }  // 这一下只负责关闭，不穿透去选中板块
+  };
   document.addEventListener('pointerdown', outside, true);
   document.addEventListener('touchstart', outside, { capture: true, passive: true });
-  if (!native) document.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
-  window.__guide = { open, close, isOpen, native };
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && isOpen()) close(); });
+  addEventListener('resize', () => { if (isOpen()) place(infoState.btn); });
+  const fh = document.getElementById('flyTitle');
+  if (fh) fh.insertAdjacentHTML('afterend', infoBtn('pane', '当前面板说明'));
+  window.__scc_info = { open: (k) => open(k, document.querySelector(`.info-btn[data-info="${k}"]`)), close, isOpen, get key() { return infoState.key; }, native, keys: Object.keys(INFO) };
 }
 // ---------------- 导览：从全局到局部（社区 → 核心 → 桥梁 → 另一社区核心） ----------------
 let tour = null;
@@ -2442,7 +2550,7 @@ document.getElementById('showFailed').onclick = () => {
   refreshFocus();
 };
 document.getElementById('showFailed').classList.toggle('active', showFailed);
-document.getElementById('leadSum').textContent = leadSummaryText();
+if (DATA.lead_summary) document.getElementById('leadSum').innerHTML = `领先候选 ${DATA.lead_summary.candidates} · FDR 通过 ${DATA.lead_summary.fdr_pass}${infoBtn('lead', '领先传导说明')}`;
 
 const presetsEl = document.getElementById('presets');
 (DATA.presets || []).forEach(p => {
@@ -2478,6 +2586,7 @@ canvas.addEventListener('pointerup', ev => {
   if (!ptrDown) return;
   const moved = ptrDragged || Math.hypot(ev.clientX - ptrDown.x, ev.clientY - ptrDown.y) > TAP_CANCEL_PX;
   ptrDown = null; ptrDragged = false; if (moved) return;
+  if (performance.now() - infoState.dismissAt < 700) return;
   const i = pickNode(ev.clientX, ev.clientY);
   if (i >= 0) { const id = DATA.nodes[i].id; document.getElementById('q').value = id; setExpandOptions([]); step([id]); }
 });
@@ -2540,6 +2649,10 @@ if (window.ResizeObserver) new ResizeObserver(() => applyViewOffset()).observe(d
   if (foot) {
     if (bench.name) foot.insertAdjacentHTML('beforeend', ` · 基准 ${bench.name}${bench.ok ? '' : ' <span class="stale">（非沪深300）</span>'} · 滚动 beta ${DATA.beta_window || '-'} 日`);
     foot.innerHTML = foot.innerHTML.replace(/跟涨观察 \S+ 日/, `事件窗=滞后周 · FDR α=${(DATA.lead_summary || {}).fdr_alpha ?? '-'}`);
+    footFullHtml = foot.innerHTML;
+    const alerts = [...foot.querySelectorAll('.stale')].map(x => x.outerHTML).join(' · ');
+    const soft = DATA.edges.filter(e => e.soft).length;
+    foot.innerHTML = `${DATA.n_sectors} 板块 · ${DATA.edges.length - soft} 同步边 · 涨跌榜 ${DATA.market_as_of || DATA.end || '-'}${alerts ? ' · ' + alerts : ''}${infoBtn('data', '数据与样本说明')}`;
   }
   const bar = document.getElementById('warnBar');
   if (warns.length) { bar.innerHTML = warns.map(w => `<div>${w}</div>`).join(''); bar.classList.add('show'); }
@@ -2597,7 +2710,7 @@ window.__scc = {
   camera, controls, pickNode, three: THREE_SOURCE, fps,
   screenOf: id => { const n = nodeById[id]; if (!n) return null; camera.updateMatrixWorld(); _v.set(n.x, n.y, n.z).project(camera); return _v.z > 1 ? null : toScreen(_v); }, step, goTrail, goGlobal, startTour, stopTour, graph: GRAPH,
   get coreIds() { return [...coreIds]; }, get mode() { return mode; }, get colorBy() { return colorBy; },
-  setColorBy: v => window.__setColorBy(v), get riskAppetite() { return raNow; }, get styleSum() { return styleSum; }, get styleLinkCount() { return styleLinks ? styleLinks.userData.n : 0; }, guide: () => window.__guide,
+  setColorBy: v => window.__setColorBy(v), get riskAppetite() { return raNow; }, get styleSum() { return styleSum; }, get styleLinkCount() { return styleLinks ? styleLinks.userData.n : 0; }, info: () => window.__scc_info,
   get commFocus() { return commFocus; }, get trail() { return trail.map(entryLabel); }, get trailIdx() { return trailIdx; },
   get flying() { return !!flight; }, get animating() { return performance.now() < litAnimUntil; }, get pulses() { return pulses.length; },
   get drawCalls() { return renderer.info.render.calls; }, get dayIdx() { return dayIdx; }, get period() { return curP(); },

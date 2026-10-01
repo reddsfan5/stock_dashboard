@@ -61,11 +61,18 @@ class SectorStyleTest(unittest.TestCase):
         payload["style"] = {"styles": STYLES, "colors": {k: "#888888" for k in STYLES}, "counts": {"进攻": 1, "防御": 2},
                             "tags": {"甲": {"p": "进攻", "s": None}, "乙": {"p": "防御", "s": None}, "丙": {"p": "防御", "s": None}}, "view": {"links": True}}
         html = render_html({"start": "2022-01-01", "end": "2026-09-30", **payload})
-        for needle in ('id="readGuide"', 'popover="auto"', 'id="guideBtn"', 'id="cmStyle"', 'id="styleLinkBtn"', 'id="rpRA"',
+        for needle in ('id="infoPop"', 'popover="auto"', 'id="guideBtn"', 'data-info="legend"', 'data-info="style"', 'data-info="risk"',
+                       'data-info="signals"', 'id="lgGuideSrc"', 'id="cmStyle"', 'id="styleLinkBtn"', 'id="rpRA"',
                        "function updateRiskAppetite(", "const styleLinks", "hidePopover", 'class="lg-colhd"'):
             self.assertIn(needle, html, needle)
         legend = html[html.index('<details class="legend"'):html.index('</details>', html.index('<details class="legend"'))]
         self.assertNotIn('id="lgScale"', legend)  # 编码说明已移入读图说明
+        # 说明文字统一走共享 ⓘ popover：方法注释不再常驻在页面上
+        self.assertEqual(html.count('popover="auto"'), 1)
+        self.assertNotIn('class="sg-note"', html)
+        self.assertNotIn('<div class="empty">${DATA.note', html)
+        for key in ("legend", "ctrl", "board", "detail", "data", "lead", "signals", "risk", "style"):
+            self.assertIn(f"  {key}: {{ title:", html, key)
         cfg = sls.load_config()
         st = cfg["style"]
         for key in ("lookback_days", "risk_hi", "risk_lo", "cyclical_l1", "growth_pe_pct", "l1_overrides", "overrides", "links", "colors"):
