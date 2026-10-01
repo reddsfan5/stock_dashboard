@@ -80,6 +80,7 @@ display:
   edge_tint_mix: 0.85        # 边着色与社区色的最大混合比例
   signals_open: true         # 桌面默认展开「异动观察」
   signals_open_mobile: false # 手机默认收起（标题行显示首条摘要）
+  risk_appetite: true        # 回放条旁显示「风险偏好」= 进攻均值 − 防御均值
 
 daily:                       # 逐日板块收益（scripts/reports/sector_daily.py，嵌入 HTML 供回放）
   replay_days: 20            # 回放最近 N 个交易日
@@ -93,8 +94,9 @@ signals:                     # 异动观察（scripts/reports/sector_signals.py�
   relax: 0.7
   sigma_floor: 0.35          # 当日横截面稳健 σ（1.4826×MAD，%）下限；各类分数都以它为单位
   history_days: 120          # 生成器读取的日收益历史（供脱钩的历史价差），不嵌入页面
-  type_caps: {contra: 2, decouple: 2, streak: 2, bridge: 2, disperse: 1}   # 每类上限
-  weights: {contra: 1.0, decouple: 1.0, streak: 0.9, bridge: 1.0, disperse: 0.9}
+  pin_types: [style]         # 市场层面的信号优先占位（仍受每类上限约束）
+  type_caps: {contra: 2, decouple: 2, streak: 2, bridge: 2, disperse: 1, style: 1}   # 每类上限
+  weights: {contra: 1.0, decouple: 1.0, streak: 0.9, bridge: 1.0, disperse: 0.9, style: 1.1}
   contra:                    # 逆簇而行：|r−簇中位|/σ ≥ min_z，且簇内（除自身）上涨占比 ≤ breadth 而它涨（或 ≥ 1−breadth 而它跌）
     min_comm: 4
     breadth: 0.35
@@ -124,6 +126,40 @@ signals:                     # 异动观察（scripts/reports/sector_signals.py�
     max_med: 0.4
     min_spread_z: 2.5
     min_tail: 1.0
+  style:                     # 风格切换：s = 进攻等权均值 − 防御等权均值（主标签）
+    a: 进攻
+    b: 防御
+    min_days: 3              # 一方连续占优 ≥ N 天后另一方首次反超
+    min_abs: 0.3             # 反超当日 |s| 下限（%）
+    lookback: 60             # 极值：s / 此前 lookback 日 s 的标准差
+    min_hist: 20
+    extreme_z: 2.0
+    extreme_abs: 0.8
+
+style:                       # 板块风格标签（scripts/reports/sector_style.py）；规则见 docs/30「风格视角」
+  lookback_days: 500         # beta（对 benchmark.code）/ 年化波动 / 最大回撤 的估计窗口（交易日）
+  min_obs: 250
+  colors: {进攻: "#ff9f43", 防御: "#5ad1ff", 周期: "#c49a6c", 成长: "#c792ea", 价值: "#f2cc60"}   # 避开红/绿
+  risk_weights: {beta: 0.5, vol: 0.3, mdd: 0.2}   # 风险分 = 三项横截面分位的加权
+  risk_hi: 0.70              # 风险分 ≥ → 进攻
+  risk_lo: 0.30              # 风险分 ≤ → 防御
+  cyclical_l1: [有色金属, 钢铁, 煤炭, 基础化工, 石油石化, 建筑材料]   # 其余按市盈率分 成长/价值
+  cyclical_sw2: []
+  growth_pe_pct: 0.60        # 成分股动态市盈率中位数分位 ≥ → 成长
+  loss_share_growth: 0.40    # 或亏损股占比 ≥ → 成长
+  l1_overrides:              # 一级行业 → 主标签（人工）
+    银行: 防御
+    公用事业: 防御           # 含 电力、燃气Ⅱ
+    食品饮料: 防御
+    医药生物: 防御
+    国防军工: 进攻
+    计算机: 进攻
+  overrides:                 # 二级板块 → 主标签（优先于一级）
+    半导体: 进攻
+    证券Ⅱ: 进攻
+  links: true                # 风格视角下同风格板块之间的细连线（每点连最近 link_k 个同风格点，合并为一次绘制）
+  link_k: 2
+  link_opacity: 0.5
 
 graph:                       # 同步图社区与桥梁（scripts/reports/sector_graph.py）
   min_community_size: 3      # 小于此规模的社区并入「零散」

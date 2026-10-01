@@ -98,6 +98,34 @@ class SectorSignalsTest(unittest.TestCase):
                 pert = compute_signals(bad, _graph(), _edges(), out)
                 self.assertEqual(pert["days"][:cut + 1], full["days"][:cut + 1])
 
+    def test_style_switch_and_no_look_ahead(self):
+        df = _frame(90, seed=3)
+        styles = {"tags": {s: {"p": "进攻" if s.startswith("A") else ("防御" if s.startswith("B") else "价值")} for s in IDS}}
+        A, B = [f"A{i}" for i in range(5)], [f"B{i}" for i in range(5)]
+        T = len(df) - 1
+        for k in range(4, 0, -1):                       # 防御连续 4 天跑赢
+            df.loc[df.index[T - k], A] = -0.8
+            df.loc[df.index[T - k], B] = 0.4
+        df.loc[df.index[T], A] = 1.5                     # 进攻首次反超
+        df.loc[df.index[T], B] = -0.2
+        out = [d.strftime("%Y-%m-%d") for d in df.index[-12:]]
+        full = compute_signals(df, _graph(), _edges(), out, None, styles)
+        last = [o for o in full["days"][-1] if o["t"] == "style"]
+        self.assertEqual(len(last), 1)
+        self.assertIn("防御连续 4 天跑赢进攻后，进攻首次反超", last[0]["x"])
+        self.assertEqual(last[0]["d"], 1)
+        self.assertEqual(full["days"][-1][0]["t"], "style")  # pin_types：市场层面信号优先
+        # 前一天防御仍在连续占优：至多是「价差极值」，不会是「反超」
+        self.assertTrue(all(o.get("sub") == "extreme" for o in full["days"][-2] if o["t"] == "style"))
+        # 无未来数据：截断 / 篡改未来后，之前各天（含风格切换）完全一致
+        for cut in (3, 8, 10):
+            k0 = len(df) - 12 + cut + 1
+            trunc = compute_signals(df.iloc[:k0], _graph(), _edges(), out[:cut + 1], None, styles)
+            self.assertEqual(trunc["days"], full["days"][:cut + 1])
+            bad = df.copy()
+            bad.iloc[k0:] = np.random.default_rng(cut).normal(0, 6, size=bad.iloc[k0:].shape)
+            self.assertEqual(compute_signals(bad, _graph(), _edges(), out, None, styles)["days"][:cut + 1], full["days"][:cut + 1])
+
     def test_page_panel_and_config(self):
         nodes = [{"id": s, "l1": "电子", "last": 0.5} for s in ("甲", "乙", "丙")]
         payload = attach_graph({"nodes": nodes, "edges": [{"source": "甲", "target": "乙", "corr": 0.8, "abs": 0.8, "sign": 1}], "n_sectors": 3})
@@ -112,7 +140,7 @@ class SectorSignalsTest(unittest.TestCase):
         for key in ("max_items", "min_items", "type_caps", "contra", "decouple", "streak", "bridge", "disperse", "history_days"):
             self.assertIn(key, sg)
         self.assertLessEqual(sg["min_items"], sg["max_items"])
-        self.assertEqual(set(sg["type_caps"]), {"contra", "decouple", "streak", "bridge", "disperse"})
+        self.assertEqual(set(sg["type_caps"]), {"contra", "decouple", "streak", "bridge", "disperse", "style"})
         self.assertIn("signals_open_mobile", cfg["display"])
 
 

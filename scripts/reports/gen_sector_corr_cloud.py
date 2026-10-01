@@ -26,6 +26,7 @@ from scripts.reports.sector_daily import load_daily_bundle
 from scripts.reports.sector_graph import analyze as analyze_graph
 from scripts.reports.sector_lead_stats import build_lead_edges_sig, load_config, rolling_residualize
 from scripts.reports.sector_signals import compute_signals
+from scripts.reports.sector_style import load_style
 
 # 参数集中在 config/sector_corr_cloud.yaml（缺省值见 sector_lead_stats.DEFAULTS）
 CFG = load_config()
@@ -580,17 +581,29 @@ def attach_daily(payload: dict) -> dict:
         info = StockInfo().df
         sw2_col = next(c for c in ("申万2级", "申万二级", "sw_l2") if c in info.columns)
         sig_cfg = CFG.get("signals") or {}
-        payload["daily"], frame = load_daily_bundle(KLINE_CACHE, info, sw2_col, ids, CFG.get("daily"),
-                                                    history_days=int(sig_cfg.get("history_days", 120)))
+        style_cfg = CFG.get("style") or {}
+        hist = max(int(sig_cfg.get("history_days", 120)), int(style_cfg.get("lookback_days", 500)))
+        payload["daily"], frame = load_daily_bundle(KLINE_CACHE, info, sw2_col, ids, CFG.get("daily"), history_days=hist)
         d = payload["daily"]
         print(f"  逐日收益 {len(d['dates'])} 日（回放 {d['replay_days']} 日，{d['dates'][0] if d['dates'] else '-'} → {d['dates'][-1] if d['dates'] else '-'}）")
     except Exception as exc:  # 行情缓存缺失时页面退回 node.last / cum20，不影响结构
         print(f"  逐日收益不可用，回放关闭: {exc}")
-        payload["daily"], payload["signals"] = None, None
+        payload["daily"], payload["signals"], payload["style"] = None, None, None
         return payload
+    try:  # 风格标签（进攻/防御/周期/成长/价值）：历史 beta/波动/回撤 + 市盈率 + 配置覆盖
+        l1_of = {n["id"]: n.get("l1", "") for n in payload.get("nodes", [])}
+        payload["style"] = load_style(frame, l1_of, info, sw2_col, PROJECT_DIR / "cache" / "index_kline_cache.parquet",
+                                      PROJECT_DIR / "cache" / "daily_basic_cache.parquet",
+                                      str(CFG.get("benchmark", {}).get("code", "sh000300")), style_cfg)
+        payload["style"]["view"] = {k: style_cfg.get(k) for k in ("links", "link_k", "link_opacity")}
+        print(f"  风格标签 {payload['style']['counts']}（基准 {payload['style']['bench']}，{payload['style']['lookback']} 日）")
+    except Exception as exc:
+        print(f"  风格标签不可用: {exc}")
+        payload["style"] = None
     try:
         out_dates = d["dates"][-d["replay_days"]:] if d["replay_days"] else []
-        payload["signals"] = compute_signals(frame, payload.get("graph"), payload.get("edges", []), out_dates, sig_cfg)
+        payload["signals"] = compute_signals(frame, payload.get("graph"), payload.get("edges", []), out_dates, sig_cfg,
+                                             payload.get("style"))
         print(f"  异动观察 {sum(len(x) for x in payload['signals']['days'])} 条 / {len(out_dates)} 日")
     except Exception as exc:  # 信号失败不影响回放
         print(f"  异动观察不可用: {exc}")
@@ -724,13 +737,36 @@ button:hover,.chip:hover,.chip.active,.seg button.active{border-color:var(--acce
 .commlink{cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
 .cdot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;flex:0 0 auto}
 .lg-comm{display:grid;grid-template-columns:1fr;gap:3px;margin:4px 0 0 2px}
-.lg-comm .lc{display:grid;grid-template-columns:9px minmax(0,1fr) 42px 30px 50px;align-items:center;column-gap:6px;cursor:pointer;line-height:1.25}
+.lg-comm .lc{display:grid;grid-template-columns:9px minmax(0,1fr) 44px 40px 60px;align-items:center;column-gap:8px;cursor:pointer;line-height:1.25;padding:1px 0}
+.lg-comm .lc.nostep{cursor:default}
 .lg-comm .lc:hover{color:var(--text)}
 .lg-comm .lc .cdot{margin:0}
 .lg-comm .lc-name{white-space:normal;word-break:keep-all;overflow-wrap:anywhere}
 .lc-bar{height:6px;border-radius:3px;background:color-mix(in srgb,var(--dn,#22d38a) 38%,transparent);overflow:hidden}
 .lc-bar i{display:block;height:100%;background:var(--up,#ff4d4f);border-radius:3px 0 0 3px}
 .lc-up,.lc-avg{font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.lc-avg{padding-left:6px;border-left:1px solid rgba(139,155,184,.18)}
+.legend summary{display:flex;align-items:center;gap:6px}
+.legend summary::after{order:9}
+.lg-sub{font-weight:400;color:var(--muted);font-size:10.5px;font-variant-numeric:tabular-nums}
+.guide-btn{margin-left:auto;font-size:10.5px;line-height:18px;padding:0 8px;border-radius:999px;border:1px solid rgba(159,243,255,.45);background:rgba(159,243,255,.08);color:#9ff3ff;cursor:pointer;white-space:nowrap}
+.guide-btn:hover{background:rgba(159,243,255,.18)}
+.lg-colhd{display:grid;grid-template-columns:9px minmax(0,1fr) 44px 40px 60px;column-gap:8px;font-size:10px;color:var(--muted);opacity:.8;margin:4px 0 1px 2px}
+.lg-colhd .c-up{grid-column:3 / 5;text-align:center}
+.lg-colhd .c-avg{text-align:right;padding-left:6px}
+.guide{margin:auto;width:min(440px,calc(100vw - 24px));max-height:min(78vh,640px);overflow:auto;padding:10px 14px 12px;border-radius:14px;border:1px solid var(--line);background:rgba(12,18,32,.97);color:var(--muted);font-size:12px;box-shadow:0 18px 60px rgba(0,0,0,.55)}
+.guide::backdrop{background:rgba(3,6,14,.45)}
+.guide:not(:popover-open):not(.open){display:none}
+.guide-hd{display:flex;align-items:center;justify-content:space-between;color:var(--text);font-size:13px;margin-bottom:4px;position:sticky;top:-10px;background:rgba(12,18,32,.97);padding:4px 0}
+.guide-x{width:28px;height:28px;border-radius:50%;border:1px solid var(--line);background:transparent;color:var(--text);font-size:16px;cursor:pointer}
+.guide .lg-row{margin-top:8px}
+.guide-note{margin-top:10px;font-size:11px;opacity:.85;border-top:1px dashed var(--line);padding-top:6px}
+.ra-mini{font-weight:700;color:#ff9f43}
+.rp-ra{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;padding-left:8px;border-left:1px solid var(--line)}
+.rp-ra[hidden]{display:none}
+.rp-ra .ra-lbl{color:var(--muted);font-size:11px}
+.rp-ra b{font-variant-numeric:tabular-nums;font-weight:600;min-width:46px;text-align:right}
+.rp-ra b.pos{color:var(--up,#ff4d4f)}.rp-ra b.neg{color:var(--dn,#22d38a)}
 .sigp{flex:0 1 auto;min-height:0;overflow:auto;font-size:11.5px;color:var(--muted);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:6px 10px 8px;backdrop-filter:blur(10px)}
 .sigp summary{cursor:pointer;color:var(--text);font-weight:600;list-style:none;padding:2px 0;display:flex;align-items:baseline;gap:6px}
 .sigp summary::-webkit-details-marker{display:none}
@@ -747,7 +783,7 @@ button:hover,.chip:hover,.chip.active,.seg button.active{border-color:var(--acce
 .sg-list li.new{animation:sgIn .9s ease-out}
 @keyframes sgIn{from{background:rgba(159,243,255,.22)}to{background:transparent}}
 .sg-tag{flex:0 0 auto;font-size:10px;line-height:16px;padding:0 5px;border-radius:999px;border:1px solid currentColor;margin-top:1px}
-.sg-tag.t-contra{color:#ffb347}.sg-tag.t-decouple{color:#c792ea}.sg-tag.t-streak{color:#9ff3ff}.sg-tag.t-bridge{color:#ffe9a8}.sg-tag.t-disperse{color:#8fa8ff}
+.sg-tag.t-style{color:#ff9f43;background:rgba(255,159,67,.12)}.sg-tag.t-contra{color:#ffb347}.sg-tag.t-decouple{color:#c792ea}.sg-tag.t-streak{color:#9ff3ff}.sg-tag.t-bridge{color:#ffe9a8}.sg-tag.t-disperse{color:#8fa8ff}
 .sg-body{min-width:0;color:var(--muted)}
 .sg-body b{color:var(--text);font-weight:600;margin-right:4px}
 .sg-body b.pos{color:var(--up,#ff4d4f)}.sg-body b.neg{color:var(--dn,#22d38a)}
@@ -758,7 +794,7 @@ button:hover,.chip:hover,.chip.active,.seg button.active{border-color:var(--acce
 .lg-line.trailc{border-top:2px solid #9ff3ff}
 .tourcap{position:fixed;left:50%;top:54px;transform:translateX(-50%);z-index:6;max-width:min(560px,calc(100vw - 24px));font-size:13px;color:var(--text);background:rgba(12,18,32,.92);border:1px solid rgba(159,243,255,.45);border-radius:12px;padding:8px 14px;display:none;text-align:center;pointer-events:none}
 .tourcap.show{display:block}
-.replay{position:fixed;left:50%;bottom:64px;transform:translateX(-50%);z-index:5;display:flex;align-items:center;gap:8px;padding:5px 10px;border-radius:999px;background:var(--panel);border:1px solid var(--line);backdrop-filter:blur(10px);font-size:12px;width:min(500px,calc(100vw - 24px))}
+.replay{position:fixed;left:50%;bottom:64px;transform:translateX(-50%);z-index:5;display:flex;align-items:center;gap:8px;padding:5px 10px;border-radius:999px;background:var(--panel);border:1px solid var(--line);backdrop-filter:blur(10px);font-size:12px;width:min(680px,calc(100vw - 680px))}
 .replay[hidden]{display:none}
 .replay #rpPlay{width:30px;height:30px;padding:0;border-radius:50%;font-size:12px;flex:0 0 auto}
 .replay input[type=range]{flex:1;min-width:60px;accent-color:#9ff3ff}
@@ -769,7 +805,8 @@ button:hover,.chip:hover,.chip.active,.seg button.active{border-color:var(--acce
 .lg-halo.up{background:radial-gradient(circle,#8fa8ff 0 3px,rgba(255,77,79,.75) 4px,rgba(255,77,79,0) 7px)}
 .lg-halo.dn{background:radial-gradient(circle,#8fa8ff 0 3px,rgba(34,211,138,.75) 4px,rgba(34,211,138,0) 7px)}
 @media(max-width:900px){
-  .replay{bottom:auto;top:calc(52px + env(safe-area-inset-top,0px));left:10px;right:10px;width:auto;transform:none}
+  .replay{bottom:auto;top:calc(52px + env(safe-area-inset-top,0px));left:10px;right:10px;width:auto;transform:none;flex-wrap:wrap;border-radius:18px;row-gap:4px}
+  .rp-ra{flex:1 0 100%;justify-content:center;border-left:0;padding-left:0;border-top:1px solid var(--line);padding-top:3px}
   .tourcap{top:calc(100px + env(safe-area-inset-top,0px))}
 }
 @media(max-width:900px){
@@ -791,8 +828,9 @@ button:hover,.chip:hover,.chip.active,.seg button.active{border-color:var(--acce
   #presets .chip,.chips.expand .chip{flex:0 0 auto}
   .rcol{display:contents}
   .legend{position:fixed;z-index:6;right:auto;left:10px;bottom:auto;top:calc(10px + env(safe-area-inset-top,0px));width:auto;max-width:calc(100vw - 20px);max-height:70vh}
-  .legend[open]{width:min(300px,calc(100vw - 20px))}
-  .sigp{position:fixed;z-index:5;left:10px;right:10px;top:calc(98px + env(safe-area-inset-top,0px));max-height:var(--sig-mvh,46vh);font-size:12.5px;padding:6px 12px 8px}
+  .legend[open]{width:min(330px,calc(100vw - 20px))}
+  .guide{font-size:13px;max-height:80vh}
+  .sigp{position:fixed;z-index:5;left:10px;right:10px;top:calc(var(--rp-bottom,98px) + 6px);max-height:var(--sig-mvh,46vh);font-size:12.5px;padding:6px 12px 8px}
   .sigp:not([open]){padding:4px 12px}
   .sg-list li{padding:6px 4px}
   .sg-tag{font-size:11px;line-height:17px}
@@ -809,16 +847,9 @@ button:hover,.chip:hover,.chip.active,.seg button.active{border-color:var(--acce
 <div class="warnbar" id="warnBar" role="status"></div>
 <div class="rcol" id="rcol">
 <details class="legend" id="legend" open>
-  <summary>图例</summary>
-  <div class="lg-row"><span class="lg-sw"><span class="lg-halo up"></span><span class="lg-halo dn"></span></span><span id="lgScale">光晕 = 涨跌（红涨 / 绿跌）</span></div>
-  <div class="lg-row" id="lgRet"><span class="lg-sw"><span class="lg-grad"></span></span><span>节点色 = 涨跌（「按涨跌」模式）</span></div>
-  <div id="lgCommBox"><div class="lg-row"><span class="lg-sw"><span class="cdot" style="background:#5ad1ff"></span><span class="cdot" style="background:#ffb347"></span></span><span id="lgCommHd">节点色 = 同步图社区 · 条 = 上涨占比，右为均值（点击进入该簇）</span></div><div class="lg-comm" id="lgComm"></div></div>
-  <div class="lg-row"><span class="lg-sw"><span class="lg-dot" style="width:6px;height:6px"></span><span class="lg-dot" style="width:12px;height:12px"></span></span><span id="lgSize">点大小 = 连接强度 Σ|ρ|（越大越居中）</span></div>
-  <div class="lg-row"><span class="lg-sw"><span class="lg-line web"></span></span><span id="lgWeb">千丝万缕 = 全部同步边，越亮 |ρ| 越大</span></div>
-  <div class="lg-row" id="lgSoft"><span class="lg-sw"><span class="lg-line soft"></span></span><span>同步边 · 补充（未复核，仅让孤立板块有参照）</span></div>
-  <div class="lg-row"><span class="lg-sw"><span class="lg-ring"></span></span><span>虚线环 = 桥梁板块（跨社区、介数高）</span></div>
-  <div class="lg-row"><span class="lg-sw"><span class="lg-line trailc"></span></span><span>青色折线 = 探索路径</span></div>
-  <div class="lg-row"><span class="lg-sw"><span class="lg-arrow"></span></span><span>领先箭头（实验）：金 = 同向，蓝 = 反向；虚线 = 未通过 FDR</span></div>
+  <summary><span id="lgTitle">社区</span><span class="lg-sub" id="lgSub"></span><button type="button" class="guide-btn" id="guideBtn" aria-haspopup="dialog" aria-controls="readGuide" title="读图说明：光晕、颜色、大小、连线等编码">ⓘ 读图说明</button></summary>
+  <div class="lg-colhd" aria-hidden="true"><span></span><span id="lgColName">名称</span><span class="c-up">上涨占比</span><span class="c-avg">均值</span></div>
+  <div class="lg-comm" id="lgComm"></div>
 </details>
 <details class="sigp" id="sigPanel" open>
   <summary><span>异动观察</span><span class="sg-date" id="sgDate"></span><span class="sg-peek" id="sgPeek"></span></summary>
@@ -827,6 +858,21 @@ button:hover,.chip:hover,.chip.active,.seg button.active{border-color:var(--acce
 </details>
 </div>
 
+<div id="readGuide" class="guide" popover="auto" role="dialog" aria-modal="false" aria-labelledby="guideTitle">
+  <div class="guide-hd"><b id="guideTitle">读图说明</b><button type="button" class="guide-x" id="guideClose" aria-label="关闭">×</button></div>
+  <div class="lg-row"><span class="lg-sw"><span class="lg-halo up"></span><span class="lg-halo dn"></span></span><span id="lgScale">光晕 = 涨跌（红涨 / 绿跌）</span></div>
+  <div class="lg-row" id="lgRet"><span class="lg-sw"><span class="lg-grad"></span></span><span>节点色 = 涨跌（「按涨跌」模式）</span></div>
+  <div id="lgCommBox"><div class="lg-row"><span class="lg-sw"><span class="cdot" style="background:#5ad1ff"></span><span class="cdot" style="background:#ffb347"></span></span><span id="lgCommHd">节点色 = 同步图社区 · 条 = 上涨占比，右为均值（点击进入该簇）</span></div></div>
+  <div class="lg-row"><span class="lg-sw"><span class="lg-dot" style="width:6px;height:6px"></span><span class="lg-dot" style="width:12px;height:12px"></span></span><span id="lgSize">点大小 = 连接强度 Σ|ρ|（越大越居中）</span></div>
+  <div class="lg-row"><span class="lg-sw"><span class="lg-line web"></span></span><span id="lgWeb">千丝万缕 = 全部同步边，越亮 |ρ| 越大</span></div>
+  <div class="lg-row" id="lgSoft"><span class="lg-sw"><span class="lg-line soft"></span></span><span>同步边 · 补充（未复核，仅让孤立板块有参照）</span></div>
+  <div class="lg-row"><span class="lg-sw"><span class="lg-ring"></span></span><span>虚线环 = 桥梁板块（跨社区、介数高）</span></div>
+  <div class="lg-row"><span class="lg-sw"><span class="lg-line trailc"></span></span><span>青色折线 = 探索路径</span></div>
+  <div class="lg-row"><span class="lg-sw"><span class="lg-arrow"></span></span><span>领先箭头（实验）：金 = 同向，蓝 = 反向；虚线 = 未通过 FDR</span></div>
+  <div class="lg-row" id="lgStyleRow"><span class="lg-sw"><span class="cdot" style="background:#ff9f43"></span><span class="cdot" style="background:#5ad1ff"></span></span><span>风格视角：节点色 = 风格（进攻 / 防御 / 周期 / 成长 / 价值），细线连接最近的同风格板块；图例换成各风格的均值与上涨占比</span></div>
+  <div class="lg-row"><span class="lg-sw"><span class="ra-mini">±</span></span><span>风险偏好 = 进攻板块均值 − 防御板块均值（所选区间）；为正 = 偏进攻（risk-on）。小折线 = 回放窗口内逐日价差的累计，只画到当前日期</span></div>
+  <div class="guide-note">右侧（手机在回放条下方）「异动观察」为描述性信号，不是预测；按 Esc 或点击空白处关闭。</div>
+</div>
 <nav class="rail" id="dockRail" aria-label="分析轨道">
   <button type="button" class="rail-btn active" data-mode="ctrl" id="railCtrl" title="搜索与筛选">控</button>
   <button type="button" class="rail-btn" data-mode="board" id="railBoard" title="涨跌榜">榜</button>
@@ -849,6 +895,7 @@ button:hover,.chip:hover,.chip.active,.seg button.active{border-color:var(--acce
     <button type="button" data-v="5">5日</button>
     <button type="button" data-v="20">20日</button>
   </div>
+  <span class="rp-ra" id="rpRA" hidden title="风险偏好 = 进攻均值 − 防御均值；折线 = 回放窗口内逐日价差累计（只到当前日期）"><span class="ra-lbl">风险偏好</span><b id="raVal">—</b><svg id="raSpark" viewBox="0 0 64 18" width="64" height="18" aria-hidden="true"></svg></span>
 </div>
 
 <aside class="flyout open" id="flyout" data-mode="ctrl">
@@ -880,7 +927,9 @@ button:hover,.chip:hover,.chip.active,.seg button.active{border-color:var(--acce
         <div class="seg" id="colormode" title="节点着色">
           <button type="button" data-v="community">按簇</button>
           <button type="button" data-v="return">按涨跌</button>
+          <button type="button" data-v="style" id="cmStyle" title="风格视角：进攻 / 防御 / 周期 / 成长 / 价值">风格视角</button>
         </div>
+        <button type="button" class="chip" id="styleLinkBtn" hidden title="同风格板块之间的细连线">同风格连线</button>
         <button type="button" class="chip" id="tourBtn" title="从全局到局部：社区 → 核心 → 桥梁">导览 ▶</button>
         <div class="seg" id="edgemode">
           <button type="button" class="active" data-v="sync">同步相关</button>
@@ -956,6 +1005,14 @@ const BRIDGES = new Map((GRAPH.bridges || []).map(b => [b.id, b]));
 function commOf(id) { const k = (GRAPH.node_comm || {})[id]; return k == null ? -1 : k; }
 function commName(k) { return commById[k] ? commById[k].name : '零散'; }
 let colorBy = (CFG_UI.color_by === 'return' || !COMM.length) ? 'return' : 'community';
+// ---------------- 风格（进攻 / 防御 / 周期 / 成长 / 价值；生成器按历史 beta·波动·回撤 + 市盈率 + 配置覆盖打标签） ----------------
+const STYLE = (DATA.style && DATA.style.tags) ? DATA.style : null;
+const STYLES = STYLE ? STYLE.styles : [];
+const STYLE_CFG = (STYLE && STYLE.view) || {};
+function styleOf(id) { return STYLE && STYLE.tags[id] ? STYLE.tags[id].p : null; }
+function styleHex(k) { return (STYLE && STYLE.colors[k]) || '#6b778c'; }
+function styleColor(id) { return new THREE.Color(styleHex(styleOf(id))); }
+let styleSum = {}, styleLinksOn = STYLE_CFG.links ?? true;
 const REDUCED = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
 const DIM_FLOOR = CFG_UI.web_focus_dim ?? 0.12;
 const TRAIL_MAX = CFG_UI.trail_max ?? 12;
@@ -1112,7 +1169,13 @@ function computeMovers() {
 }
 function sumText(k) { const v = commSum[k]; return v ? `${fmtRet(v.avg)}，${Math.round(v.up * 100)}% 上涨` : '—'; }
 function updateCommSummary() {
-  commSum = {};
+  commSum = {}; styleSum = {};
+  if (STYLE) {
+    const acc = {};
+    for (let i = 0; i < N; i++) { if (!hasRet[i]) continue; const k = styleOf(DATA.nodes[i].id); if (!k) continue; const a = acc[k] || (acc[k] = [0, 0, 0]); a[0] += retTo[i]; a[1]++; if (retTo[i] > 0) a[2]++; }
+    for (const k of STYLES) { const a = acc[k]; styleSum[k] = a && a[1] ? { avg: a[0] / a[1], up: a[2] / a[1], n: a[1] } : null; }
+    updateRiskAppetite();
+  }
   for (const c of COMM) {
     let s0 = 0, n0 = 0, up = 0;
     for (const id of c.members) { const i = idxOf[id]; if (i == null || !hasRet[i]) continue; s0 += retTo[i]; n0++; if (retTo[i] > 0) up++; }
@@ -1168,7 +1231,7 @@ function commColor(id) { const c = commById[commOf(id)]; return new THREE.Color(
 function computeBase() {
   for (let i = 0; i < N; i++) {
     const n = DATA.nodes[i];
-    baseCol[i].copy(commColor(n.id));
+    baseCol[i].copy(colorBy === 'style' ? styleColor(n.id) : commColor(n.id));
     baseSize[i] = 2.0 + 2.6 * Math.sqrt(((GRAPH.wdeg || {})[n.id] ?? 0) / WDEG_MAX);  // 点大小 = 连接强度
   }
 }
@@ -1179,11 +1242,11 @@ let breathT = 0;
 function paintNode(i) {
   const L = lit[i], l1 = Math.min(1, L), boost = Math.max(0, L - 1), vis = DIM_FLOOR + (1 - DIM_FLOOR) * l1;
   const r = hasRet[i] ? retCur[i] : null;
-  if (colorBy === 'community') _c.copy(baseCol[i]); else _c.copy(colorFromRet(r, 1));
+  if (colorBy !== 'return') _c.copy(baseCol[i]); else _c.copy(colorFromRet(r, 1));
   _c.multiplyScalar(vis);
   discs[i].material.color.copy(_c);
   discs[i].material.opacity = 0.45 + 0.55 * l1;
-  const base = colorBy === 'community' ? baseSize[i] : sizeFromRet(r) * 0.34;
+  const base = colorBy !== 'return' ? baseSize[i] : sizeFromRet(r) * 0.34;
   const ds = Math.max(1.3, base * (0.55 + 0.45 * l1 + boost * 1.7));
   discs[i].scale.set(ds, ds, 1);
   const t = r == null ? 0 : Math.min(1, Math.abs(r) / Math.max(0.01, RET_SCALE));
@@ -1263,13 +1326,42 @@ const WEB = (() => {
   return { list, w, col, line, ia: list.map(e => idxOf[e.source]), ib: list.map(e => idxOf[e.target]) };
 })();
 const syncLines = WEB.line; scene.add(syncLines);
+// 风格视角：每个点连到最近 link_k 个同风格点（去重后合并为一个 LineSegments，一次绘制）
+const styleLinks = (() => {
+  if (!STYLE) return null;
+  const K = STYLE_CFG.link_k ?? 2, seen = new Set(), pos = [], col = [];
+  const ns = DATA.nodes;
+  for (let i = 0; i < ns.length; i++) {
+    const si = styleOf(ns[i].id); if (!si) continue;
+    const near = [];
+    for (let j = 0; j < ns.length; j++) {
+      if (j === i || styleOf(ns[j].id) !== si) continue;
+      const dx = ns[i].x - ns[j].x, dy = ns[i].y - ns[j].y, dz = ns[i].z - ns[j].z;
+      near.push([dx * dx + dy * dy + dz * dz, j]);
+    }
+    near.sort((a, b) => a[0] - b[0]);
+    const c = new THREE.Color(styleHex(si));
+    for (const [, j] of near.slice(0, K)) {
+      const key = i < j ? i + ':' + j : j + ':' + i; if (seen.has(key)) continue; seen.add(key);
+      pos.push(ns[i].x, ns[i].y, ns[i].z, ns[j].x, ns[j].y, ns[j].z);
+      col.push(c.r, c.g, c.b, c.r, c.g, c.b);
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  const line = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: STYLE_CFG.link_opacity ?? 0.5, depthWrite: false, blending: THREE.AdditiveBlending }));
+  line.renderOrder = 1; line.visible = false; line.userData.n = seen.size; scene.add(line);
+  return line;
+})();
 const softLines = buildSyncLines(true); scene.add(softLines);
 const cPosE = new THREE.Color(0xff7a7a), cNegE = new THREE.Color(0x3ddc97), cNegC = new THREE.Color(0x8fa3c4);
 const cGreyE = new THREE.Color(0x8796b0), _ea = new THREE.Color(), _eb = new THREE.Color();
 const TINT_ON = CFG_UI.edge_tint ?? true, TINT_MIX = CFG_UI.edge_tint_mix ?? 0.85;
 // 边着色：两端同涨发红、同跌发绿（强度 ∝ min(|r1|,|r2|)/封顶 × |ρ|），方向相反变暗；仍是一个 LineSegments 的顶点色。
 function updateWebColors() {
-  const col = WEB.col, modeF = mode === 'lead' ? 0.35 : 1, focused = focusIds.size > 0, isComm = colorBy === 'community';
+  const col = WEB.col, modeF = mode === 'lead' ? 0.35 : 1, focused = focusIds.size > 0, isComm = colorBy !== 'return';
+  if (styleLinks) { styleLinks.visible = colorBy === 'style' && styleLinksOn; styleLinks.material.opacity = (STYLE_CFG.link_opacity ?? 0.5) * (focused ? 0.3 : 1); }
   for (let k = 0; k < WEB.list.length; k++) {
     const e = WEB.list[k], i = WEB.ia[k], j = WEB.ib[k], la = lit[i], lb = lit[j];
     let emph = Math.min(1, la, lb); emph = Math.max(0.05, emph * emph);
@@ -2042,15 +2134,58 @@ function renderLegend() {
   renderCommLegend();
   renderLegendScale();
 }
+function groupRow(key, color, name, v, title, cls = '') {
+  const up = v ? Math.round(v.up * 100) : null;
+  return `<div class="lc ${cls}" ${key} title="${title}；${periodLabel()}均值 ${v ? fmtRet(v.avg) : '—'}，${up == null ? '—' : up + '%'} 上涨"><span class="cdot" style="background:${color}"></span><span class="lc-name">${name}</span><span class="lc-bar" aria-hidden="true"><i style="width:${up ?? 0}%"></i></span><span class="lc-up">${up == null ? '—' : up + '%'}</span><span class="lc-avg ${v ? (v.avg >= 0 ? 'pos' : 'neg') : ''}">${v ? fmtRet(v.avg) : '—'}</span></div>`;
+}
 function renderCommLegend() {
   const box = document.getElementById('lgComm'); if (!box) return;
+  const isStyle = colorBy === 'style' && STYLE;
+  document.getElementById('lgTitle').textContent = isStyle ? '风格' : '社区';
+  document.getElementById('lgColName').textContent = isStyle ? '风格（板块数）' : '社区';
+  if (isStyle) {
+    box.innerHTML = STYLES.map(k => groupRow(`data-style="${k}"`, styleHex(k), `${k}<small class="lc-n"> ${STYLE.counts[k] ?? 0}</small>`, styleSum[k], `${k}：${STYLE.counts[k] ?? 0} 个板块`, 'nostep')).join('');
+    return;
+  }
   box.innerHTML = COMM.map(c => {
     const v = commSum[c.id], up = v ? Math.round(v.up * 100) : null;
     return `<div class="lc" data-comm="${c.id}" title="${c.name}：${c.size} 个板块，核心 ${c.core}；${periodLabel()}均值 ${v ? fmtRet(v.avg) : '—'}，${up == null ? '—' : up + '%'} 上涨">${cdot(c.id)}<span class="lc-name">${c.name}</span><span class="lc-bar" aria-hidden="true"><i style="width:${up ?? 0}%"></i></span><span class="lc-up">${up == null ? '—' : up + '%'}</span><span class="lc-avg ${v ? (v.avg >= 0 ? 'pos' : 'neg') : ''}">${v ? fmtRet(v.avg) : '—'}</span></div>`;
   }).join('');
   box.querySelectorAll('[data-comm]').forEach(el => el.onclick = () => step([], { comm: +el.dataset.comm }));
 }
+// 风险偏好：进攻均值 − 防御均值（所选区间、所选日期）；折线 = 回放窗口内逐日（1 日）价差的累计，只画到当前日期
+const RA_DAILY = (() => {
+  if (!STYLE || !RET[1]) return [];
+  const out = [];
+  for (let d = 0; d < R_DAYS; d++) {
+    const s = { 进攻: [0, 0], 防御: [0, 0] };
+    for (let i = 0; i < N; i++) { const k = styleOf(DATA.nodes[i].id); const v = RET[1][d][i]; if ((k === '进攻' || k === '防御') && !Number.isNaN(v)) { s[k][0] += v; s[k][1]++; } }
+    out.push(s.进攻[1] && s.防御[1] ? s.进攻[0] / s.进攻[1] - s.防御[0] / s.防御[1] : 0);
+  }
+  return out;
+})();
+let raNow = null;
+function updateRiskAppetite() {
+  const box = document.getElementById('rpRA'); if (!box) return;
+  if (!STYLE || CFG_UI.risk_appetite === false) { box.hidden = true; return; }
+  box.hidden = false;
+  const a = styleSum['进攻'], b = styleSum['防御'];
+  raNow = a && b ? a.avg - b.avg : null;
+  const el = document.getElementById('raVal');
+  el.textContent = raNow == null ? '—' : fmtRet(raNow); el.className = raNow == null ? '' : (raNow >= 0 ? 'pos' : 'neg');
+  const cum = []; let c = 0; for (let d = 0; d <= dayIdx && d < RA_DAILY.length; d++) { c += RA_DAILY[d]; cum.push(c); }
+  const all = []; let c2 = 0; for (const v of RA_DAILY) { c2 += v; all.push(c2); }
+  const lo = Math.min(0, ...all), hi = Math.max(0, ...all), span = Math.max(0.5, hi - lo), W = 64, H = 18, n = Math.max(2, RA_DAILY.length);
+  const X = d => 2 + (W - 4) * d / (n - 1), Y = v => H - 2 - (H - 4) * (v - lo) / span;
+  const pts = cum.map((v, d) => `${X(d).toFixed(1)},${Y(v).toFixed(1)}`).join(' ');
+  const last = cum.length ? cum[cum.length - 1] : 0, colr = last >= 0 ? 'var(--up,#ff4d4f)' : 'var(--dn,#22d38a)';
+  document.getElementById('raSpark').innerHTML = `<line x1="1" x2="${W - 1}" y1="${Y(0).toFixed(1)}" y2="${Y(0).toFixed(1)}" stroke="rgba(139,155,184,.45)" stroke-dasharray="2 2" stroke-width="1"/>` +
+    (cum.length > 1 ? `<polyline points="${pts}" fill="none" stroke="${colr}" stroke-width="1.5" stroke-linejoin="round"/>` : '') +
+    (cum.length ? `<circle cx="${X(cum.length - 1).toFixed(1)}" cy="${Y(last).toFixed(1)}" r="2" fill="${colr}"/>` : '');
+  document.getElementById('rpRA').title = `风险偏好（${periodLabel()}，${R_DATES[dayIdx] || ''}）= 进攻 ${a ? fmtRet(a.avg) : '—'} − 防御 ${b ? fmtRet(b.avg) : '—'}；窗口内累计 ${fmtRet(last)}（只到当前日期）。为正 = 偏进攻`;
+}
 function renderLegendScale() {
+  const sub = document.getElementById('lgSub'); if (sub) sub.textContent = `${periodLabel()} · ${(R_DATES[dayIdx] || '').slice(5)}`;
   const el = document.getElementById('lgScale'); if (!el) return;
   el.textContent = `光晕 = ${periodLabel()}涨跌（${R_DATES[dayIdx] || ''}）：红涨 / 绿跌，大小与亮度 ∝ |涨跌|，±${CLIP[curP()].toFixed(2)}% 封顶（回放窗口 ${Math.round(CLIP_Q * 100)}% 分位）；呼吸 = 强势异动`;
 }
@@ -2131,7 +2266,7 @@ function syncPeriodButtons() {
 }
 function afterRetChange() {
   renderBoard(); renderLegendScale(); updateRetDom(); renderSignals();
-  if (!coreIds.size && commFocus == null && colorBy === 'return') rebuildLabels();
+  if (!coreIds.size && commFocus == null && colorBy !== 'community') rebuildLabels();
   const rd = document.getElementById('rpDate'); if (rd) rd.textContent = (R_DATES[dayIdx] || '').slice(5);
 }
 function setPeriod(P) {
@@ -2169,6 +2304,7 @@ function openSignal(o) {
   if (!o) return;
   const why = `异动观察 · ${SIG_LABEL[o.t] || ''}（${(R_DATES[dayIdx] || '').slice(5)}）：${o.id} ${o.x}`;
   if (o.t === 'disperse' && o.c != null) { step([], { comm: o.c, why }); return; }
+  if (o.t === 'style') { if (window.__setColorBy) window.__setColorBy('style'); setPStep && setPStep(why); return; }
   const cores = [o.id, ...(o.t === 'decouple' ? (o.p || []) : [])].filter(id => idxOf[id] != null);
   if (cores.length) step(cores, { why });
 }
@@ -2210,6 +2346,9 @@ document.getElementById('rpPlay').onclick = () => { if (playing) pauseReplay(); 
   sl.max = String(R_DAYS - 1); sl.value = String(dayIdx);
   sl.addEventListener('input', () => { pauseReplay(); setDay(+sl.value, 300); });
   document.getElementById('replayBar').hidden = R_DAYS < 2;
+  // 手机：异动观察面板紧贴回放条下沿（回放条含风险偏好时会换行变高）
+  const syncRpBottom = () => { const rb = document.getElementById('replayBar'); const b = rb.hidden ? 52 : rb.getBoundingClientRect().bottom; document.documentElement.style.setProperty('--rp-bottom', Math.round(b) + 'px'); };
+  syncRpBottom(); addEventListener('resize', syncRpBottom); requestAnimationFrame(syncRpBottom);
   syncPeriodButtons();
 }
 setRetTargets(1); stepRet(performance.now() + 10);
@@ -2224,12 +2363,34 @@ setRetTargets(1); stepRet(performance.now() + 10);
   const sync = () => [...cm.children].forEach(x => x.classList.toggle('active', x.dataset.v === colorBy));
   if (!COMM.length) cm.style.display = 'none';
   sync();
-  cm.onclick = e => {
-    const b = e.target.closest('button'); if (!b) return;
-    colorBy = b.dataset.v; sync();
+  if (!STYLE) document.getElementById('cmStyle').style.display = 'none';
+  const linkBtn = document.getElementById('styleLinkBtn');
+  const syncLink = () => { linkBtn.hidden = colorBy !== 'style'; linkBtn.classList.toggle('active', styleLinksOn); linkBtn.textContent = (styleLinksOn ? '✓ ' : '+ ') + '同风格连线'; };
+  window.__setColorBy = v => {
+    if (v === 'style' && !STYLE) return;
+    colorBy = v; sync(); syncLink();
     applyNodeAppearance();
     if (!coreIds.size && commFocus == null) rebuildLabels();
   };
+  cm.onclick = e => { const b = e.target.closest('button'); if (b) window.__setColorBy(b.dataset.v); };
+  linkBtn.onclick = () => { styleLinksOn = !styleLinksOn; syncLink(); updateWebColors(); };
+  syncLink();
+}
+// ---------------- 读图说明（popover：点外部 / Esc 关闭；不支持 popover 时退回 class 切换） ----------------
+{
+  const g = document.getElementById('readGuide'), btn = document.getElementById('guideBtn');
+  const native = typeof g.showPopover === 'function';
+  const isOpen = () => native ? g.matches(':popover-open') : g.classList.contains('open');
+  const open = () => { if (native) g.showPopover(); else g.classList.add('open'); };
+  const close = () => { if (native) { if (isOpen()) g.hidePopover(); } else g.classList.remove('open'); };
+  btn.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); isOpen() ? close() : open(); });
+  document.getElementById('guideClose').onclick = close;
+  // 原生 popover 已有轻触关闭；再补一层 pointerdown/touchstart，兼容触屏模拟与旧版 Safari
+  const outside = e => { if (isOpen() && !g.contains(e.target) && !btn.contains(e.target)) close(); };
+  document.addEventListener('pointerdown', outside, true);
+  document.addEventListener('touchstart', outside, { capture: true, passive: true });
+  if (!native) document.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
+  window.__guide = { open, close, isOpen, native };
 }
 // ---------------- 导览：从全局到局部（社区 → 核心 → 桥梁 → 另一社区核心） ----------------
 let tour = null;
@@ -2436,6 +2597,7 @@ window.__scc = {
   camera, controls, pickNode, three: THREE_SOURCE, fps,
   screenOf: id => { const n = nodeById[id]; if (!n) return null; camera.updateMatrixWorld(); _v.set(n.x, n.y, n.z).project(camera); return _v.z > 1 ? null : toScreen(_v); }, step, goTrail, goGlobal, startTour, stopTour, graph: GRAPH,
   get coreIds() { return [...coreIds]; }, get mode() { return mode; }, get colorBy() { return colorBy; },
+  setColorBy: v => window.__setColorBy(v), get riskAppetite() { return raNow; }, get styleSum() { return styleSum; }, get styleLinkCount() { return styleLinks ? styleLinks.userData.n : 0; }, guide: () => window.__guide,
   get commFocus() { return commFocus; }, get trail() { return trail.map(entryLabel); }, get trailIdx() { return trailIdx; },
   get flying() { return !!flight; }, get animating() { return performance.now() < litAnimUntil; }, get pulses() { return pulses.length; },
   get drawCalls() { return renderer.info.render.calls; }, get dayIdx() { return dayIdx; }, get period() { return curP(); },

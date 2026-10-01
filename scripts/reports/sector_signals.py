@@ -6,6 +6,7 @@
 - streak   持续性：同向连涨/连跌且逐日放大；或连涨/连跌后的首个反向日。
 - bridge   桥梁先动：桥梁板块大幅波动，远端社区是否在其后 1–2 日跟随（当日事件标记「观察中」）。
 - disperse 簇内分化：社区中位数接近 0，但内部离散度高，点出领涨与领跌。
+- style    风格切换：进攻−防御 等权价差，一方连续 ≥N 天占优后另一方首次反超；或价差为近期极值。
 
 各类分数都折算成「当日横截面稳健 σ」的倍数，再乘类型权重后统一排序；参数见 config signals:。
 """
@@ -20,18 +21,20 @@ SIGNAL_DEFAULTS: dict[str, Any] = {
     "max_items": 8,
     "min_items": 5,
     "relax": 0.7,             # 严格阈值下不足 min_items 时，阈值乘以该系数补足
+    "pin_types": ["style"],   # 市场层面的信号优先占位（仍受每类上限约束）
     "sigma_floor": 0.35,      # 当日横截面稳健 σ（%）下限，避免极平静日放大噪声
     "history_days": 120,      # 生成器读取的日收益历史长度（供脱钩的历史价差），不嵌入页面
-    "type_caps": {"contra": 2, "decouple": 2, "streak": 2, "bridge": 2, "disperse": 1},
-    "weights": {"contra": 1.0, "decouple": 1.0, "streak": 0.9, "bridge": 1.0, "disperse": 0.9},
+    "type_caps": {"contra": 2, "decouple": 2, "streak": 2, "bridge": 2, "disperse": 1, "style": 1},
+    "weights": {"contra": 1.0, "decouple": 1.0, "streak": 0.9, "bridge": 1.0, "disperse": 0.9, "style": 1.1},
     "contra": {"min_comm": 4, "breadth": 0.35, "min_z": 1.2, "min_abs": 0.6},
     "decouple": {"min_rho": 0.6, "window": 5, "lookback": 60, "min_hist": 30, "min_z": 2.0, "min_gap": 2.0},
     "streak": {"min_len": 3, "min_abs": 0.5, "reversal_min_len": 3, "reversal_min_z": 1.2},
     "bridge": {"min_z": 1.5, "min_abs": 1.0, "follow_days": 2, "follow_min": 0.3, "decay": 0.8, "follow_bonus": 1.15},
     "disperse": {"min_comm": 5, "max_med": 0.4, "min_spread_z": 2.5, "min_tail": 1.0},
+    "style": {"a": "进攻", "b": "防御", "min_days": 3, "min_abs": 0.3, "lookback": 60, "min_hist": 20, "extreme_z": 2.0, "extreme_abs": 0.8},
 }
-TYPE_ORDER = ["contra", "decouple", "streak", "bridge", "disperse"]
-TYPE_LABEL = {"contra": "逆簇", "decouple": "脱钩", "streak": "持续", "bridge": "桥梁", "disperse": "分化"}
+TYPE_ORDER = ["style", "contra", "decouple", "streak", "bridge", "disperse"]
+TYPE_LABEL = {"contra": "逆簇", "decouple": "脱钩", "streak": "持续", "bridge": "桥梁", "disperse": "分化", "style": "风格"}
 
 
 def _merge(base: dict, extra: dict | None) -> dict:
@@ -52,7 +55,7 @@ def _pct(x: float, nd: int = 2) -> str:
     return f"{x:+.{nd}f}%"
 
 
-def build_context(ids: list[str], graph: dict | None, edges: list[dict], cfg: dict) -> dict:
+def build_context(ids: list[str], graph: dict | None, edges: list[dict], cfg: dict, styles: dict | None = None) -> dict:
     """把同步图结构整理成索引形式（与日期无关）。"""
     graph = graph or {}
     pos = {s: i for i, s in enumerate(ids)}
@@ -95,7 +98,12 @@ def build_context(ids: list[str], graph: dict | None, edges: list[dict], cfg: di
         far_id = max(sorted(w), key=lambda k: w[k])
         far = next(c for c in comms if c["id"] == far_id)
         bridges.append({"i": i, "own": own, "far": far})
-    return {"ids": ids, "comms": comms, "comm_of": comm_of, "cname": cname, "pairs": pairs, "bridges": bridges}
+    sa, sb = cfg["style"]["a"], cfg["style"]["b"]
+    tags = (styles or {}).get("tags", styles or {}) if styles else {}
+    st_a = np.array([pos[k] for k, t in tags.items() if k in pos and t.get("p") == sa], dtype=int)
+    st_b = np.array([pos[k] for k, t in tags.items() if k in pos and t.get("p") == sb], dtype=int)
+    return {"ids": ids, "comms": comms, "comm_of": comm_of, "cname": cname, "pairs": pairs, "bridges": bridges,
+            "st_a": st_a, "st_b": st_b}
 
 
 def day_candidates(R: np.ndarray, dates: list[str], ctx: dict, cfg: dict, relax: float = 1.0) -> list[dict]:
@@ -237,6 +245,36 @@ def day_candidates(R: np.ndarray, dates: list[str], ctx: dict, cfg: dict, relax:
             out.append({"t": "disperse", "id": c["name"], "p": [ids[lead], ids[lag]], "c": int(c["id"]), "d": 0,
                         "s": spread / sig / 2 * W["disperse"],
                         "x": f"中位 {_pct(med)} 但内部分化：{ids[lead]} {_pct(r[lead])} / {ids[lag]} {_pct(r[lag])}"})
+    # 6. 风格切换（进攻 − 防御 等权价差；只用截至当日的行）
+    c6 = cfg["style"]
+    if len(ctx.get("st_a", [])) and len(ctx.get("st_b", [])):
+        sub = R[max(0, t - int(c6["lookback"]) - 40):t + 1]
+        with np.errstate(all="ignore"):
+            A = np.nanmean(sub[:, ctx["st_a"]], axis=1)
+            B = np.nanmean(sub[:, ctx["st_b"]], axis=1)
+        spr = A - B
+        st = spr[-1]
+        if np.isfinite(st) and st != 0:
+            m = 0
+            while m + 2 <= len(spr) and np.isfinite(spr[-2 - m]) and np.sign(spr[-2 - m]) == -np.sign(st):
+                m += 1
+            hist = spr[-1 - int(c6["lookback"]):-1]
+            hist = hist[np.isfinite(hist)]
+            z = st / float(np.std(hist, ddof=1)) if hist.size >= c6["min_hist"] and np.std(hist) > 0 else 0.0
+            win, lose = (c6["a"], c6["b"]) if st > 0 else (c6["b"], c6["a"])
+            parts, score = [], 0.0
+            if m >= c6["min_days"] and abs(st) >= c6["min_abs"] * relax:
+                parts.append(f"{lose}连续 {m} 天跑赢{win}后，{win}首次反超 {_pct(abs(st))}")
+                score = max(abs(z), 1.0) * (1 + 0.1 * m)
+            if abs(z) >= c6["extreme_z"] * relax and abs(st) >= c6["extreme_abs"] * relax:
+                parts.append(f"价差 {_pct(st)} 为近{int(c6['lookback'])}日 {abs(z):.1f}σ")
+                score = max(score, abs(z))
+            if parts:
+                tail = f"（{c6['a']} {_pct(A[-1])} / {c6['b']} {_pct(B[-1])}）"
+                mood = "风险偏好升温" if st > 0 else "避险升温"
+                out.append({"t": "style", "id": f"{c6['a']} vs {c6['b']}", "p": [], "c": None, "d": int(np.sign(st)),
+                            "sub": "switch" if m >= c6["min_days"] else "extreme",
+                            "s": score * W.get("style", 1.0), "x": "，".join(parts) + f"{tail}，{mood}"})
     for o in out:
         o["s"] = round(float(o["s"]), 3)
     return out
@@ -260,13 +298,15 @@ def select_day(strict: list[dict], loose: list[dict], cfg: dict) -> list[dict]:
         for o in sorted(pool, key=lambda o: (-o["s"], order[o["t"]], o["id"])):
             if len(picked) >= cfg["max_items"]:
                 return
-            names = {o["id"], *o["p"]} if o["t"] != "disperse" else {f"comm:{o['c']}"}
+            names = {f"comm:{o['c']}"} if o["t"] == "disperse" else ({"style"} if o["t"] == "style" else {o["id"], *o["p"]})
             if cnt.get(o["t"], 0) >= caps.get(o["t"], 0) or names & used or _key(o) in {_key(p) for p in picked}:
                 continue
             picked.append(o)
             used.update(names)
             cnt[o["t"]] = cnt.get(o["t"], 0) + 1
 
+    pins = set(cfg.get("pin_types") or [])
+    take([o for o in strict if o["t"] in pins])
     take(strict)
     if len(picked) < cfg["min_items"]:
         keys = {_key(o) for o in strict}
@@ -275,11 +315,11 @@ def select_day(strict: list[dict], loose: list[dict], cfg: dict) -> list[dict]:
 
 
 def compute_signals(daily: pd.DataFrame, graph: dict | None, edges: list[dict], out_dates: list[str],
-                    cfg: dict | None = None) -> dict:
+                    cfg: dict | None = None, styles: dict | None = None) -> dict:
     """daily: 交易日 × 板块的日收益（%）。对 out_dates 中每一天，只把截至当天的行交给 day_candidates。"""
     cfg = _merge(SIGNAL_DEFAULTS, cfg)
     ids = [str(c) for c in daily.columns]
-    ctx = build_context(ids, graph, edges, cfg)
+    ctx = build_context(ids, graph, edges, cfg, styles)
     all_dates = [pd.Timestamp(d).strftime("%Y-%m-%d") for d in daily.index]
     pos = {d: k for k, d in enumerate(all_dates)}
     R = daily.to_numpy(dtype=float)
