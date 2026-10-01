@@ -64,6 +64,26 @@ display:
   trail_max: 12              # 探索路径最多保留几步
   suggest_neighbors: 3       # 详情里“最强未探索邻居”条数
   tour_step_ms: 4200         # “从全局到局部”导览每步停留（毫秒）
+  default_period: 1          # 默认收益区间（交易日）：1 | 5 | 20
+  replay_step_ms: 800        # 逐日回放每天停留（毫秒）
+  replay_tween_ms: 650       # 日与日之间光晕/边色的平滑过渡（毫秒）
+  replay_loop: false         # 回放到最后一天是否从头循环
+  halo_max_scale: 3.4        # 光晕最大半径（相对节点核心，|涨跌|≥封顶时）
+  halo_max_opacity: 0.62     # 光晕最大亮度
+  halo_up_color: "#ff4d4f"   # A 股习惯：红涨
+  halo_down_color: "#22d38a" # 绿跌
+  breathe_top_n: 8           # |涨跌| 前 N（且 ≥ 半个封顶）的板块光晕呼吸；超过封顶的也呼吸
+  breathe_max: 16            # 同时呼吸的板块上限
+  breathe_period_ms: 1600    # 呼吸周期
+  breathe_amp: 0.18          # 呼吸幅度（相对亮度/大小）
+  edge_tint: true            # 同步边按两端涨跌着色：同涨红、同跌绿、方向相反变暗
+  edge_tint_mix: 0.85        # 边着色与社区色的最大混合比例
+
+daily:                       # 逐日板块收益（scripts/reports/sector_daily.py，嵌入 HTML 供回放）
+  replay_days: 20            # 回放最近 N 个交易日
+  periods: [1, 5, 20]        # 可选收益区间（交易日）；会多嵌入 max(periods)-1 天用于复利
+  max_abs_ret: 35.0          # 单只股票日涨跌超过此值（%）视为异常，不计入板块均值
+  min_members: 1             # 当日有效成分不足此数则该板块当日记为无行情
 
 graph:                       # 同步图社区与桥梁（scripts/reports/sector_graph.py）
   min_community_size: 3      # 小于此规模的社区并入「零散」

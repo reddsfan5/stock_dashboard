@@ -23,9 +23,10 @@ GRAPH_DEFAULTS: dict[str, Any] = {
     "bridge_min_participation": 0.25,
     "name_min_share": 0.45,
     "name_overrides": {},   # {簇核心板块: 显示名}；核心变化时自动回落到行业众数命名
+    # 社区色避开红/绿（红涨绿跌留给光晕与边着色）
     "palette": [
-        "#5ad1ff", "#ffb347", "#c792ea", "#7ee787", "#ff7eb6", "#f2cc60",
-        "#4dd0b5", "#8fa8ff", "#ff8a65", "#b5e853", "#e0a3ff", "#6fd3ff",
+        "#5ad1ff", "#ffb347", "#c792ea", "#f2cc60", "#8fa8ff", "#e6e6f0",
+        "#c49a6c", "#e0a3ff", "#4f7cff", "#d4b483", "#9ad0ec", "#b39ddb",
     ],
     "loose_color": "#6b778c",
 }

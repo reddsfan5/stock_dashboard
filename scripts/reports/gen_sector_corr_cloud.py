@@ -22,6 +22,7 @@ sys.path.insert(0, str(PROJECT_DIR))
 
 from data.industry import StockInfo
 
+from scripts.reports.sector_daily import load_daily_payload
 from scripts.reports.sector_graph import analyze as analyze_graph
 from scripts.reports.sector_lead_stats import build_lead_edges_sig, load_config, rolling_residualize
 
@@ -571,6 +572,21 @@ def attach_graph(payload: dict) -> dict:
     return payload
 
 
+def attach_daily(payload: dict) -> dict:
+    """嵌入近 N 日板块日收益（基点整数数组），供光晕/边着色/逐日回放；参数见 config daily:。"""
+    ids = [n["id"] for n in payload.get("nodes", [])]
+    try:
+        info = StockInfo().df
+        sw2_col = next(c for c in ("申万2级", "申万二级", "sw_l2") if c in info.columns)
+        payload["daily"] = load_daily_payload(KLINE_CACHE, info, sw2_col, ids, CFG.get("daily"))
+        d = payload["daily"]
+        print(f"  逐日收益 {len(d['dates'])} 日（回放 {d['replay_days']} 日，{d['dates'][0] if d['dates'] else '-'} → {d['dates'][-1] if d['dates'] else '-'}）")
+    except Exception as exc:  # 行情缓存缺失时页面退回 node.last / cum20，不影响结构
+        print(f"  逐日收益不可用，回放关闭: {exc}")
+        payload["daily"] = None
+    return payload
+
+
 def render_html(payload: dict) -> str:
     """Embed Three.js page; payload JSON injected via token replace (no f-string brace hell)."""
     data_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).replace("<", "\\u003c")
@@ -702,6 +718,23 @@ button:hover,.chip:hover,.chip.active,.seg button.active{border-color:var(--acce
 .lg-line.trailc{border-top:2px solid #9ff3ff}
 .tourcap{position:fixed;left:50%;top:54px;transform:translateX(-50%);z-index:6;max-width:min(560px,calc(100vw - 24px));font-size:13px;color:var(--text);background:rgba(12,18,32,.92);border:1px solid rgba(159,243,255,.45);border-radius:12px;padding:8px 14px;display:none;text-align:center;pointer-events:none}
 .tourcap.show{display:block}
+.replay{position:fixed;left:50%;bottom:64px;transform:translateX(-50%);z-index:5;display:flex;align-items:center;gap:8px;padding:5px 10px;border-radius:999px;background:var(--panel);border:1px solid var(--line);backdrop-filter:blur(10px);font-size:12px;width:min(500px,calc(100vw - 24px))}
+.replay[hidden]{display:none}
+.replay #rpPlay{width:30px;height:30px;padding:0;border-radius:50%;font-size:12px;flex:0 0 auto}
+.replay input[type=range]{flex:1;min-width:60px;accent-color:#9ff3ff}
+.rp-date{color:var(--text);font-variant-numeric:tabular-nums;white-space:nowrap;min-width:44px;text-align:right}
+.seg.mini{flex:0 0 auto}
+.seg.mini button{padding:4px 8px;font-size:11px}
+.lg-halo{display:inline-block;width:14px;height:14px;border-radius:50%}
+.lg-halo.up{background:radial-gradient(circle,#8fa8ff 0 3px,rgba(255,77,79,.75) 4px,rgba(255,77,79,0) 7px)}
+.lg-halo.dn{background:radial-gradient(circle,#8fa8ff 0 3px,rgba(34,211,138,.75) 4px,rgba(34,211,138,0) 7px)}
+.lg-comm{grid-template-columns:1fr}
+.lg-comm .lc-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.lg-comm .lc-sum{margin-left:8px;font-variant-numeric:tabular-nums}
+@media(max-width:900px){
+  .replay{bottom:auto;top:calc(52px + env(safe-area-inset-top,0px));left:10px;right:10px;width:auto;transform:none}
+  .tourcap{top:calc(100px + env(safe-area-inset-top,0px))}
+}
 @media(max-width:900px){
   .trail{left:92px;right:10px;transform:none;max-width:none;top:calc(10px + env(safe-area-inset-top,0px))}
   .tourcap{top:calc(56px + env(safe-area-inset-top,0px))}
@@ -734,9 +767,10 @@ button:hover,.chip:hover,.chip.active,.seg button.active{border-color:var(--acce
 <div class="warnbar" id="warnBar" role="status"></div>
 <details class="legend" id="legend" open>
   <summary>图例</summary>
-  <div class="lg-row" id="lgRet"><span class="lg-sw"><span class="lg-grad"></span></span><span id="lgScale">红涨 · 绿跌</span></div>
-  <div id="lgCommBox"><div class="lg-row"><span class="lg-sw"><span class="cdot" style="background:#5ad1ff"></span><span class="cdot" style="background:#ffb347"></span></span><span>颜色 = 同步图社区（点名称进入该簇）</span></div><div class="lg-comm" id="lgComm"></div></div>
-  <div class="lg-row"><span class="lg-sw"><span class="lg-dot" style="width:6px;height:6px"></span><span class="lg-dot" style="width:12px;height:12px"></span></span><span>点大小 = |涨跌|（非成交额/市值）；灰点 = 无行情</span></div>
+  <div class="lg-row"><span class="lg-sw"><span class="lg-halo up"></span><span class="lg-halo dn"></span></span><span id="lgScale">光晕 = 涨跌（红涨 / 绿跌）</span></div>
+  <div class="lg-row" id="lgRet"><span class="lg-sw"><span class="lg-grad"></span></span><span>节点色 = 涨跌（「按涨跌」模式）</span></div>
+  <div id="lgCommBox"><div class="lg-row"><span class="lg-sw"><span class="cdot" style="background:#5ad1ff"></span><span class="cdot" style="background:#ffb347"></span></span><span>节点色 = 同步图社区 · 右侧为所选区间均值与上涨占比（点名称进入该簇）</span></div><div class="lg-comm" id="lgComm"></div></div>
+  <div class="lg-row"><span class="lg-sw"><span class="lg-dot" style="width:6px;height:6px"></span><span class="lg-dot" style="width:12px;height:12px"></span></span><span id="lgSize">点大小 = 连接强度 Σ|ρ|（越大越居中）</span></div>
   <div class="lg-row"><span class="lg-sw"><span class="lg-line web"></span></span><span id="lgWeb">千丝万缕 = 全部同步边，越亮 |ρ| 越大</span></div>
   <div class="lg-row" id="lgSoft"><span class="lg-sw"><span class="lg-line soft"></span></span><span>同步边 · 补充（未复核，仅让孤立板块有参照）</span></div>
   <div class="lg-row"><span class="lg-sw"><span class="lg-ring"></span></span><span>虚线环 = 桥梁板块（跨社区、介数高）</span></div>
@@ -757,6 +791,16 @@ button:hover,.chip:hover,.chip.active,.seg button.active{border-color:var(--acce
   <div class="crumbs" id="crumbs"></div>
 </div>
 <div class="tourcap" id="tourCap" role="status"></div>
+<div class="replay" id="replayBar" hidden aria-label="逐日回放">
+  <button type="button" id="rpPlay" title="回放近 N 个交易日" aria-label="播放">▶</button>
+  <input type="range" id="rpSlider" min="0" max="0" step="1" value="0" aria-label="日期"/>
+  <span class="rp-date" id="rpDate"></span>
+  <div class="seg mini" id="rpPeriod">
+    <button type="button" data-v="1">1日</button>
+    <button type="button" data-v="5">5日</button>
+    <button type="button" data-v="20">20日</button>
+  </div>
+</div>
 
 <aside class="flyout open" id="flyout" data-mode="ctrl">
   <div class="fly-hd">
@@ -780,8 +824,9 @@ button:hover,.chip:hover,.chip.active,.seg button.active{border-color:var(--acce
       <div class="chips expand" id="expandBox" style="display:none"></div>
       <div class="row">
         <div class="seg" id="retmode">
-          <button type="button" class="active" data-v="last">当日</button>
-          <button type="button" data-v="cum20">近20日</button>
+          <button type="button" data-v="1">当日</button>
+          <button type="button" data-v="5">近5日</button>
+          <button type="button" data-v="20">近20日</button>
         </div>
         <div class="seg" id="colormode" title="节点着色">
           <button type="button" data-v="community">按簇</button>
@@ -849,7 +894,7 @@ const TAP_CANCEL_PX = 10;  // 与 chart-touch.js 的 MOVE_CANCEL_PX 一致
 document.documentElement.style.setProperty('--fly-mvh', (CFG_UI.mobile_panel_vh ?? 42) + 'vh');
 
 // ---------------- 状态 ----------------
-let retWindow = 'last';
+let retWindow = String(CFG_UI.default_period ?? 1);  // 区间：'1' | '5' | '20'（交易日）
 let qMode = 'sector';
 let mode = CFG_UI.default_mode === 'lead' ? 'lead' : 'sync';
 let coreIds = new Set();
@@ -942,21 +987,96 @@ for (let i = 0; i < N; i++) {
   disc.position.set(n.x, n.y, n.z); disc.renderOrder = 2; scene.add(disc); discs.push(disc);
 }
 
-// ---------------- 收益 → 颜色/大小（分位截断，抗离群值） ----------------
-function retOf(n) {
-  const v = retWindow === 'cum20' ? (n.cum20 ?? n.cum_20 ?? n.ret20) : (n.last ?? n.ret1 ?? n.day);
-  return (v == null || Number.isNaN(+v)) ? null : +v;
-}
+// ---------------- 收益：近 N 日逐日序列 → 1/5/20 日复利；光晕 / 边着色读平滑插值后的 retCur ----------------
+const DAILY = (DATA.daily && DATA.daily.dates && DATA.daily.dates.length) ? DATA.daily : null;
+const R_DAYS = DAILY ? Math.max(1, DATA.daily.replay_days) : 1;
+const R_DATES = DAILY ? DAILY.dates.slice(-R_DAYS) : [DATA.market_as_of || DATA.end || ''];
+const PERIODS = DAILY ? (DAILY.periods || [1, 5, 20]) : [1, 20];
+if (!PERIODS.includes(+retWindow)) retWindow = String(PERIODS[0]);
+let dayIdx = R_DAYS - 1;
 function quantile(arr, q) {
   if (!arr.length) return 0;
   const a = [...arr].sort((x, y) => x - y), pos = (a.length - 1) * q, lo = Math.floor(pos), hi = Math.ceil(pos);
   return a[lo] + (a[hi] - a[lo]) * (pos - lo);
 }
+const RET = {};   // RET[P][d][i]：区间 P、回放第 d 天、第 i 个板块的收益（%），NaN = 无行情
+{
+  const rowOf = {}; if (DAILY) DAILY.ids.forEach((id, k) => { rowOf[id] = DAILY.bp[k]; });
+  const off = DAILY ? DAILY.dates.length - R_DAYS : 0;
+  for (const P of PERIODS) {
+    RET[P] = [];
+    for (let d = 0; d < R_DAYS; d++) {
+      const a = new Float32Array(N).fill(NaN);
+      for (let i = 0; i < N; i++) {
+        const n = DATA.nodes[i];
+        if (DAILY) {
+          const row = rowOf[n.id]; if (!row) continue;
+          const end = off + d; let g = 1, any = false;
+          for (let k = Math.max(0, end - P + 1); k <= end; k++) { const v = row[k]; if (v == null) continue; g *= 1 + v / 10000; any = true; }
+          if (any) a[i] = (g - 1) * 100;
+        } else {
+          const v = P === 1 ? n.last : n.cum20;
+          if (v != null && !Number.isNaN(+v)) a[i] = +v;
+        }
+      }
+      RET[P].push(a);
+    }
+  }
+}
 const CLIP_Q = CFG_UI.color_clip_pct ?? 0.9;
-let RET_SCALE = 1;
-function computeRetScale() {
-  const v = DATA.nodes.map(retOf).filter(x => x != null).map(Math.abs);
-  RET_SCALE = Math.max(CFG_UI.min_ret_scale ?? 0.5, quantile(v, CLIP_Q));
+const CLIP = {};  // 每个区间在整个回放窗口上的 |收益| 分位封顶，跨日可比
+for (const P of PERIODS) {
+  const v = []; for (const a of RET[P]) for (const x of a) if (!Number.isNaN(x)) v.push(Math.abs(x));
+  CLIP[P] = Math.max(CFG_UI.min_ret_scale ?? 0.5, quantile(v, CLIP_Q));
+}
+function curP() { return +retWindow; }
+function periodLabel(P = curP()) { return P === 1 ? '当日' : `近${P}日`; }
+function retAt(P, d, i) { const v = RET[P] ? RET[P][d][i] : NaN; return Number.isNaN(v) ? null : v; }
+function retOf(n) { return retAt(curP(), dayIdx, idxOf[n.id]); }
+let RET_SCALE = CLIP[curP()];
+function computeRetScale() {}  // 兼容旧调用：封顶值由 CLIP[区间] 给出并随回放插值
+const retCur = new Float32Array(N), retFrom = new Float32Array(N), retTo = new Float32Array(N), hasRet = new Uint8Array(N);
+let retT0 = 0, retDur = 1, retAnim = false, scaleFrom = RET_SCALE, scaleTo = RET_SCALE;
+let movers = new Set(), commSum = {};
+function setRetTargets(ms = CFG_UI.replay_tween_ms ?? 650) {
+  const P = curP(), a = RET[P][dayIdx];
+  for (let i = 0; i < N; i++) { retFrom[i] = retCur[i]; const v = a[i]; hasRet[i] = Number.isNaN(v) ? 0 : 1; retTo[i] = Number.isNaN(v) ? 0 : v; }
+  scaleFrom = RET_SCALE; scaleTo = CLIP[P];
+  retT0 = performance.now(); retDur = REDUCED ? 1 : Math.max(1, ms); retAnim = true;
+  computeMovers(); updateCommSummary();
+}
+function stepRet(now) {
+  if (!retAnim) return false;
+  const u = Math.min(1, (now - retT0) / retDur), e = u * u * (3 - 2 * u);
+  for (let i = 0; i < N; i++) retCur[i] = retFrom[i] + (retTo[i] - retFrom[i]) * e;
+  RET_SCALE = scaleFrom + (scaleTo - scaleFrom) * e;
+  if (u >= 1) retAnim = false;
+  return true;
+}
+// 强势异动：|收益| ≥ 封顶，或 |收益| 前 N 且 ≥ 半个封顶 → 光晕轻微呼吸
+function computeMovers() {
+  const clip = CLIP[curP()], rows = [];
+  for (let i = 0; i < N; i++) if (hasRet[i]) rows.push([i, Math.abs(retTo[i])]);
+  rows.sort((a, b) => b[1] - a[1]);
+  const topN = CFG_UI.breathe_top_n ?? 8, cap = CFG_UI.breathe_max ?? 16;
+  movers = new Set(rows.filter((r, k) => r[1] >= clip || (k < topN && r[1] >= 0.5 * clip)).slice(0, cap).map(r => r[0]));
+}
+function sumText(k) { const v = commSum[k]; return v ? `${fmtRet(v.avg)}，${Math.round(v.up * 100)}% 上涨` : '—'; }
+function updateCommSummary() {
+  commSum = {};
+  for (const c of COMM) {
+    let s0 = 0, n0 = 0, up = 0;
+    for (const id of c.members) { const i = idxOf[id]; if (i == null || !hasRet[i]) continue; s0 += retTo[i]; n0++; if (retTo[i] > 0) up++; }
+    commSum[c.id] = n0 ? { avg: s0 / n0, up: up / n0, n: n0 } : null;
+  }
+  renderCommLegend();
+  updateRetDom();
+}
+// 详情/社区列表中随日期、区间变化的数字
+function updateRetDom() {
+  document.querySelectorAll('[data-csum]').forEach(el => { const v = commSum[+el.dataset.csum]; el.textContent = sumText(+el.dataset.csum); el.className = v ? (v.avg >= 0 ? 'pos' : 'neg') : ''; });
+  document.querySelectorAll('[data-ret]').forEach(el => { const v = retAt(+el.dataset.ret, dayIdx, idxOf[el.dataset.id]); el.textContent = fmtRet(v); el.className = v == null ? '' : (v >= 0 ? 'pos' : 'neg'); });
+  document.querySelectorAll('[data-retdate]').forEach(el => { el.textContent = R_DATES[dayIdx] || '-'; });
 }
 function colorFromRet(v, dim = 1) {
   const c = new THREE.Color();
@@ -970,6 +1090,7 @@ function sizeFromRet(v) {
   if (v == null) return 3.2;
   return 5.5 + 10.0 * Math.min(1, Math.abs(v) / RET_SCALE);
 }
+const WDEG_MAX = Math.max(1e-6, ...Object.values(GRAPH.wdeg || { _: 1 }));
 function maxCorrToCores(nodeId) {
   let best = 0;
   for (const c of coreIds) {
@@ -996,25 +1117,34 @@ const litT0 = new Float32Array(N), litDur = new Float32Array(N).fill(1);
 let litAnimUntil = 0;
 function commColor(id) { const c = commById[commOf(id)]; return new THREE.Color(c ? c.color : (GRAPH.loose_color || '#6b778c')); }
 function computeBase() {
-  computeRetScale();
   for (let i = 0; i < N; i++) {
-    const n = DATA.nodes[i], v = retOf(n);
-    baseCol[i].copy(colorBy === 'community' ? commColor(n.id) : colorFromRet(v, 1));
-    baseSize[i] = sizeFromRet(v);
+    const n = DATA.nodes[i];
+    baseCol[i].copy(commColor(n.id));
+    baseSize[i] = 2.0 + 2.6 * Math.sqrt(((GRAPH.wdeg || {})[n.id] ?? 0) / WDEG_MAX);  // 点大小 = 连接强度
   }
 }
-const _c = new THREE.Color();
+const _c = new THREE.Color(), _h = new THREE.Color();
+const HALO_UP = new THREE.Color(CFG_UI.halo_up_color || '#ff4d4f'), HALO_DN = new THREE.Color(CFG_UI.halo_down_color || '#22d38a');
+let breathT = 0;
+// 节点核心 = 社区色（「按涨跌」时为涨跌色）；光晕 = 涨跌：红涨绿跌，大小/亮度 ∝ |收益|/封顶，强势异动轻微呼吸。
 function paintNode(i) {
-  const L = lit[i], l1 = Math.min(1, L), boost = Math.max(0, L - 1);
-  _c.copy(baseCol[i]).multiplyScalar(DIM_FLOOR + (1 - DIM_FLOOR) * l1);
+  const L = lit[i], l1 = Math.min(1, L), boost = Math.max(0, L - 1), vis = DIM_FLOOR + (1 - DIM_FLOOR) * l1;
+  const r = hasRet[i] ? retCur[i] : null;
+  if (colorBy === 'community') _c.copy(baseCol[i]); else _c.copy(colorFromRet(r, 1));
+  _c.multiplyScalar(vis);
   discs[i].material.color.copy(_c);
   discs[i].material.opacity = 0.45 + 0.55 * l1;
-  const mul = 0.45 + 0.55 * l1 + boost * 1.7;
-  const ds = Math.max(1.4, baseSize[i] * 0.34 * mul);
+  const base = colorBy === 'community' ? baseSize[i] : sizeFromRet(r) * 0.34;
+  const ds = Math.max(1.3, base * (0.55 + 0.45 * l1 + boost * 1.7));
   discs[i].scale.set(ds, ds, 1);
-  glows[i].material.color.copy(_c);
-  glows[i].material.opacity = 0.03 + 0.25 * l1 * l1 + boost * 2.2;
-  const gs = baseSize[i] * 1.35 * mul; glows[i].scale.set(gs, gs, 1);
+  const t = r == null ? 0 : Math.min(1, Math.abs(r) / Math.max(0.01, RET_SCALE));
+  const br = (!REDUCED && movers.has(i)) ? Math.sin(2 * Math.PI * breathT * 1000 / (CFG_UI.breathe_period_ms ?? 1600) + i * 1.7) : 0;
+  const amp = CFG_UI.breathe_amp ?? 0.18;
+  _h.copy(r != null && r < 0 ? HALO_DN : HALO_UP).multiplyScalar(vis);
+  glows[i].material.color.copy(_h);
+  glows[i].material.opacity = (0.015 + (CFG_UI.halo_max_opacity ?? 0.62) * Math.pow(t, 0.85)) * (0.3 + 0.7 * l1) * (1 + amp * br);
+  const gs = ds * (1.1 + (CFG_UI.halo_max_scale ?? 3.4) * t) * (1 + amp * 0.6 * br);
+  glows[i].scale.set(gs, gs, 1);
 }
 // 桥梁板块：淡金色虚线环
 const ringTex = (() => {
@@ -1086,19 +1216,29 @@ const WEB = (() => {
 const syncLines = WEB.line; scene.add(syncLines);
 const softLines = buildSyncLines(true); scene.add(softLines);
 const cPosE = new THREE.Color(0xff7a7a), cNegE = new THREE.Color(0x3ddc97), cNegC = new THREE.Color(0x8fa3c4);
+const cGreyE = new THREE.Color(0x8796b0), _ea = new THREE.Color(), _eb = new THREE.Color();
+const TINT_ON = CFG_UI.edge_tint ?? true, TINT_MIX = CFG_UI.edge_tint_mix ?? 0.85;
+// 边着色：两端同涨发红、同跌发绿（强度 ∝ min(|r1|,|r2|)/封顶 × |ρ|），方向相反变暗；仍是一个 LineSegments 的顶点色。
 function updateWebColors() {
-  const col = WEB.col, modeF = mode === 'lead' ? 0.35 : 1, focused = focusIds.size > 0;
+  const col = WEB.col, modeF = mode === 'lead' ? 0.35 : 1, focused = focusIds.size > 0, isComm = colorBy === 'community';
   for (let k = 0; k < WEB.list.length; k++) {
     const e = WEB.list[k], i = WEB.ia[k], j = WEB.ib[k], la = lit[i], lb = lit[j];
     let emph = Math.min(1, la, lb); emph = Math.max(0.05, emph * emph);
     if (focused && (la > 1.01 || lb > 1.01)) emph = Math.min(1.9, emph * 2.0);  // 与核心相连的边加亮
-    const g = WEB.w[k] * emph * modeF;
-    let ca, cb;
-    if (colorBy === 'community') { ca = e.sign >= 0 ? baseCol[i] : cNegC; cb = e.sign >= 0 ? baseCol[j] : cNegC; }
-    else { ca = cb = e.sign >= 0 ? cPosE : cNegE; }
+    let g = WEB.w[k] * emph * modeF;
+    _ea.copy(e.sign >= 0 ? (isComm ? baseCol[i] : cGreyE) : cNegC);
+    _eb.copy(e.sign >= 0 ? (isComm ? baseCol[j] : cGreyE) : cNegC);
+    if (TINT_ON && hasRet[i] && hasRet[j]) {
+      const r1 = retCur[i], r2 = retCur[j];
+      const m = Math.min(1, Math.min(Math.abs(r1), Math.abs(r2)) / Math.max(0.01, RET_SCALE));
+      if ((r1 > 0 && r2 > 0) || (r1 < 0 && r2 < 0)) {
+        const mix = TINT_MIX * Math.min(1, m * 1.6), tc = r1 > 0 ? HALO_UP : HALO_DN;
+        _ea.lerp(tc, mix); _eb.lerp(tc, mix); g *= 0.55 + 1.1 * m;
+      } else g *= 0.4;
+    }
     const o = k * 6;
-    col[o] = ca.r * g; col[o + 1] = ca.g * g; col[o + 2] = ca.b * g;
-    col[o + 3] = cb.r * g; col[o + 4] = cb.g * g; col[o + 5] = cb.b * g;
+    col[o] = _ea.r * g; col[o + 1] = _ea.g * g; col[o + 2] = _ea.b * g;
+    col[o + 3] = _eb.r * g; col[o + 4] = _eb.g * g; col[o + 5] = _eb.b * g;
   }
   syncLines.geometry.attributes.color.needsUpdate = true;
 }
@@ -1667,7 +1807,7 @@ function cdot(k) { const c = commById[k]; return `<span class="cdot" style="back
 function commListHtml() {
   if (!COMM.length) return '';
   return `<div class="sec"><span>同步图社区 ${COMM.length} 个 · 模块度 Q=${GRAPH.modularity ?? '-'}</span><span>点击进入</span></div><ul class="list">${COMM.map(c =>
-    `<li data-comm="${c.id}"><span>${cdot(c.id)}${c.name}<span class="sub2">${c.size} 个板块 · 核心 ${c.core} · 主行业 ${c.l1_top}</span></span><span>›</span></li>`).join('')}</ul>`;
+    `<li data-comm="${c.id}"><span>${cdot(c.id)}${c.name}<span class="sub2">${c.size} 个板块 · 核心 ${c.core} · 主行业 ${c.l1_top}</span></span><span data-csum="${c.id}"></span></li>`).join('')}</ul>`;
 }
 // 下一步建议：簇核心 / 桥梁 / 最强未探索邻居
 function renderSuggest(id) {
@@ -1700,14 +1840,14 @@ function renderCommunityPanel(k) {
   const c = commById[k]; if (!c) return;
   document.getElementById('pTitle').textContent = `${c.name}簇`;
   document.getElementById('pMeta').textContent = `${c.size} 个板块 · 簇核心 ${c.core} · ${GRAPH.method || ''}`;
-  document.getElementById('pKv').innerHTML = `<b>主行业</b><span>${c.l1_top}（${Math.round(c.l1_share * 100)}%）</span><b>模块度</b><span>Q=${GRAPH.modularity ?? '-'}（全图）</span>`;
+  document.getElementById('pKv').innerHTML = `<b>主行业</b><span>${c.l1_top}（${Math.round(c.l1_share * 100)}%）</span><b>模块度</b><span>Q=${GRAPH.modularity ?? '-'}（全图）</span><b>区间涨跌</b><span data-csum="${k}"></span>`;
   const bs = (GRAPH.bridges || []).filter(b => b.comm === k);
   const wd = GRAPH.wdeg || {};
   document.getElementById('pBody').innerHTML =
     (bs.length ? `<div class="sec"><span>桥梁（通往其他社区）</span></div><ul class="list">${bs.map(b => `<li data-id="${b.id}"><span><span class="stag bridge">桥梁</span>${b.id}<span class="sub2">→ ${b.links.map(commName).join('、')} · 介数 ${b.betweenness}</span></span><span>›</span></li>`).join('')}</ul>` : '') +
     `<div class="sec"><span>成员（按簇内加权度）</span><span>${c.size}</span></div><ul class="list">${c.members.map(id => `<li data-id="${id}"><span>${id === c.core ? '<span class="stag core">核心</span>' : ''}${id}</span><span class="sub2">Σ|ρ| ${(wd[id] ?? 0).toFixed(2)}</span></li>`).join('')}</ul>`;
   document.getElementById('pBody').querySelectorAll('li[data-id]').forEach(li => li.onclick = () => { document.getElementById('q').value = li.dataset.id; setExpandOptions([]); step([li.dataset.id]); });
-  renderMembers(null); renderSuggest(null);
+  renderMembers(null); renderSuggest(null); updateRetDom();
 }
 function fmtPct(x) { if (x == null || Number.isNaN(x)) return '-'; return (x * 100).toFixed(0) + '%'; }
 function fmtLift(x) { if (x == null || Number.isNaN(x)) return '-'; return (x >= 0 ? '+' : '') + (x * 100).toFixed(0) + 'pt'; }
@@ -1769,6 +1909,7 @@ function renderPanel(cores, neighborIds) {
       meta.textContent = `${DATA.n_sectors} 个二级 · 同步边 ${DATA.edges.length - soft} 条多年复核${soft ? ` + ${soft} 条补充` : ''}（|ρ|≥${DATA.corr_thr}）`;
       body.innerHTML = `<div class="empty">${DATA.note || ''}</div>${commListHtml()}`;
       body.querySelectorAll('li[data-comm]').forEach(li => li.onclick = () => step([], { comm: +li.dataset.comm }));
+      updateRetDom();
     }
     kv.innerHTML = ''; renderMembers(null); renderSuggest(null); return;
   }
@@ -1776,7 +1917,8 @@ function renderPanel(cores, neighborIds) {
   if (cores.length === 1) {
     const n = nodeById[cores[0]];
     const k = commOf(n.id);
-    kv.innerHTML = `<b>社区</b><span class="commlink" data-comm="${k}">${cdot(k)}${commName(k)}${BRIDGES.has(n.id) ? ' · 桥梁' : ''}</span><b>一级</b><span>${n.l1 || '-'}</span><b>成分</b><span>${n.n || '-'} 只</span><b>近20日</b><span class="${(n.cum20 || 0) >= 0 ? 'pos' : 'neg'}">${fmtRet(n.cum20)}</span><b>当日</b><span class="${(n.last || 0) >= 0 ? 'pos' : 'neg'}">${fmtRet(n.last)}</span>`;
+    kv.innerHTML = `<b>社区</b><span class="commlink" data-comm="${k}">${cdot(k)}${commName(k)}${BRIDGES.has(n.id) ? ' · 桥梁' : ''}</span><b>一级</b><span>${n.l1 || '-'}</span><b>成分</b><span>${n.n || '-'} 只</span><b>日期</b><span data-retdate>${R_DATES[dayIdx] || '-'}</span>${PERIODS.map(P => `<b>${periodLabel(P)}</b><span data-ret="${P}" data-id="${n.id}"></span>`).join('')}`;
+    updateRetDom();
     renderMembers(cores[0]);
     const cl = kv.querySelector('.commlink'); if (cl && k >= 0) cl.onclick = () => step([], { comm: k });
   } else {
@@ -1829,7 +1971,7 @@ function renderMembers(sectorId) {
 }
 function renderBoard() {
   const ul = document.getElementById('boardList');
-  document.getElementById('boardLabel').textContent = retWindow === 'cum20' ? '近20日' : '当日';
+  document.getElementById('boardLabel').textContent = periodLabel() + (dayIdx < R_DAYS - 1 ? ` @${(R_DATES[dayIdx] || '').slice(5)}` : '');
   const rows = DATA.nodes.map(n => ({ id: n.id, v: retOf(n) })).filter(r => r.v != null);
   rows.sort((a, b) => b.v - a.v);
   ul.innerHTML = rows.map(r => {
@@ -1842,21 +1984,26 @@ function renderBoard() {
 function renderLegend() {
   const isComm = colorBy === 'community';
   document.getElementById('lgRet').style.display = isComm ? 'none' : '';
-  document.getElementById('lgCommBox').style.display = isComm ? '' : 'none';
+  document.getElementById('lgCommBox').style.display = COMM.length ? '' : 'none';
   document.getElementById('lgSoft').style.display = DATA.edges.some(e => e.soft) ? '' : 'none';
-  document.getElementById('lgWeb').textContent = isComm
-    ? '千丝万缕 = 全部同步边：两端社区色渐变，越亮 |ρ| 越大（灰 = 负相关）'
-    : '千丝万缕 = 全部同步边：红正 / 绿负，越亮 |ρ| 越大';
-  const box = document.getElementById('lgComm');
-  if (isComm && !box.childElementCount) {
-    box.innerHTML = COMM.map(c => `<div data-comm="${c.id}" title="${c.name}：${c.size} 个板块，核心 ${c.core}">${cdot(c.id)}${c.name}</div>`).join('');
-    box.querySelectorAll('[data-comm]').forEach(el => el.onclick = () => step([], { comm: +el.dataset.comm }));
-  }
+  document.getElementById('lgSize').textContent = isComm ? '点大小 = 连接强度 Σ|ρ|（越大越居中）' : '点大小 = |涨跌|（「按涨跌」模式）';
+  document.getElementById('lgWeb').textContent = TINT_ON
+    ? '千丝万缕：两端同涨发红、同跌发绿，方向相反变暗；亮度 ∝ |ρ| × min(|涨跌|)'
+    : (isComm ? '千丝万缕 = 全部同步边：两端社区色渐变，越亮 |ρ| 越大' : '千丝万缕 = 全部同步边，越亮 |ρ| 越大');
+  renderCommLegend();
   renderLegendScale();
+}
+function renderCommLegend() {
+  const box = document.getElementById('lgComm'); if (!box) return;
+  box.innerHTML = COMM.map(c => {
+    const v = commSum[c.id];
+    return `<div data-comm="${c.id}" title="${c.name}：${c.size} 个板块，核心 ${c.core}">${cdot(c.id)}<span class="lc-name">${c.name}</span><span class="lc-sum ${v ? (v.avg >= 0 ? 'pos' : 'neg') : ''}">${sumText(c.id)}</span></div>`;
+  }).join('');
+  box.querySelectorAll('[data-comm]').forEach(el => el.onclick = () => step([], { comm: +el.dataset.comm }));
 }
 function renderLegendScale() {
   const el = document.getElementById('lgScale'); if (!el) return;
-  el.textContent = `红涨 · 绿跌（${retWindow === 'cum20' ? '近20日' : '当日'}，颜色在 ±${RET_SCALE.toFixed(2)}% 封顶 = |涨跌| 的 ${Math.round(CLIP_Q * 100)}% 分位）`;
+  el.textContent = `光晕 = ${periodLabel()}涨跌（${R_DATES[dayIdx] || ''}）：红涨 / 绿跌，大小与亮度 ∝ |涨跌|，±${CLIP[curP()].toFixed(2)}% 封顶（回放窗口 ${Math.round(CLIP_Q * 100)}% 分位）；呼吸 = 强势异动`;
 }
 
 // ---------------- 扩展选项（查询时只聚焦精确匹配，其余可选加入） ----------------
@@ -1926,14 +2073,59 @@ document.getElementById('qmode').onclick = e => {
   document.getElementById('q').placeholder = qMode === 'stock' ? '输入股票名称或代码…' : '查询板块，如：电力、半导体、白酒…';
   updateHints();
 };
-document.getElementById('retmode').onclick = e => {
-  const b = e.target.closest('button'); if (!b) return;
-  retWindow = b.dataset.v;
-  [...document.getElementById('retmode').children].forEach(x => x.classList.toggle('active', x === b));
-  applyNodeAppearance(); renderBoard();
-  if (!coreIds.size) rebuildLabels();
-  if (coreIds.size === 1) renderPanel([...coreIds], [...focusIds].filter(id => !coreIds.has(id)));
-};
+// ---------------- 区间（1/5/20 日）与逐日回放 ----------------
+function syncPeriodButtons() {
+  for (const id of ['retmode', 'rpPeriod']) [...document.getElementById(id).children].forEach(x => {
+    x.classList.toggle('active', x.dataset.v === retWindow);
+    x.style.display = PERIODS.includes(+x.dataset.v) ? '' : 'none';
+  });
+}
+function afterRetChange() {
+  renderBoard(); renderLegendScale(); updateRetDom();
+  if (!coreIds.size && commFocus == null && colorBy === 'return') rebuildLabels();
+  const rd = document.getElementById('rpDate'); if (rd) rd.textContent = (R_DATES[dayIdx] || '').slice(5);
+}
+function setPeriod(P) {
+  if (!PERIODS.includes(+P)) return;
+  retWindow = String(P); syncPeriodButtons();
+  setRetTargets(); afterRetChange();
+}
+let playing = false, playTimer = 0;
+const STEP_MS = CFG_UI.replay_step_ms ?? 800;
+function setDay(d, ms) {
+  dayIdx = Math.max(0, Math.min(R_DAYS - 1, d));
+  document.getElementById('rpSlider').value = String(dayIdx);
+  setRetTargets(ms ?? Math.min(STEP_MS * 0.85, CFG_UI.replay_tween_ms ?? 650)); afterRetChange();
+}
+function playStep() {
+  if (!playing) return;
+  if (dayIdx >= R_DAYS - 1) { if (CFG_UI.replay_loop) setDay(0); else { pauseReplay(); return; } }
+  else setDay(dayIdx + 1);
+  playTimer = setTimeout(playStep, STEP_MS);
+}
+function playReplay() {
+  if (R_DAYS < 2) return;
+  playing = true; document.getElementById('rpPlay').textContent = '❚❚';
+  document.getElementById('rpPlay').setAttribute('aria-label', '暂停');
+  if (dayIdx >= R_DAYS - 1) setDay(0, 350);
+  clearTimeout(playTimer); playTimer = setTimeout(playStep, STEP_MS);
+}
+function pauseReplay() {
+  playing = false; clearTimeout(playTimer);
+  document.getElementById('rpPlay').textContent = '▶';
+  document.getElementById('rpPlay').setAttribute('aria-label', '播放');
+}
+document.getElementById('retmode').onclick = e => { const b = e.target.closest('button'); if (b) setPeriod(+b.dataset.v); };
+document.getElementById('rpPeriod').onclick = e => { const b = e.target.closest('button'); if (b) setPeriod(+b.dataset.v); };
+document.getElementById('rpPlay').onclick = () => { if (playing) pauseReplay(); else playReplay(); };
+{
+  const sl = document.getElementById('rpSlider');
+  sl.max = String(R_DAYS - 1); sl.value = String(dayIdx);
+  sl.addEventListener('input', () => { pauseReplay(); setDay(+sl.value, 300); });
+  document.getElementById('replayBar').hidden = R_DAYS < 2;
+  syncPeriodButtons();
+}
+setRetTargets(1); stepRet(performance.now() + 10);
 {
   const leadBtn = document.querySelector('#edgemode button[data-v="lead"]');
   leadBtn.classList.add('exp');
@@ -2126,7 +2318,11 @@ function fps() { if (frameTimes.length < 2) return 0; return Math.round((frameTi
   frameTimes.push(ms); while (frameTimes.length > 2 && ms - frameTimes[0] > 2000) frameTimes.shift();
   const t = (now || ms) * 0.001;
   const flying = stepFlight(ms);
-  stepLit(ms);
+  breathT = ms / 1000;
+  const retMoving = stepRet(ms);
+  const litMoving = stepLit(ms);
+  if (retMoving && !litMoving) { for (let i = 0; i < N; i++) paintNode(i); paintRings(); updateWebColors(); }
+  else if (!litMoving && movers.size && !REDUCED) for (const i of movers) paintNode(i);
   stepPulses(ms);
   if (flowFade < 1) {
     flowFade = Math.max(0, Math.min(1, (ms - flowFadeT0) / flowFadeDur));
@@ -2155,7 +2351,9 @@ window.__scc = {
   get coreIds() { return [...coreIds]; }, get mode() { return mode; }, get colorBy() { return colorBy; },
   get commFocus() { return commFocus; }, get trail() { return trail.map(entryLabel); }, get trailIdx() { return trailIdx; },
   get flying() { return !!flight; }, get animating() { return performance.now() < litAnimUntil; }, get pulses() { return pulses.length; },
-  get drawCalls() { return renderer.info.render.calls; }, get webSegments() { return WEB.list.length; }, reduced: REDUCED,
+  get drawCalls() { return renderer.info.render.calls; }, get dayIdx() { return dayIdx; }, get period() { return curP(); },
+  get playing() { return playing; }, get movers() { return movers.size; }, get commSummary() { return COMM.map(c => `${c.name} ${sumText(c.id)}`); },
+  replayDates: R_DATES, playReplay, pauseReplay, setDay, setPeriod, get webSegments() { return WEB.list.length; }, reduced: REDUCED,
 };
 </script>
 </body>
@@ -2204,7 +2402,7 @@ def main() -> None:
         payload["lead_display"] = CFG["display"]  # 展示参数随配置即时生效，无需重算结构
         payload["stale_weeks"] = int(CFG["stale_weeks"])
         print("从缓存加载，刷新 stock_index / sector_members…")
-        payload = attach_graph(attach_stock_payload(payload))
+        payload = attach_daily(attach_graph(attach_stock_payload(payload)))
         OUTPUT_JSON.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         OUTPUT_HTML.parent.mkdir(parents=True, exist_ok=True)
         OUTPUT_HTML.write_text(render_html(payload), encoding="utf-8")
@@ -2221,7 +2419,7 @@ def main() -> None:
     resid = rolling_residualize(piv, mkt, BETA_WINDOW, BETA_MIN_PERIODS)
     piv, resid = piv.loc[piv.index >= START], resid.loc[resid.index >= START]
     print(f"  板块 {piv.shape[1]} · 交易日 {piv.shape[0]} · 截止 {piv.index.max().date()}")
-    payload = attach_graph(pack_payload(piv, resid, meta, bench=bench))
+    payload = attach_daily(attach_graph(pack_payload(piv, resid, meta, bench=bench)))
     g = payload["graph"]
     print(f"  社区 {len(g['communities'])} 个（Q={g['modularity']}）· 桥梁 {len(g['bridges'])} 个")
     print(f"  节点 {payload['n_sectors']} · 同步边 {len(payload['edges'])} · 领先边 {len(payload['lead_edges'])}")
