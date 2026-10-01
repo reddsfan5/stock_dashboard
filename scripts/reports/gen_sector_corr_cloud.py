@@ -22,9 +22,10 @@ sys.path.insert(0, str(PROJECT_DIR))
 
 from data.industry import StockInfo
 
-from scripts.reports.sector_daily import load_daily_payload
+from scripts.reports.sector_daily import load_daily_bundle
 from scripts.reports.sector_graph import analyze as analyze_graph
 from scripts.reports.sector_lead_stats import build_lead_edges_sig, load_config, rolling_residualize
+from scripts.reports.sector_signals import compute_signals
 
 # 参数集中在 config/sector_corr_cloud.yaml（缺省值见 sector_lead_stats.DEFAULTS）
 CFG = load_config()
@@ -578,12 +579,22 @@ def attach_daily(payload: dict) -> dict:
     try:
         info = StockInfo().df
         sw2_col = next(c for c in ("申万2级", "申万二级", "sw_l2") if c in info.columns)
-        payload["daily"] = load_daily_payload(KLINE_CACHE, info, sw2_col, ids, CFG.get("daily"))
+        sig_cfg = CFG.get("signals") or {}
+        payload["daily"], frame = load_daily_bundle(KLINE_CACHE, info, sw2_col, ids, CFG.get("daily"),
+                                                    history_days=int(sig_cfg.get("history_days", 120)))
         d = payload["daily"]
         print(f"  逐日收益 {len(d['dates'])} 日（回放 {d['replay_days']} 日，{d['dates'][0] if d['dates'] else '-'} → {d['dates'][-1] if d['dates'] else '-'}）")
     except Exception as exc:  # 行情缓存缺失时页面退回 node.last / cum20，不影响结构
         print(f"  逐日收益不可用，回放关闭: {exc}")
-        payload["daily"] = None
+        payload["daily"], payload["signals"] = None, None
+        return payload
+    try:
+        out_dates = d["dates"][-d["replay_days"]:] if d["replay_days"] else []
+        payload["signals"] = compute_signals(frame, payload.get("graph"), payload.get("edges", []), out_dates, sig_cfg)
+        print(f"  异动观察 {sum(len(x) for x in payload['signals']['days'])} 条 / {len(out_dates)} 日")
+    except Exception as exc:  # 信号失败不影响回放
+        print(f"  异动观察不可用: {exc}")
+        payload["signals"] = None
     return payload
 
 
@@ -667,7 +678,9 @@ button:hover,.chip:hover,.chip.active,.seg button.active{border-color:var(--acce
 .sig.no{color:var(--muted);border:1px dashed rgba(139,155,184,.6)}
 .list li.failed{opacity:.62}
 .leadsum{font-size:11px;color:var(--muted);line-height:1.5;margin-top:8px}
-.legend{position:fixed;right:14px;bottom:14px;z-index:5;width:262px;font-size:11px;color:var(--muted);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:6px 10px 8px;backdrop-filter:blur(10px)}
+.rcol{position:fixed;right:14px;top:14px;bottom:14px;z-index:5;width:300px;display:flex;flex-direction:column;justify-content:flex-start;gap:8px;pointer-events:none}
+.rcol>*{pointer-events:auto}
+.legend{flex:0 0 auto;max-height:58vh;overflow:auto;font-size:11px;color:var(--muted);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:6px 10px 8px;backdrop-filter:blur(10px)}
 .legend summary{cursor:pointer;color:var(--text);font-weight:600;list-style:none;padding:2px 0}
 .legend summary::-webkit-details-marker{display:none}
 .legend summary::after{content:' ▾';color:var(--muted)}
@@ -710,9 +723,36 @@ button:hover,.chip:hover,.chip.active,.seg button.active{border-color:var(--acce
 .stag.nb{color:var(--accent);border-color:rgba(90,209,255,.45)}
 .commlink{cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
 .cdot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;flex:0 0 auto}
-.lg-comm{display:grid;grid-template-columns:1fr 1fr;gap:3px 8px;margin:4px 0 0 2px}
-.lg-comm div{cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center}
-.lg-comm div:hover{color:var(--text)}
+.lg-comm{display:grid;grid-template-columns:1fr;gap:3px;margin:4px 0 0 2px}
+.lg-comm .lc{display:grid;grid-template-columns:9px minmax(0,1fr) 42px 30px 50px;align-items:center;column-gap:6px;cursor:pointer;line-height:1.25}
+.lg-comm .lc:hover{color:var(--text)}
+.lg-comm .lc .cdot{margin:0}
+.lg-comm .lc-name{white-space:normal;word-break:keep-all;overflow-wrap:anywhere}
+.lc-bar{height:6px;border-radius:3px;background:color-mix(in srgb,var(--dn,#22d38a) 38%,transparent);overflow:hidden}
+.lc-bar i{display:block;height:100%;background:var(--up,#ff4d4f);border-radius:3px 0 0 3px}
+.lc-up,.lc-avg{font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.sigp{flex:0 1 auto;min-height:0;overflow:auto;font-size:11.5px;color:var(--muted);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:6px 10px 8px;backdrop-filter:blur(10px)}
+.sigp summary{cursor:pointer;color:var(--text);font-weight:600;list-style:none;padding:2px 0;display:flex;align-items:baseline;gap:6px}
+.sigp summary::-webkit-details-marker{display:none}
+.sigp summary::after{content:'▾';color:var(--muted);margin-left:auto}
+.sigp:not([open]) summary::after{content:'▸'}
+.sg-date{font-weight:400;color:var(--accent);font-variant-numeric:tabular-nums}
+.sg-peek{font-weight:400;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1}
+.sigp[open] .sg-peek{display:none}
+.sg-list{list-style:none;margin:4px 0 0;padding:0;display:flex;flex-direction:column;gap:2px}
+.sg-list li{display:flex;gap:7px;align-items:flex-start;padding:4px 4px;border-radius:8px;cursor:pointer;line-height:1.4}
+.sg-list li:hover{background:rgba(159,243,255,.08)}
+.sg-list li.weak{opacity:.72}
+.sg-list li.empty{cursor:default;color:var(--muted)}
+.sg-list li.new{animation:sgIn .9s ease-out}
+@keyframes sgIn{from{background:rgba(159,243,255,.22)}to{background:transparent}}
+.sg-tag{flex:0 0 auto;font-size:10px;line-height:16px;padding:0 5px;border-radius:999px;border:1px solid currentColor;margin-top:1px}
+.sg-tag.t-contra{color:#ffb347}.sg-tag.t-decouple{color:#c792ea}.sg-tag.t-streak{color:#9ff3ff}.sg-tag.t-bridge{color:#ffe9a8}.sg-tag.t-disperse{color:#8fa8ff}
+.sg-body{min-width:0;color:var(--muted)}
+.sg-body b{color:var(--text);font-weight:600;margin-right:4px}
+.sg-body b.pos{color:var(--up,#ff4d4f)}.sg-body b.neg{color:var(--dn,#22d38a)}
+.sg-n{display:inline-block;font-size:10px;color:#0b1220;background:#9ff3ff;border-radius:999px;padding:0 5px;line-height:15px;margin-right:4px;vertical-align:1px}
+.sg-note{margin-top:6px;font-size:10.5px;line-height:1.45;color:var(--muted);opacity:.85;border-top:1px dashed var(--line);padding-top:5px}
 .lg-ring{display:inline-block;width:14px;height:14px;border-radius:50%;border:1.5px dashed #ffe9a8}
 .lg-line.web{border-top:1px solid rgba(170,205,255,.8);box-shadow:0 0 5px rgba(170,205,255,.6)}
 .lg-line.trailc{border-top:2px solid #9ff3ff}
@@ -728,9 +768,6 @@ button:hover,.chip:hover,.chip.active,.seg button.active{border-color:var(--acce
 .lg-halo{display:inline-block;width:14px;height:14px;border-radius:50%}
 .lg-halo.up{background:radial-gradient(circle,#8fa8ff 0 3px,rgba(255,77,79,.75) 4px,rgba(255,77,79,0) 7px)}
 .lg-halo.dn{background:radial-gradient(circle,#8fa8ff 0 3px,rgba(34,211,138,.75) 4px,rgba(34,211,138,0) 7px)}
-.lg-comm{grid-template-columns:1fr}
-.lg-comm .lc-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
-.lg-comm .lc-sum{margin-left:8px;font-variant-numeric:tabular-nums}
 @media(max-width:900px){
   .replay{bottom:auto;top:calc(52px + env(safe-area-inset-top,0px));left:10px;right:10px;width:auto;transform:none}
   .tourcap{top:calc(100px + env(safe-area-inset-top,0px))}
@@ -752,8 +789,13 @@ button:hover,.chip:hover,.chip.active,.seg button.active{border-color:var(--acce
   #presets,.chips.expand{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-bottom:2px}
   #presets::-webkit-scrollbar,.chips.expand::-webkit-scrollbar{display:none}
   #presets .chip,.chips.expand .chip{flex:0 0 auto}
-  .legend{right:auto;left:10px;bottom:auto;top:calc(10px + env(safe-area-inset-top,0px));width:auto;max-width:calc(100vw - 20px)}
-  .legend[open]{width:min(290px,calc(100vw - 20px))}
+  .rcol{display:contents}
+  .legend{position:fixed;z-index:6;right:auto;left:10px;bottom:auto;top:calc(10px + env(safe-area-inset-top,0px));width:auto;max-width:calc(100vw - 20px);max-height:70vh}
+  .legend[open]{width:min(300px,calc(100vw - 20px))}
+  .sigp{position:fixed;z-index:5;left:10px;right:10px;top:calc(98px + env(safe-area-inset-top,0px));max-height:var(--sig-mvh,46vh);font-size:12.5px;padding:6px 12px 8px}
+  .sigp:not([open]){padding:4px 12px}
+  .sg-list li{padding:6px 4px}
+  .sg-tag{font-size:11px;line-height:17px}
   .rail-tip{left:50%;bottom:calc(72px + env(safe-area-inset-bottom,0px));transform:translateX(-50%) translateY(6px);text-align:center}
   .rail-tip.show{transform:translateX(-50%)}
   .foot{display:none}
@@ -765,11 +807,12 @@ button:hover,.chip:hover,.chip.active,.seg button.active{border-color:var(--acce
 
 <canvas id="c"></canvas>
 <div class="warnbar" id="warnBar" role="status"></div>
+<div class="rcol" id="rcol">
 <details class="legend" id="legend" open>
   <summary>图例</summary>
   <div class="lg-row"><span class="lg-sw"><span class="lg-halo up"></span><span class="lg-halo dn"></span></span><span id="lgScale">光晕 = 涨跌（红涨 / 绿跌）</span></div>
   <div class="lg-row" id="lgRet"><span class="lg-sw"><span class="lg-grad"></span></span><span>节点色 = 涨跌（「按涨跌」模式）</span></div>
-  <div id="lgCommBox"><div class="lg-row"><span class="lg-sw"><span class="cdot" style="background:#5ad1ff"></span><span class="cdot" style="background:#ffb347"></span></span><span>节点色 = 同步图社区 · 右侧为所选区间均值与上涨占比（点名称进入该簇）</span></div><div class="lg-comm" id="lgComm"></div></div>
+  <div id="lgCommBox"><div class="lg-row"><span class="lg-sw"><span class="cdot" style="background:#5ad1ff"></span><span class="cdot" style="background:#ffb347"></span></span><span id="lgCommHd">节点色 = 同步图社区 · 条 = 上涨占比，右为均值（点击进入该簇）</span></div><div class="lg-comm" id="lgComm"></div></div>
   <div class="lg-row"><span class="lg-sw"><span class="lg-dot" style="width:6px;height:6px"></span><span class="lg-dot" style="width:12px;height:12px"></span></span><span id="lgSize">点大小 = 连接强度 Σ|ρ|（越大越居中）</span></div>
   <div class="lg-row"><span class="lg-sw"><span class="lg-line web"></span></span><span id="lgWeb">千丝万缕 = 全部同步边，越亮 |ρ| 越大</span></div>
   <div class="lg-row" id="lgSoft"><span class="lg-sw"><span class="lg-line soft"></span></span><span>同步边 · 补充（未复核，仅让孤立板块有参照）</span></div>
@@ -777,6 +820,12 @@ button:hover,.chip:hover,.chip.active,.seg button.active{border-color:var(--acce
   <div class="lg-row"><span class="lg-sw"><span class="lg-line trailc"></span></span><span>青色折线 = 探索路径</span></div>
   <div class="lg-row"><span class="lg-sw"><span class="lg-arrow"></span></span><span>领先箭头（实验）：金 = 同向，蓝 = 反向；虚线 = 未通过 FDR</span></div>
 </details>
+<details class="sigp" id="sigPanel" open>
+  <summary><span>异动观察</span><span class="sg-date" id="sgDate"></span><span class="sg-peek" id="sgPeek"></span></summary>
+  <ol class="sg-list" id="sgList"></ol>
+  <div class="sg-note">描述性信号，不是预测：每天只用当日及之前的板块日收益，说明「发生了什么」；ρ、社区与桥梁为全样本结构估计。点击条目聚焦。</div>
+</details>
+</div>
 
 <nav class="rail" id="dockRail" aria-label="分析轨道">
   <button type="button" class="rail-btn active" data-mode="ctrl" id="railCtrl" title="搜索与筛选">控</button>
@@ -1996,8 +2045,8 @@ function renderLegend() {
 function renderCommLegend() {
   const box = document.getElementById('lgComm'); if (!box) return;
   box.innerHTML = COMM.map(c => {
-    const v = commSum[c.id];
-    return `<div data-comm="${c.id}" title="${c.name}：${c.size} 个板块，核心 ${c.core}">${cdot(c.id)}<span class="lc-name">${c.name}</span><span class="lc-sum ${v ? (v.avg >= 0 ? 'pos' : 'neg') : ''}">${sumText(c.id)}</span></div>`;
+    const v = commSum[c.id], up = v ? Math.round(v.up * 100) : null;
+    return `<div class="lc" data-comm="${c.id}" title="${c.name}：${c.size} 个板块，核心 ${c.core}；${periodLabel()}均值 ${v ? fmtRet(v.avg) : '—'}，${up == null ? '—' : up + '%'} 上涨">${cdot(c.id)}<span class="lc-name">${c.name}</span><span class="lc-bar" aria-hidden="true"><i style="width:${up ?? 0}%"></i></span><span class="lc-up">${up == null ? '—' : up + '%'}</span><span class="lc-avg ${v ? (v.avg >= 0 ? 'pos' : 'neg') : ''}">${v ? fmtRet(v.avg) : '—'}</span></div>`;
   }).join('');
   box.querySelectorAll('[data-comm]').forEach(el => el.onclick = () => step([], { comm: +el.dataset.comm }));
 }
@@ -2081,7 +2130,7 @@ function syncPeriodButtons() {
   });
 }
 function afterRetChange() {
-  renderBoard(); renderLegendScale(); updateRetDom();
+  renderBoard(); renderLegendScale(); updateRetDom(); renderSignals();
   if (!coreIds.size && commFocus == null && colorBy === 'return') rebuildLabels();
   const rd = document.getElementById('rpDate'); if (rd) rd.textContent = (R_DATES[dayIdx] || '').slice(5);
 }
@@ -2090,6 +2139,44 @@ function setPeriod(P) {
   retWindow = String(P); syncPeriodButtons();
   setRetTargets(); afterRetChange();
 }
+// ---------------- 异动观察（生成器按日计算，只用当日及之前数据） ----------------
+const SIGS = (DATA.signals && DATA.signals.dates && DATA.signals.dates.length) ? DATA.signals : null;
+const SIG_BY_DATE = new Map(SIGS ? SIGS.dates.map((d, k) => [d, SIGS.days[k] || []]) : []);
+const SIG_LABEL = (SIGS && SIGS.labels) || {};
+let sigPrevKeys = new Set(), sigShownDate = null;
+function escHtml(x) { return String(x).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+function sigKey(o) { return `${o.t}:${o.id}:${(o.p || []).join('|')}`; }
+function renderSignals(force) {
+  const panel = document.getElementById('sigPanel'); if (!panel) return;
+  if (!SIGS) { panel.style.display = 'none'; return; }
+  const date = R_DATES[dayIdx] || '';
+  if (!force && date === sigShownDate) return;
+  const items = SIG_BY_DATE.get(date) || [];
+  const fresh = sigShownDate != null;
+  document.getElementById('sgDate').textContent = date.slice(5);
+  document.getElementById('sgPeek').textContent = items.length ? `${items[0].id} · ${SIG_LABEL[items[0].t] || ''} 等 ${items.length} 条` : '无';
+  const ul = document.getElementById('sgList');
+  ul.innerHTML = items.length ? items.map((o, k) => {
+    const dir = o.d > 0 ? 'pos' : o.d < 0 ? 'neg' : '';
+    const cls = [o.weak ? 'weak' : '', fresh && !sigPrevKeys.has(sigKey(o)) ? 'new' : ''].join(' ').trim();
+    const nd = o.n > 1 ? `<span class="sg-n">第${o.n}天</span>` : '';
+    return `<li class="${cls}" data-k="${k}" title="${escHtml(o.id + ' ' + o.x)}${o.weak ? '（放宽阈值补足）' : ''}"><span class="sg-tag t-${o.t}">${escHtml(SIG_LABEL[o.t] || o.t)}</span><span class="sg-body"><b class="${dir}">${escHtml(o.id)}</b>${nd}<span class="sg-x">${escHtml(o.x)}</span></span></li>`;
+  }).join('') : '<li class="empty">当日没有达到阈值的异动</li>';
+  ul.querySelectorAll('li[data-k]').forEach(li => li.onclick = () => openSignal(items[+li.dataset.k]));
+  sigPrevKeys = new Set(items.map(sigKey)); sigShownDate = date;
+}
+function openSignal(o) {
+  if (!o) return;
+  const why = `异动观察 · ${SIG_LABEL[o.t] || ''}（${(R_DATES[dayIdx] || '').slice(5)}）：${o.id} ${o.x}`;
+  if (o.t === 'disperse' && o.c != null) { step([], { comm: o.c, why }); return; }
+  const cores = [o.id, ...(o.t === 'decouple' ? (o.p || []) : [])].filter(id => idxOf[id] != null);
+  if (cores.length) step(cores, { why });
+}
+document.documentElement.style.setProperty('--up', CFG_UI.halo_up_color || '#ff4d4f');
+document.documentElement.style.setProperty('--dn', CFG_UI.halo_down_color || '#22d38a');
+if (MOBILE_MQ.matches && !CFG_UI.signals_open_mobile) document.getElementById('sigPanel').open = false;
+if (!MOBILE_MQ.matches && CFG_UI.signals_open === false) document.getElementById('sigPanel').open = false;
+renderSignals(true);
 let playing = false, playTimer = 0;
 const STEP_MS = CFG_UI.replay_step_ms ?? 800;
 function setDay(d, ms) {

@@ -78,12 +78,52 @@ display:
   breathe_amp: 0.18          # 呼吸幅度（相对亮度/大小）
   edge_tint: true            # 同步边按两端涨跌着色：同涨红、同跌绿、方向相反变暗
   edge_tint_mix: 0.85        # 边着色与社区色的最大混合比例
+  signals_open: true         # 桌面默认展开「异动观察」
+  signals_open_mobile: false # 手机默认收起（标题行显示首条摘要）
 
 daily:                       # 逐日板块收益（scripts/reports/sector_daily.py，嵌入 HTML 供回放）
   replay_days: 20            # 回放最近 N 个交易日
   periods: [1, 5, 20]        # 可选收益区间（交易日）；会多嵌入 max(periods)-1 天用于复利
   max_abs_ret: 35.0          # 单只股票日涨跌超过此值（%）视为异常，不计入板块均值
   min_members: 1             # 当日有效成分不足此数则该板块当日记为无行情
+
+signals:                     # 异动观察（scripts/reports/sector_signals.py）；描述性信号，每天只用当日及之前的日收益
+  max_items: 8               # 每天最多条数
+  min_items: 5               # 严格阈值不足时，用 relax 放宽阈值补足到该条数（标为「放宽」并淡显）
+  relax: 0.7
+  sigma_floor: 0.35          # 当日横截面稳健 σ（1.4826×MAD，%）下限；各类分数都以它为单位
+  history_days: 120          # 生成器读取的日收益历史（供脱钩的历史价差），不嵌入页面
+  type_caps: {contra: 2, decouple: 2, streak: 2, bridge: 2, disperse: 1}   # 每类上限
+  weights: {contra: 1.0, decouple: 1.0, streak: 0.9, bridge: 1.0, disperse: 0.9}
+  contra:                    # 逆簇而行：|r−簇中位|/σ ≥ min_z，且簇内（除自身）上涨占比 ≤ breadth 而它涨（或 ≥ 1−breadth 而它跌）
+    min_comm: 4
+    breadth: 0.35
+    min_z: 1.2
+    min_abs: 0.6             # 自身 |当日涨跌| 下限（%）
+  decouple:                  # 和老搭档脱钩：ρ ≥ min_rho 的同步对，近 window 日累计收益差 / 历史 window 日价差 σ ≥ min_z
+    min_rho: 0.6
+    window: 5
+    lookback: 60             # 历史价差取「近 window 日之前」的 lookback 个交易日
+    min_hist: 30
+    min_z: 2.0
+    min_gap: 2.0             # 累计收益差下限（%）
+  streak:                    # 持续性：同向 ≥ min_len 天且最近 3 天幅度递增；或连续 ≥ reversal_min_len 天后的首个反向日
+    min_len: 3
+    min_abs: 0.5
+    reversal_min_len: 3
+    reversal_min_z: 1.2
+  bridge:                    # 桥梁先动：桥梁当日 |r|/σ ≥ min_z；远端 = 与之 Σρ 最大的其他社区；之后 follow_days 日内远端中位累计同向 ≥ follow_min 记为跟随
+    min_z: 1.5
+    min_abs: 1.0
+    follow_days: 2
+    follow_min: 0.3
+    decay: 0.8               # 事件每早一天分数 ×decay
+    follow_bonus: 1.15
+  disperse:                  # 簇内分化：|簇中位| ≤ max_med 且 (P90−P10)/σ ≥ min_spread_z，领涨 ≥ +min_tail、领跌 ≤ −min_tail
+    min_comm: 5
+    max_med: 0.4
+    min_spread_z: 2.5
+    min_tail: 1.0
 
 graph:                       # 同步图社区与桥梁（scripts/reports/sector_graph.py）
   min_community_size: 3      # 小于此规模的社区并入「零散」
