@@ -39,6 +39,16 @@ class SectorStyleTest(unittest.TestCase):
         self.assertEqual(t["s0"]["s"], "进攻")
         self.assertEqual(t["s0"]["src"], "override")
         self.assertGreater(t["s1"]["beta"], t["s4"]["beta"])
+        # 解释字段：分位、属性来源、覆盖前的规则结果
+        self.assertGreater(t["s1"]["bp"], t["s4"]["bp"])
+        self.assertTrue(all(0 < t[k]["vp"] <= 1 and 0 < t[k]["mp"] <= 1 for k in t))
+        self.assertEqual(t["s6"]["nat"], "cyc_l1")
+        self.assertEqual(t["s7"]["nat"], "pe")
+        self.assertEqual(t["s8"]["nat"], "value")
+        self.assertGreaterEqual(t["s7"]["pp"], 0.6)
+        self.assertEqual(t["s0"]["rule"], "进攻")       # 人工指定前规则判为进攻
+        self.assertEqual(out["rules"]["risk_hi"], 0.70)
+        self.assertIn("beta", out["rules"]["risk_weights"])
         self.assertEqual(sum(out["counts"].values()), 10)
         self.assertEqual(out["styles"], STYLES)
 
@@ -73,6 +83,10 @@ class SectorStyleTest(unittest.TestCase):
         self.assertNotIn('<div class="empty">${DATA.note', html)
         for key in ("legend", "ctrl", "board", "detail", "data", "lead", "signals", "risk", "style"):
             self.assertIn(f"  {key}: {{ title:", html, key)
+        # 第九轮：风格徽章 / 判定依据 / 筛选 / 悬停提示 / 风格词搜索
+        for needle in ("function styleTag(", "function setStyleFilter(", "INFO.styleWhy", "function styleWhyHtml(", "function styleQuery(",
+                       "function showNodeTip(", "id=\"pStyle\"", "sMask[i]", "仅${styleFilter}"):
+            self.assertIn(needle, html, needle)
         cfg = sls.load_config()
         st = cfg["style"]
         for key in ("lookback_days", "risk_hi", "risk_lo", "cyclical_l1", "growth_pe_pct", "l1_overrides", "overrides", "links", "colors"):

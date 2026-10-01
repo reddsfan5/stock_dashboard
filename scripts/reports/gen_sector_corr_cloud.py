@@ -767,6 +767,20 @@ button:hover,.chip:hover,.chip.active,.seg button.active{border-color:var(--acce
 .ip-body b{color:var(--text);font-weight:600}
 .ip-kv{color:var(--text);font-variant-numeric:tabular-nums}
 .exp-tag{display:flex;align-items:center;gap:4px;margin:4px 0 8px;font-size:11.5px;color:#ffcf7a}
+.p-hd{display:flex;align-items:center;flex-wrap:wrap;gap:6px}.p-hd h3{margin:0}
+.info-btn.style-badge{height:22px;padding:0 9px 0 7px;gap:5px;border-color:var(--sc,#6b778c);background:rgba(255,255,255,.04);color:var(--text);font-size:12px;font-weight:600}
+.style-badge i{width:8px;height:8px;border-radius:50%;background:var(--sc,#6b778c);display:inline-block}
+.style-badge small{color:var(--sc2,var(--muted));font-weight:500}
+.style-badge[hidden]{display:none}
+.stag{display:inline-block;margin-left:4px;padding:0 3px;border-radius:4px;border:1px solid currentColor;font-size:9.5px;line-height:13px;font-weight:600;vertical-align:1px;opacity:.9;color:var(--sc,#8b9bb8)}
+.node-tip{position:fixed;z-index:20;pointer-events:none;display:none;align-items:center;gap:6px;padding:5px 9px;border-radius:9px;background:rgba(10,15,28,.94);border:1px solid var(--line);color:var(--text);font-size:12px;white-space:nowrap;box-shadow:0 8px 24px rgba(0,0,0,.45)}
+.node-tip.show{display:flex}.node-tip .stag{margin-left:0;font-size:11px;line-height:16px;padding:0 5px}
+.node-tip .pos{color:var(--up,#ff4d4f)}.node-tip .neg{color:var(--dn,#22d38a)}
+.list li.sdim{opacity:.45}
+.lg-comm .lc.sf{cursor:pointer;border-radius:6px}
+.lg-comm .lc.sf.on{background:rgba(159,243,255,.1);color:var(--text);outline:1px solid rgba(159,243,255,.35)}
+.lg-comm .lc.sf.off{opacity:.38}
+.why-v{font-variant-numeric:tabular-nums;color:var(--text)}
 .short-note{display:flex;align-items:center;gap:4px;font-size:11.5px;color:var(--muted);margin-top:6px}
 #paneCtrl .sub{display:none}
 .fly-hd h3{margin-right:0}.fly-hd .info-btn{margin-right:auto}
@@ -1022,6 +1036,18 @@ const STYLE_CFG = (STYLE && STYLE.view) || {};
 function styleOf(id) { return STYLE && STYLE.tags[id] ? STYLE.tags[id].p : null; }
 function styleHex(k) { return (STYLE && STYLE.colors[k]) || '#6b778c'; }
 function styleColor(id) { return new THREE.Color(styleHex(styleOf(id))); }
+const STYLE_ABBR = { 进攻: '攻', 防御: '防', 周期: '周', 成长: '成', 价值: '价' };
+function styleText(id) { const t = STYLE && STYLE.tags[id]; return t ? t.p + (t.s ? ` / ${t.s}` : '') : ''; }
+// 名称后的紧凑风格标签（列表 / 异动 / 涨跌榜）
+function styleTag(id, full = false) {
+  const t = STYLE && STYLE.tags[id]; if (!t) return '';
+  return `<span class="stag" style="--sc:${styleHex(t.p)}" title="风格：${styleText(id)}">${full ? t.p : (STYLE_ABBR[t.p] || t.p)}</span>`;
+}
+// 风格筛选：只高亮某一风格，其余变暗；与聚焦（lit）相乘，回放照常
+let styleFilter = null;
+const STYLE_DIM = 0.12;
+const sMask = new Float32Array(DATA.nodes.length).fill(1);
+function styleQuery(q) { const m = String(q || '').trim().match(/^(进攻|防御|周期|成长|价值)(型|类|板块|风格)?$/); return m && STYLE ? m[1] : null; }
 let styleSum = {}, styleLinksOn = STYLE_CFG.links ?? true;
 const REDUCED = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
 const DIM_FLOOR = CFG_UI.web_focus_dim ?? 0.12;
@@ -1250,7 +1276,7 @@ const HALO_UP = new THREE.Color(CFG_UI.halo_up_color || '#ff4d4f'), HALO_DN = ne
 let breathT = 0;
 // 节点核心 = 社区色（「按涨跌」时为涨跌色）；光晕 = 涨跌：红涨绿跌，大小/亮度 ∝ |收益|/封顶，强势异动轻微呼吸。
 function paintNode(i) {
-  const L = lit[i], l1 = Math.min(1, L), boost = Math.max(0, L - 1), vis = DIM_FLOOR + (1 - DIM_FLOOR) * l1;
+  const L = lit[i] * sMask[i], l1 = Math.min(1, L), boost = Math.max(0, L - 1), vis = DIM_FLOOR + (1 - DIM_FLOOR) * l1;
   const r = hasRet[i] ? retCur[i] : null;
   if (colorBy !== 'return') _c.copy(baseCol[i]); else _c.copy(colorFromRet(r, 1));
   _c.multiplyScalar(vis);
@@ -1283,7 +1309,7 @@ for (const b of BRIDGES.values()) {
 }
 function paintRings() {
   for (const sp of bridgeRings) {
-    const i = sp.userData.i, l1 = Math.min(1, lit[i]);
+    const i = sp.userData.i, l1 = Math.min(1, lit[i] * sMask[i]);
     const r = Math.max(4.2, discs[i].scale.x * 2.3); sp.scale.set(r, r, 1);
     sp.material.opacity = 0.12 + 0.45 * l1;
   }
@@ -1339,7 +1365,7 @@ const syncLines = WEB.line; scene.add(syncLines);
 // 风格视角：每个点连到最近 link_k 个同风格点（去重后合并为一个 LineSegments，一次绘制）
 const styleLinks = (() => {
   if (!STYLE) return null;
-  const K = STYLE_CFG.link_k ?? 2, seen = new Set(), pos = [], col = [];
+  const K = STYLE_CFG.link_k ?? 2, seen = new Set(), pos = [], col = [], segStyle = [];
   const ns = DATA.nodes;
   for (let i = 0; i < ns.length; i++) {
     const si = styleOf(ns[i].id); if (!si) continue;
@@ -1354,14 +1380,14 @@ const styleLinks = (() => {
     for (const [, j] of near.slice(0, K)) {
       const key = i < j ? i + ':' + j : j + ':' + i; if (seen.has(key)) continue; seen.add(key);
       pos.push(ns[i].x, ns[i].y, ns[i].z, ns[j].x, ns[j].y, ns[j].z);
-      col.push(c.r, c.g, c.b, c.r, c.g, c.b);
+      col.push(c.r, c.g, c.b, c.r, c.g, c.b); segStyle.push(si);
     }
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   const line = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: STYLE_CFG.link_opacity ?? 0.5, depthWrite: false, blending: THREE.AdditiveBlending }));
-  line.renderOrder = 1; line.visible = false; line.userData.n = seen.size; scene.add(line);
+  line.renderOrder = 1; line.visible = false; line.userData.n = seen.size; line.userData.seg = segStyle; line.userData.col0 = Float32Array.from(col); scene.add(line);
   return line;
 })();
 const softLines = buildSyncLines(true); scene.add(softLines);
@@ -1373,7 +1399,7 @@ function updateWebColors() {
   const col = WEB.col, modeF = mode === 'lead' ? 0.35 : 1, focused = focusIds.size > 0, isComm = colorBy !== 'return';
   if (styleLinks) { styleLinks.visible = colorBy === 'style' && styleLinksOn; styleLinks.material.opacity = (STYLE_CFG.link_opacity ?? 0.5) * (focused ? 0.3 : 1); }
   for (let k = 0; k < WEB.list.length; k++) {
-    const e = WEB.list[k], i = WEB.ia[k], j = WEB.ib[k], la = lit[i], lb = lit[j];
+    const e = WEB.list[k], i = WEB.ia[k], j = WEB.ib[k], la = lit[i] * sMask[i], lb = lit[j] * sMask[j];
     let emph = Math.min(1, la, lb); emph = Math.max(0.05, emph * emph);
     if (focused && (la > 1.01 || lb > 1.01)) emph = Math.min(1.9, emph * 2.0);  // 与核心相连的边加亮
     let g = WEB.w[k] * emph * modeF;
@@ -1628,7 +1654,7 @@ function setLabels(items) {
 // 标签随节点点亮淡入（核心/置顶标签常亮）
 function updateLabelOpacity() {
   for (const sp of labelGroup.children) {
-    const L = sp.userData.i == null ? 1 : lit[sp.userData.i];
+    const L = sp.userData.i == null ? 1 : lit[sp.userData.i] * sMask[sp.userData.i];
     sp.material.opacity = sp.userData.pin ? 1 : Math.max(0, Math.min(1, (L - 0.45) / 0.35));
   }
 }
@@ -1646,6 +1672,12 @@ function rebuildLabels() {
     setLabels(c.members.slice(0, limit0).map((id, k) => ({ id, color: id === c.core ? c.color : '#e8eefc', priority: id === c.core ? 1000 : 100 - k, pin: id === c.core })));
     return;
   }
+  if (!coreIds.size && styleFilter) {
+    const rows = DATA.nodes.filter(n => styleOf(n.id) === styleFilter).map(n => ({ id: n.id, v: retOf(n) }))
+      .sort((a, b) => Math.abs(b.v ?? 0) - Math.abs(a.v ?? 0)).slice(0, CFG_UI.top_movers_labels ?? 8);
+    setLabels(rows.map((r, i) => ({ id: r.id, text: `${r.id} ${fmtRet(r.v)}`, color: styleHex(styleFilter), priority: 60 - i })));
+    return;
+  }
   if (!coreIds.size && colorBy === 'community' && COMM.length) {
     setLabels(COMM.map((c, k) => ({ id: c.core, text: `${c.name}`, color: c.color, priority: 60 - k })));
     return;
@@ -1658,7 +1690,7 @@ function rebuildLabels() {
   const neighbors = [...focusIds].filter(id => !coreIds.has(id))
     .map(id => ({ id, s: maxCorrToCores(id) })).filter(r => r.s > 0).sort((a, b) => b.s - a.s).slice(0, limit);
   setLabels([
-    ...[...coreIds].map(id => ({ id, color: '#5ad1ff', priority: 1000, pin: true })),
+    ...[...coreIds].map(id => ({ id, text: STYLE && STYLE.tags[id] ? `${id} · ${STYLE.tags[id].p}` : id, color: '#5ad1ff', priority: 1000, pin: true })),
     ...neighbors.map((r, i) => ({ id: r.id, color: '#e8eefc', priority: 100 - i - (r.s < 0.3 ? 20 : 0) })),
   ]);
 }
@@ -2019,7 +2051,7 @@ function leadRow(r, arrow) {
   if (r.oos_n >= OOS_MIN_EVENTS) oos = `样本外 ${r.oos_n} 次/${r.oos_folds} 段 · 命中 ${fmtPct(r.oos_hit)}（基准 ${fmtPct(r.oos_base)}，${fmtLift(r.oos_lift)}）`;
   else if (r.oos_n > 0) oos = `样本外仅 ${r.oos_n} 次事件（<${OOS_MIN_EVENTS}），样本不足`;
   else if (r.oos_n === 0) oos = '样本外：历次训练段均未入选，无验证记录';
-  return `<li data-id="${r.id}" class="${pass ? '' : 'failed'}"><span>${r.id}${badge}${fromTag(r._from)}<span class="sub2">滞后 ${r.lag} 周 · xcorr ${r.xcorr.toFixed(2)} · ${ins}</span>${oos ? `<span class="sub2">${oos}</span>` : ''}</span><span class="leadc">${arrow}</span></li>`;
+  return `<li data-id="${r.id}" class="${pass ? '' : 'failed'}"><span>${r.id}${styleTag(r.id)}${badge}${fromTag(r._from)}<span class="sub2">滞后 ${r.lag} 周 · xcorr ${r.xcorr.toFixed(2)} · ${ins}</span>${oos ? `<span class="sub2">${oos}</span>` : ''}</span><span class="leadc">${arrow}</span></li>`;
 }
 function leadSummaryText() {
   const s = DATA.lead_summary; if (!s) return '';
@@ -2054,14 +2086,22 @@ function renderPanel(cores, neighborIds) {
   const kv = document.getElementById('pKv');
   const body = document.getElementById('pBody');
   if (!meta || !kv || !body) return;
+  syncStyleBadge(cores && cores.length === 1 ? cores[0] : null);
   if (!cores || !cores.length) {
-    if (title) title.textContent = '全局视图';
+    if (title) title.textContent = styleFilter && mode !== 'lead' ? `风格 · ${styleFilter}` : '全局视图';
     if (mode === 'lead') {
       meta.textContent = `${DATA.n_sectors} 板块 · ${(DATA.lead_edges || []).length} 候选领先边`;
       body.innerHTML = `${leadNotice()}<div class="empty">请先查询或点击一个板块</div>`;
     } else {
       const soft = DATA.edges.filter(e => e.soft).length;
       meta.textContent = `${DATA.n_sectors} 板块 · ${DATA.edges.length - soft} 同步边${soft ? ` · ${soft} 补充` : ''}`;
+      if (styleFilter) {
+        const rows = DATA.nodes.filter(n => styleOf(n.id) === styleFilter).map(n => ({ id: n.id, v: retOf(n) })).sort((a, b) => (b.v ?? -1e9) - (a.v ?? -1e9));
+        meta.textContent = `${styleFilter} ${rows.length} 板块 · ${periodLabel()}均值 ${styleSum[styleFilter] ? fmtRet(styleSum[styleFilter].avg) : '—'}`;
+        body.innerHTML = `<ul class="list">${rows.map(r => `<li data-id="${r.id}"><span>${r.id}${STYLE.tags[r.id].s ? `<span class="sub2">副 ${STYLE.tags[r.id].s}</span>` : ''}</span><span class="${(r.v ?? 0) >= 0 ? 'pos' : 'neg'}">${fmtRet(r.v)}</span></li>`).join('')}</ul>`;
+        body.querySelectorAll('li[data-id]').forEach(li => li.onclick = () => { document.getElementById('q').value = li.dataset.id; setExpandOptions([]); step([li.dataset.id]); });
+        kv.innerHTML = ''; renderMembers(null); renderSuggest(null); return;
+      }
       body.innerHTML = commListHtml();
       body.querySelectorAll('li[data-comm]').forEach(li => li.onclick = () => step([], { comm: +li.dataset.comm }));
       updateRetDom();
@@ -2103,7 +2143,7 @@ function renderPanel(cores, neighborIds) {
     body.innerHTML = rows.length
       ? `<ul class="list">${rows.slice(0, 24).map(r => {
           const ok = verified.has(`${r._from}|${r.id}`);
-          return `<li data-id="${r.id}"><span>${r.id}${fromTag(r._from)}${ok ? '<span class="tag-ok" title="多年方向复核通过">复核</span>' : ''}</span><span class="${r.corr >= 0 ? 'pos' : 'neg'}">ρ ${r.corr.toFixed(2)}</span></li>`;
+          return `<li data-id="${r.id}"><span>${r.id}${styleTag(r.id)}${fromTag(r._from)}${ok ? '<span class="tag-ok" title="多年方向复核通过">复核</span>' : ''}</span><span class="${r.corr >= 0 ? 'pos' : 'neg'}">ρ ${r.corr.toFixed(2)}</span></li>`;
         }).join('')}</ul>`
       : `<div class="empty">该簇暂无足够强的稳健相关边，仍可看空间邻近。</div>`;
   }
@@ -2132,7 +2172,7 @@ function renderBoard() {
   ul.innerHTML = rows.map(r => {
     const cls = r.v >= 0 ? 'pos' : 'neg';
     const on = coreIds.has(r.id) ? 'on' : '';
-    return `<li class="${on}" data-id="${r.id}"><span>${r.id}</span><span class="${cls}">${fmtRet(r.v)}</span></li>`;
+    return `<li class="${on}${styleFilter && styleOf(r.id) !== styleFilter ? ' sdim' : ''}" data-id="${r.id}"><span>${r.id}${styleTag(r.id)}</span><span class="${cls}">${fmtRet(r.v)}</span></li>`;
   }).join('');
   ul.querySelectorAll('li').forEach(li => li.onclick = () => { document.getElementById('q').value = li.dataset.id; setExpandOptions([]); step([li.dataset.id]); });
 }
@@ -2158,7 +2198,12 @@ function renderCommLegend() {
   document.getElementById('lgTitle').textContent = isStyle ? '风格' : '社区';
   document.getElementById('lgColName').textContent = isStyle ? '风格（板块数）' : '社区';
   if (isStyle) {
-    box.innerHTML = STYLES.map(k => groupRow(`data-style="${k}"`, styleHex(k), `${k}<small class="lc-n"> ${STYLE.counts[k] ?? 0}</small>`, styleSum[k], `${k}：${STYLE.counts[k] ?? 0} 个板块`, 'nostep')).join('');
+    box.innerHTML = STYLES.map(k => groupRow(`data-style="${k}" role="button" tabindex="0" aria-pressed="${styleFilter === k}"`, styleHex(k), `${k}<small class="lc-n"> ${STYLE.counts[k] ?? 0}</small>`, styleSum[k],
+      `${k}：${STYLE.counts[k] ?? 0} 个板块（点击只看该风格，再点取消）`, `sf ${styleFilter === k ? 'on' : (styleFilter ? 'off' : '')}`)).join('');
+    box.querySelectorAll('[data-style]').forEach(el => {
+      const go = () => setStyleFilter(styleFilter === el.dataset.style ? null : el.dataset.style);
+      el.onclick = go; el.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } };
+    });
     return;
   }
   box.innerHTML = COMM.map(c => {
@@ -2199,7 +2244,7 @@ function updateRiskAppetite() {
   document.getElementById('rpRA').title = `风险偏好（${periodLabel()}，${R_DATES[dayIdx] || ''}）= 进攻 ${a ? fmtRet(a.avg) : '—'} − 防御 ${b ? fmtRet(b.avg) : '—'}；窗口内累计 ${fmtRet(last)}（只到当前日期）。为正 = 偏进攻`;
 }
 function renderLegendScale() {
-  const sub = document.getElementById('lgSub'); if (sub) sub.textContent = `${periodLabel()} · ${(R_DATES[dayIdx] || '').slice(5)}`;
+  const sub = document.getElementById('lgSub'); if (sub) sub.textContent = `${periodLabel()} · ${(R_DATES[dayIdx] || '').slice(5)}${styleFilter ? ` · 仅${styleFilter}` : ''}`;
   const el = document.getElementById('lgScale'); if (!el) return;
   el.textContent = `光晕 = ${periodLabel()}涨跌（${R_DATES[dayIdx] || ''}）：红涨 / 绿跌，大小与亮度 ∝ |涨跌|，±${CLIP[curP()].toFixed(2)}% 封顶（回放窗口 ${Math.round(CLIP_Q * 100)}% 分位）；呼吸 = 强势异动`;
 }
@@ -2251,6 +2296,15 @@ function runQuery() {
     if (!hits.length) { renderPanel(null, []); document.getElementById('pBody').innerHTML = `<div class="empty">未匹配到标的，试试名称或代码。</div>`; return; }
     setExpandOptions([]); step([hits[0].sector]); document.getElementById('q').value = hits[0].sector; return;
   }
+  const sk = styleQuery(q);
+  if (sk) {
+    if (coreIds.size || commFocus != null) goGlobal();
+    document.getElementById('q').value = sk;
+    if (colorBy !== 'style') window.__setColorBy('style');
+    setStyleFilter(sk);
+    setDockMode('detail', { fromFocus: true });
+    return;
+  }
   const all = expandQuery(q);
   if (!all.length) { setExpandOptions([]); renderPanel(null, []); document.getElementById('pBody').innerHTML = `<div class="empty">未匹配到二级板块，试试「电力」「半导体」「白酒」。</div>`; return; }
   const exact = exactMatches(q);
@@ -2260,7 +2314,7 @@ function runQuery() {
 }
 
 document.getElementById('go').onclick = runQuery;
-document.getElementById('reset').onclick = () => goGlobal();
+document.getElementById('reset').onclick = () => { if (styleFilter) setStyleFilter(null); goGlobal(); };
 document.getElementById('q').addEventListener('keydown', e => { if (e.key === 'Enter') runQuery(); });
 document.getElementById('q').addEventListener('input', () => { if (qMode === 'stock') updateHints(); });
 document.getElementById('edgemode').onclick = e => { const b = e.target.closest('button'); if (b) setMode(b.dataset.v); };
@@ -2309,7 +2363,7 @@ function renderSignals(force) {
     const dir = o.d > 0 ? 'pos' : o.d < 0 ? 'neg' : '';
     const cls = [o.weak ? 'weak' : '', fresh && !sigPrevKeys.has(sigKey(o)) ? 'new' : ''].join(' ').trim();
     const nd = o.n > 1 ? `<span class="sg-n">第${o.n}天</span>` : '';
-    return `<li class="${cls}" data-k="${k}" title="${escHtml(o.id + ' ' + o.x)}${o.weak ? '（放宽阈值补足）' : ''}"><span class="sg-tag t-${o.t}">${escHtml(SIG_LABEL[o.t] || o.t)}</span><span class="sg-body"><b class="${dir}">${escHtml(o.id)}</b>${nd}<span class="sg-x">${escHtml(o.x)}</span></span></li>`;
+    return `<li class="${cls}" data-k="${k}" title="${escHtml(o.id + ' ' + o.x)}${o.weak ? '（放宽阈值补足）' : ''}"><span class="sg-tag t-${o.t}">${escHtml(SIG_LABEL[o.t] || o.t)}</span><span class="sg-body"><b class="${dir}">${escHtml(o.id)}</b>${o.t === 'style' || o.t === 'disperse' ? '' : styleTag(o.id)}${nd}<span class="sg-x">${escHtml(o.x)}</span></span></li>`;
   }).join('') : '<li class="empty">当日没有达到阈值的异动</li>';
   ul.querySelectorAll('li[data-k]').forEach(li => li.onclick = () => openSignal(items[+li.dataset.k]));
   sigPrevKeys = new Set(items.map(sigKey)); sigShownDate = date;
@@ -2383,6 +2437,7 @@ setRetTargets(1); stepRet(performance.now() + 10);
   window.__setColorBy = v => {
     if (v === 'style' && !STYLE) return;
     colorBy = v; sync(); syncLink();
+    if (v !== 'style' && styleFilter) { setStyleFilter(null); }
     applyNodeAppearance();
     if (!coreIds.size && commFocus == null) rebuildLabels();
   };
@@ -2390,6 +2445,91 @@ setRetTargets(1); stepRet(performance.now() + 10);
   linkBtn.onclick = () => { styleLinksOn = !styleLinksOn; syncLink(); updateWebColors(); };
   syncLink();
 }
+// ---------------- 风格：筛选 / 详情徽章 / 判定依据 / 悬停提示 ----------------
+function setStyleFilter(k) {
+  styleFilter = k && STYLE && STYLES.includes(k) ? k : null;
+  for (let i = 0; i < N; i++) sMask[i] = !styleFilter || styleOf(DATA.nodes[i].id) === styleFilter ? 1 : STYLE_DIM;
+  if (styleLinks) {
+    const c = styleLinks.geometry.attributes.color, c0 = styleLinks.userData.col0, seg = styleLinks.userData.seg;
+    for (let k2 = 0; k2 < seg.length; k2++) { const f = !styleFilter || seg[k2] === styleFilter ? 1 : 0.06; for (let q = 0; q < 6; q++) c.array[k2 * 6 + q] = c0[k2 * 6 + q] * f; }
+    c.needsUpdate = true;
+  }
+  for (let i = 0; i < N; i++) paintNode(i);
+  paintRings(); updateWebColors(); renderCommLegend(); renderLegendScale(); renderBoard();
+  if (!coreIds.size && commFocus == null) { renderPanel(null, []); rebuildLabels(); } else updateLabelOpacity();
+}
+{
+  const t = document.getElementById('pTitle');
+  if (t && STYLE) {
+    const hd = document.createElement('div'); hd.className = 'p-hd';
+    t.parentNode.insertBefore(hd, t); hd.appendChild(t);
+    hd.insertAdjacentHTML('beforeend', `<button type="button" class="info-btn style-badge" id="pStyle" data-info="styleWhy" hidden aria-haspopup="dialog" aria-controls="infoPop" aria-expanded="false"></button>`);
+  }
+}
+function syncStyleBadge(id) {
+  const b = document.getElementById('pStyle'); if (!b) return;
+  const t = id && STYLE ? STYLE.tags[id] : null;
+  b.hidden = !t; if (!t) return;
+  b.style.setProperty('--sc', styleHex(t.p)); b.style.setProperty('--sc2', t.s ? styleHex(t.s) : '');
+  b.innerHTML = `<i></i>${t.p}${t.s ? `<small>/ ${t.s}</small>` : ''}${t.src !== 'rule' ? '<small>· 人工</small>' : ''}`;
+  b.title = `${id} · ${styleText(id)}：点击查看判定依据`;
+  b.setAttribute('aria-label', `${id} 风格 ${styleText(id)}，查看判定依据`);
+  b.dataset.id = id;
+}
+function styleWhyHtml(id) {
+  const t = STYLE && STYLE.tags[id]; if (!t) return '<p>暂无风格数据</p>';
+  const R = STYLE.rules || {}, W = R.risk_weights || { beta: 0.5, vol: 0.3, mdd: 0.2 };
+  const pc = x => x == null ? '—' : Math.round(x * 100) + '%', f2 = x => x == null ? '—' : (+x).toFixed(2);
+  const hi = R.risk_hi ?? 0.7, lo = R.risk_lo ?? 0.3, l1 = (nodeById[id] || {}).l1 || '-';
+  const sw = k => `<b style="color:${styleHex(k)}">${k}</b>`;
+  const lines = [];
+  if (t.src !== 'rule') {
+    lines.push(`<b>人工指定</b>：${t.src === 'override' ? `二级覆盖 <code>style.overrides</code>「${escHtml(id)}」` : `一级覆盖 <code>style.l1_overrides</code>「${escHtml(l1)}」`} → ${sw(t.p)}${t.rule && t.rule !== t.p ? `；规则结果为 ${sw(t.rule)}，${t.s === t.rule ? '降为副标签' : '未采用'}` : '；与规则结果一致'}`);
+  }
+  const verdict = t.risk == null ? '无足够样本' : t.risk >= hi ? `≥ ${hi} → 进攻` : t.risk <= lo ? `≤ ${lo} → 防御` : `介于 ${lo}–${hi}，风险维度不定`;
+  lines.push(`<b>风险分</b> <span class="why-v">${f2(t.risk)}</span>（${verdict}）= ${W.beta}×beta 分位 <span class="why-v">${pc(t.bp)}</span> + ${W.vol}×波动分位 <span class="why-v">${pc(t.vp)}</span> + ${W.mdd}×回撤分位 <span class="why-v">${pc(t.mp)}</span>`);
+  lines.push(`原始值：beta <span class="why-v">${f2(t.beta)}</span> · 年化波动 <span class="why-v">${t.vol == null ? '—' : t.vol + '%'}</span> · 最大回撤 <span class="why-v">${pc(t.mdd)}</span>（近 ${STYLE.lookback || '-'} 个交易日，对 ${escHtml(STYLE.bench || '基准')}）`);
+  const nat = {
+    cyc_l1: `${sw('周期')}：一级行业「${escHtml(l1)}」在周期名单（<code>style.cyclical_l1</code>）`,
+    cyc_sw2: `${sw('周期')}：该二级在周期名单（<code>style.cyclical_sw2</code>）`,
+    pe: `${sw('成长')}：市盈率中位数 <span class="why-v">${t.pe ?? '—'}</span>，横截面分位 <span class="why-v">${pc(t.pp)}</span> ≥ ${pc(R.growth_pe_pct ?? 0.6)}`,
+    loss: `${sw('成长')}：亏损股占比 <span class="why-v">${pc(t.loss)}</span> ≥ ${pc(R.loss_share_growth ?? 0.4)}（市盈率分位 ${pc(t.pp)}）`,
+    value: `${sw('价值')}：市盈率分位 <span class="why-v">${pc(t.pp)}</span> < ${pc(R.growth_pe_pct ?? 0.6)}${t.pe == null ? '（无市盈率数据，按价值处理）' : `，市盈率中位数 ${t.pe}`}`,
+  }[t.nat];
+  if (nat) lines.push(`<b>属性</b>：${nat}`);
+  lines.push(t.src !== 'rule' ? '主标签取人工指定；规则结果见上。' : (t.risk != null && (t.risk >= hi || t.risk <= lo) ? '风险维度命中 → 主标签取进攻/防御，属性作副标签。' : '风险维度未命中 → 主标签取属性；风险分 ≥0.6 / ≤0.4 时副标签为进攻 / 防御。'));
+  return `<p>${sw(t.p)}${t.s ? ` / ${sw(t.s)}（副）` : ''} · 一级 ${escHtml(l1)}</p>${infoList(lines)}<p style="opacity:.8">风格标签是结构描述，不是投资建议。</p>`;
+}
+const nodeTip = document.createElement('div'); nodeTip.className = 'node-tip'; nodeTip.id = 'nodeTip'; nodeTip.setAttribute('role', 'tooltip'); document.body.appendChild(nodeTip);
+let tipTimer = 0, hoverRaf = 0, hoverEv = null, tipId = null;
+function showNodeTip(id, x, y, ms = 0) {
+  const r = retOf(nodeById[id]);
+  nodeTip.innerHTML = `<b>${escHtml(id)}</b>${styleTag(id, true)}${STYLE && STYLE.tags[id] && STYLE.tags[id].s ? `<small style="color:var(--muted)">/ ${STYLE.tags[id].s}</small>` : ''}<span class="${r == null ? '' : r >= 0 ? 'pos' : 'neg'}">${periodLabel()} ${fmtRet(r)}</span>`;
+  nodeTip.classList.add('show'); tipId = id;
+  const w = nodeTip.offsetWidth, h = nodeTip.offsetHeight;
+  if (ms && MOBILE_MQ.matches) {  // 手机点按：镜头会飞走、抽屉会弹出，提示固定放在顶部浮层下方居中
+    const sp = document.getElementById('sigPanel'), sr = sp ? sp.getBoundingClientRect() : null, top = sr && sr.height ? sr.bottom + 8 : 12;
+    nodeTip.style.left = Math.max(6, (innerWidth - w) / 2) + 'px'; nodeTip.style.top = top + 'px';
+  } else {
+    nodeTip.style.left = Math.max(6, Math.min(innerWidth - w - 6, x + 14)) + 'px';
+    nodeTip.style.top = Math.max(6, Math.min(innerHeight - h - 6, y - h - 12)) + 'px';
+  }
+  clearTimeout(tipTimer); if (ms) tipTimer = setTimeout(hideNodeTip, ms);
+}
+function hideNodeTip() { nodeTip.classList.remove('show'); tipId = null; clearTimeout(tipTimer); }
+canvas.addEventListener('pointermove', ev => {
+  if (ev.pointerType !== 'mouse') return;
+  if (ev.buttons) { hideNodeTip(); return; }
+  hoverEv = ev;
+  if (hoverRaf) return;
+  hoverRaf = requestAnimationFrame(() => {
+    hoverRaf = 0;
+    const i = pickNode(hoverEv.clientX, hoverEv.clientY);
+    canvas.style.cursor = i >= 0 ? 'pointer' : '';
+    if (i >= 0) showNodeTip(DATA.nodes[i].id, hoverEv.clientX, hoverEv.clientY); else hideNodeTip();
+  });
+});
+canvas.addEventListener('pointerleave', ev => { if (ev.pointerType !== 'mouse') return; hideNodeTip(); canvas.style.cursor = ''; });  // 触屏抬手也会触发 leave，不能关掉点按提示
 // ---------------- 上下文说明（共享 ⓘ popover：点外部 / Esc 关闭；不支持 popover 时退回 class 切换） ----------------
 function infoBtn(key, label) {
   return `<button type="button" class="info-btn" data-info="${key}" aria-haspopup="dialog" aria-controls="infoPop" aria-expanded="false" aria-label="${label || '说明'}">ⓘ</button>`;
@@ -2438,6 +2578,7 @@ const INFO = {
     STYLE ? '进攻 / 防御由风险分划分（beta、波动、回撤），周期 / 成长 / 价值来自行业属性与估值；风格标签为结构描述，不是投资建议。' : '',
   ]) },
 };
+INFO.styleWhy = { title: '风格判定依据', html: () => { const id = (document.getElementById('pStyle') || {}).dataset?.id || [...coreIds][0]; return id ? `<p><b>${escHtml(id)}</b></p>${styleWhyHtml(id)}` : '<p>请先聚焦一个板块</p>'; } };
 const infoPop = document.getElementById('infoPop');
 const infoState = { key: null, btn: null, moved: null, downKey: null, dismissAt: -1e9 };
 {
@@ -2588,8 +2729,14 @@ canvas.addEventListener('pointerup', ev => {
   ptrDown = null; ptrDragged = false; if (moved) return;
   if (performance.now() - infoState.dismissAt < 700) return;
   const i = pickNode(ev.clientX, ev.clientY);
-  if (i >= 0) { const id = DATA.nodes[i].id; document.getElementById('q').value = id; setExpandOptions([]); step([id]); }
+  if (i >= 0) {
+    const id = DATA.nodes[i].id; document.getElementById('q').value = id; setExpandOptions([]); step([id]);
+    if (ev.pointerType !== 'mouse') showNodeTip(id, ev.clientX, ev.clientY, 2600);
+    swallowClickUntil = performance.now() + 450;  // 触屏：抽屉刚弹出，别让这次点按的 click 落到新出现的按钮上
+  }
 });
+let swallowClickUntil = 0;
+window.addEventListener('click', e => { if (performance.now() < swallowClickUntil && e.target !== canvas) { e.preventDefault(); e.stopPropagation(); } }, true);
 window.addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); applyViewOffset(); });
 
 // ---------------- 停靠面板 ----------------
@@ -2710,7 +2857,7 @@ window.__scc = {
   camera, controls, pickNode, three: THREE_SOURCE, fps,
   screenOf: id => { const n = nodeById[id]; if (!n) return null; camera.updateMatrixWorld(); _v.set(n.x, n.y, n.z).project(camera); return _v.z > 1 ? null : toScreen(_v); }, step, goTrail, goGlobal, startTour, stopTour, graph: GRAPH,
   get coreIds() { return [...coreIds]; }, get mode() { return mode; }, get colorBy() { return colorBy; },
-  setColorBy: v => window.__setColorBy(v), get riskAppetite() { return raNow; }, get styleSum() { return styleSum; }, get styleLinkCount() { return styleLinks ? styleLinks.userData.n : 0; }, info: () => window.__scc_info,
+  setColorBy: v => window.__setColorBy(v), get riskAppetite() { return raNow; }, get styleSum() { return styleSum; }, get styleLinkCount() { return styleLinks ? styleLinks.userData.n : 0; }, info: () => window.__scc_info, setStyleFilter: k => setStyleFilter(k), get styleFilter() { return styleFilter; }, styleWhy: id => styleWhyHtml(id), get tipId() { return tipId; }, nodeScreen: id => { const n = nodeById[id]; _v.set(n.x, n.y, n.z).project(camera); return toScreen(_v); },
   get commFocus() { return commFocus; }, get trail() { return trail.map(entryLabel); }, get trailIdx() { return trailIdx; },
   get flying() { return !!flight; }, get animating() { return performance.now() < litAnimUntil; }, get pulses() { return pulses.length; },
   get drawCalls() { return renderer.info.render.calls; }, get dayIdx() { return dayIdx; }, get period() { return curP(); },

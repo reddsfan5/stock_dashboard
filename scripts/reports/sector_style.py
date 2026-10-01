@@ -70,13 +70,16 @@ def risk_metrics(daily: pd.DataFrame, bench: pd.Series, cfg: dict) -> pd.DataFra
 
 def compute_style_tags(daily: pd.DataFrame, bench: pd.Series, l1_of: dict[str, str],
                        pe: pd.DataFrame | None = None, cfg: dict | None = None) -> dict:
-    """返回 {styles, colors, tags: {sector: {p, s, src, beta, vol, mdd, risk, pe, loss}}, counts, note}。
+    """返回 {styles, colors, tags: {sector: {p, s, src, beta, vol, mdd, risk, pe, loss, bp, vp, mp, pp, nat, rule}}, counts, rules, note}。
+    bp/vp/mp/pp = beta/波动/回撤/市盈率的横截面分位；nat = 属性来源（cyc_l1 / cyc_sw2 / pe / loss / value）；
+    rule = 人工覆盖前规则给出的主标签（供页面解释「人工指定」）。
     pe: index=板块，列 pe（动态市盈率中位数，正值）与 loss（亏损股占比），可为空。"""
     cfg = {**STYLE_DEFAULTS, **(cfg or {})}
     m = risk_metrics(daily, bench, cfg)
     pe = pe if pe is not None else pd.DataFrame(columns=["pe", "loss"])
     pe_pct = _pct_rank(pe["pe"].dropna()) if len(pe) else pd.Series(dtype=float)
     cyc_l1, cyc_sw2 = set(cfg["cyclical_l1"]), set(cfg["cyclical_sw2"])
+    pct = {k: _pct_rank(m[k]) for k in ("beta", "vol", "mdd")} if not m.empty else {}
     tags = {}
     for s in daily.columns:
         l1 = l1_of.get(s, "")
@@ -84,11 +87,13 @@ def compute_style_tags(daily: pd.DataFrame, bench: pd.Series, l1_of: dict[str, s
         loss = float(pe.loc[s, "loss"]) if s in pe.index and pd.notna(pe.loc[s, "loss"]) else np.nan
         pp = float(pe_pct.get(s, np.nan))
         if l1 in cyc_l1 or s in cyc_sw2:
-            nature = "周期"
-        elif (np.isfinite(pp) and pp >= cfg["growth_pe_pct"]) or (np.isfinite(loss) and loss >= cfg["loss_share_growth"]):
-            nature = "成长"
+            nature, nat = "周期", ("cyc_l1" if l1 in cyc_l1 else "cyc_sw2")
+        elif np.isfinite(pp) and pp >= cfg["growth_pe_pct"]:
+            nature, nat = "成长", "pe"
+        elif np.isfinite(loss) and loss >= cfg["loss_share_growth"]:
+            nature, nat = "成长", "loss"
         else:
-            nature = "价值"
+            nature, nat = "价值", "value"
         if np.isfinite(risk) and risk >= cfg["risk_hi"]:
             p, sec = "进攻", nature
         elif np.isfinite(risk) and risk <= cfg["risk_lo"]:
@@ -96,7 +101,7 @@ def compute_style_tags(daily: pd.DataFrame, bench: pd.Series, l1_of: dict[str, s
         else:
             p = nature
             sec = "进攻" if np.isfinite(risk) and risk >= 0.6 else ("防御" if np.isfinite(risk) and risk <= 0.4 else None)
-        src = "rule"
+        src, rule_p = "rule", p
         ov = cfg["overrides"].get(s) or cfg["l1_overrides"].get(l1)
         if ov:
             src = "override" if s in cfg["overrides"] else "l1_override"
@@ -108,10 +113,15 @@ def compute_style_tags(daily: pd.DataFrame, bench: pd.Series, l1_of: dict[str, s
                    "vol": rnd(m.loc[s, "vol"], 1) if s in m.index else None,
                    "mdd": rnd(m.loc[s, "mdd"]) if s in m.index else None,
                    "risk": rnd(risk), "pe": rnd(float(pe.loc[s, "pe"]), 1) if s in pe.index and pd.notna(pe.loc[s, "pe"]) else None,
-                   "loss": rnd(loss, 2)}
+                   "loss": rnd(loss, 2),
+                   "bp": rnd(float(pct["beta"].get(s, np.nan))) if pct else None,
+                   "vp": rnd(float(pct["vol"].get(s, np.nan))) if pct else None,
+                   "mp": rnd(float(pct["mdd"].get(s, np.nan))) if pct else None,
+                   "pp": rnd(pp), "nat": nat, "rule": rule_p}
     counts = {k: sum(1 for t in tags.values() if t["p"] == k) for k in STYLES}
     return {"styles": STYLES, "colors": cfg["colors"], "tags": tags, "counts": counts,
             "lookback": int(min(len(daily), int(cfg["lookback_days"]))),
+            "rules": {k: cfg[k] for k in ("risk_hi", "risk_lo", "growth_pe_pct", "loss_share_growth", "risk_weights")},
             "note": "风险分 = beta/波动/回撤分位加权；属性 = 一级行业周期名单 + 市盈率分位；未使用利率敏感度（无 10 年国债收益率数据）"}
 
 
