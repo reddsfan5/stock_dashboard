@@ -27,6 +27,7 @@ from scripts.reports.sector_graph import analyze as analyze_graph
 from scripts.reports.sector_lead_stats import build_lead_edges_sig, load_config, rolling_residualize
 from scripts.reports.sector_signals import compute_signals
 from scripts.reports.sector_style import load_style
+from scripts.reports.sector_concepts import attach_concepts
 
 # 参数集中在 config/sector_corr_cloud.yaml（缺省值见 sector_lead_stats.DEFAULTS）
 CFG = load_config()
@@ -790,6 +791,22 @@ button:hover,.chip:hover,.chip.active,.seg button.active{border-color:var(--acce
 .node-tip .tip-l1{color:var(--muted);font-size:11px}
 .sw1-list .sub2 .cdot{margin-right:3px}
 @media (max-width:900px){.lg-comm.lg-scroll{max-height:32vh}.sw1-row select{height:36px;font-size:14px}}
+.cc-src{display:inline-block;font-size:10.5px;line-height:15px;padding:0 5px;margin:0 5px;border-radius:6px;border:1px solid var(--line);color:var(--muted);font-weight:400;vertical-align:1px}
+.cc-src.cc-ths{color:#ffb86b;border-color:rgba(255,184,107,.45)}
+.cc-src.cc-em{color:#7cc4ff;border-color:rgba(124,196,255,.45)}
+.cc-alts{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 2px;align-items:center}
+.cc-alts .chip{padding:5px 9px}
+.cc-alts .chip .cc-src{margin:0 4px 0 0}
+.cc-alts-l{font-size:11px;color:var(--muted);margin-left:2px}
+.cc-list li.cc-sec{border-bottom-color:rgba(255,255,255,.12);padding-top:10px;font-weight:560}
+.cc-list li.cc-sec .sub2{font-weight:400}
+.cc-list li.cc-stk{padding:5px 0 5px 12px;font-size:12px}
+.cc-list li.cc-loose{cursor:default}
+.cc-w{flex:0 0 46px;height:4px;align-self:center;border-radius:2px;background:linear-gradient(90deg,#ffd27a var(--w),rgba(255,255,255,.08) var(--w))}
+.cc-r{display:flex;gap:8px;align-items:baseline;white-space:nowrap}
+.cc-r small{min-width:52px;text-align:right;font-size:11px}
+.cc-foot{margin-top:10px}
+@media (max-width:900px){.cc-list li.cc-stk{padding:7px 0 7px 12px}.cc-alts .chip{padding:7px 10px}}
 .why-v{font-variant-numeric:tabular-nums;color:var(--text)}
 .short-note{display:flex;align-items:center;gap:4px;font-size:11.5px;color:var(--muted);margin-top:6px}
 #paneCtrl .sub{display:none}
@@ -1064,6 +1081,7 @@ for (const n of DATA.nodes) (SW1_MEMBERS[n.l1 || '未分类'] ||= []).push(n.id)
 const SW1_LIST = Object.keys(SW1_MEMBERS).sort((a, b) => SW1_MEMBERS[b].length - SW1_MEMBERS[a].length || a.localeCompare(b, 'zh'));
 const SW1_COLOR = Object.fromEntries(SW1_LIST.map((k, i) => [k, `hsl(${Math.round((i * 137.508 + 200) % 360)}, 62%, 62%)`]));
 let sw1Sel = null, sw1Sum = {};
+let conceptSel = null;  // 题材叠加（与板块 / 社区 / 一级聚焦互斥），见下方「题材 / 概念叠加层」
 function sw1Of(id) { return (SW1_NODE[id] && SW1_NODE[id].l1) || '未分类'; }
 const SW1_NODE = Object.fromEntries(DATA.nodes.map(n => [n.id, n]));
 function sw1Agg(k) {
@@ -1105,7 +1123,7 @@ let dragging = false, resumeTimer = 0, flight = null;
 const ROTATE_ON = (CFG_UI.auto_rotate ?? true) && (!REDUCED || !!CFG_UI.auto_rotate_reduced_motion);
 function syncAutoRotate() {
   controls.autoRotate = ROTATE_ON && !dragging && !flight;
-  controls.autoRotateSpeed = (coreIds.size || commFocus != null || sw1Sel) ? (CFG_UI.focus_orbit_speed ?? 0.3) : (CFG_UI.auto_rotate_speed ?? 0.55);
+  controls.autoRotateSpeed = (coreIds.size || commFocus != null || sw1Sel || conceptSel) ? (CFG_UI.focus_orbit_speed ?? 0.3) : (CFG_UI.auto_rotate_speed ?? 0.55);
 }
 function pauseRotate() { dragging = true; clearTimeout(resumeTimer); syncAutoRotate(); }
 function scheduleResume() { clearTimeout(resumeTimer); resumeTimer = setTimeout(() => { dragging = false; syncAutoRotate(); }, CFG_UI.rotate_resume_ms ?? 1500); }
@@ -1701,6 +1719,7 @@ function rebuildLabels() {
     setLabels(c.members.slice(0, limit0).map((id, k) => ({ id, color: id === c.core ? c.color : '#e8eefc', priority: id === c.core ? 1000 : 100 - k, pin: id === c.core })));
     return;
   }
+  if (!coreIds.size && commFocus == null && conceptSel) { conceptLabels(limit0); return; }
   if (!coreIds.size && commFocus == null && sw1Sel) {
     const rows = (SW1_MEMBERS[sw1Sel] || []).map(id => ({ id, v: retOf(nodeById[id]) })).sort((a, b) => Math.abs(b.v ?? 0) - Math.abs(a.v ?? 0)).slice(0, limit0);
     setLabels(rows.map((r, i) => ({ id: r.id, text: `${r.id} ${fmtRet(r.v)}`, color: r.v == null ? '#e8eefc' : r.v >= 0 ? '#ff9d9d' : '#7fe7b8', priority: 80 - i })));
@@ -1903,6 +1922,7 @@ function resetView() {
   if (coreIds.size) { frameCores(); return; }
   if (commFocus != null && commById[commFocus]) { const f = frameFor(commById[commFocus].members, false); if (f) flyTo(f.target, f.pos); return; }
   if (sw1Sel) { const f = frameFor(SW1_MEMBERS[sw1Sel] || [], false); if (f) flyTo(f.target, f.pos); return; }
+  if (conceptSel && conceptSel.secIds.length) { const f = frameFor(conceptSel.secIds, false); if (f) flyTo(f.target, f.pos); return; }
   if (styleFilter) { const f = frameFor(DATA.nodes.filter(n => styleOf(n.id) === styleFilter).map(n => n.id), false); if (f) flyTo(f.target, f.pos); return; }
   controls.maxDistance = 380;
   flyTo(HOME.target.clone(), HOME.pos.clone());
@@ -1915,16 +1935,19 @@ function refreshFocus({ origin = null } = {}) {
     focusIds = new Set([...one, ...two]);
   } else if (commFocus != null && commById[commFocus]) focusIds = new Set(commById[commFocus].members);
   else if (sw1Sel) focusIds = new Set(SW1_MEMBERS[sw1Sel] || []);
+  else if (conceptSel) focusIds = new Set(conceptSel.secIds);
   else focusIds = new Set();
   syncSw1Ui();
   applyFocusVisual();
   if (coreIds.size) renderPanel([...coreIds], [...focusIds].filter(id => !coreIds.has(id)));
   else if (commFocus != null) renderCommunityPanel(commFocus);
   else if (sw1Sel) renderSw1Panel(sw1Sel);
+  else if (conceptSel) renderConceptPanel();
   else renderPanel(null, []);
   rebuildLabels();
   syncAutoRotate();
-  if (!coreIds.size && commFocus == null && sw1Sel) {
+  if (!coreIds.size && commFocus == null && !sw1Sel && conceptSel) conceptTransition();
+  else if (!coreIds.size && commFocus == null && sw1Sel) {
     const ms = SW1_MEMBERS[sw1Sel] || [], wd = GRAPH.wdeg || {};
     const core = ms.slice().sort((a, b) => (wd[b] ?? 0) - (wd[a] ?? 0))[0] || null;
     startTransition({ origin: core, hop1: new Set(ms), strength: () => 0.9 });
@@ -1937,7 +1960,7 @@ function refreshFocus({ origin = null } = {}) {
   }
 }
 function setFocus(cores, { moveCamera = true, openDetail = true, origin = null } = {}) {
-  coreIds = new Set(cores); commFocus = null; sw1Sel = null;
+  coreIds = new Set(cores); commFocus = null; sw1Sel = null; conceptSel = null;
   refreshFocus({ origin: origin || cores[0] || null });
   if (openDetail && cores.length) setDockMode('detail', { fromFocus: true });
   if (moveCamera) { if (cores.length) frameCores(); else resetView(); }
@@ -1946,7 +1969,7 @@ function setFocus(cores, { moveCamera = true, openDetail = true, origin = null }
 }
 function focusCommunity(k, { openDetail = true } = {}) {
   if (!commById[k]) return;
-  coreIds = new Set(); commFocus = k; sw1Sel = null; expandOptions = []; renderExpandChips();
+  coreIds = new Set(); commFocus = k; sw1Sel = null; conceptSel = null; expandOptions = []; renderExpandChips();
   refreshFocus();
   if (openDetail) setDockMode('detail', { fromFocus: true });
   resetView();
@@ -1998,7 +2021,7 @@ function goGlobal({ keepTrail = true } = {}) {
   if (!keepTrail) trail = [];
   trailIdx = -1;
   expandOptions = []; renderExpandChips();
-  coreIds = new Set(); commFocus = null; sw1Sel = null;
+  coreIds = new Set(); commFocus = null; sw1Sel = null; conceptSel = null; ccToken++;
   refreshFocus();
   controls.maxDistance = 380;
   flyTo(HOME.target.clone(), HOME.pos.clone());
@@ -2325,7 +2348,7 @@ function updateRiskAppetite() {
   document.getElementById('rpRA').title = `风险偏好（${periodLabel()}，${R_DATES[dayIdx] || ''}）= 进攻 ${a ? fmtRet(a.avg) : '—'} − 防御 ${b ? fmtRet(b.avg) : '—'}；窗口内累计 ${fmtRet(last)}（只到当前日期）。为正 = 偏进攻`;
 }
 function renderLegendScale() {
-  const sub = document.getElementById('lgSub'); if (sub) sub.textContent = `${periodLabel()} · ${(R_DATES[dayIdx] || '').slice(5)}${styleFilter ? ` · 仅${styleFilter}` : ''}${sw1Sel ? ` · ${sw1Sel}` : ''}`;
+  const sub = document.getElementById('lgSub'); if (sub) sub.textContent = `${periodLabel()} · ${(R_DATES[dayIdx] || '').slice(5)}${styleFilter ? ` · 仅${styleFilter}` : ''}${sw1Sel ? ` · ${sw1Sel}` : ''}${conceptSel ? ` · ${conceptSel.name}` : ''}`;
   const el = document.getElementById('lgScale'); if (!el) return;
   el.textContent = `光晕 = ${periodLabel()}涨跌（${R_DATES[dayIdx] || ''}）：红涨 / 绿跌，大小与亮度 ∝ |涨跌|，±${CLIP[curP()].toFixed(2)}% 封顶（回放窗口 ${Math.round(CLIP_Q * 100)}% 分位）；呼吸 = 强势异动`;
 }
@@ -2357,7 +2380,8 @@ function setMode(m) {
 function updateHints() {
   const box = document.getElementById('hints');
   const q = document.getElementById('q').value.trim();
-  if (qMode !== 'stock' || !q) { box.innerHTML = ''; return; }
+  if (!q) { box.innerHTML = ''; return; }
+  if (qMode !== 'stock') { renderConceptHints(q); return; }
   const hits = searchStocks(q);
   if (!hits.length) { box.innerHTML = `<div class="empty">未匹配到标的</div>`; return; }
   box.innerHTML = hits.map(h => `<div data-sector="${h.sector}"><b>${h.name}</b>${h.code} → ${h.sector}</div>`).join('');
@@ -2377,6 +2401,11 @@ function runQuery() {
     if (!hits.length) { renderPanel(null, []); document.getElementById('pBody').innerHTML = `<div class="empty">未匹配到标的，试试名称或代码。</div>`; return; }
     setExpandOptions([]); step([hits[0].sector]); document.getElementById('q').value = hits[0].sector; return;
   }
+  if (qMode === 'concept') {  // 题材模式：只搜题材；没有包含级别的匹配时给相近推荐
+    const qt0 = String(q || '').trim(), cm = conceptMatches(qt0);
+    if (cm.length && cm[0].score >= 50) selectConcept(cm[0], { alts: cm }); else conceptSuggestPanel(qt0, cm);
+    return;
+  }
   const sk = styleQuery(q);
   if (sk) {
     if (coreIds.size || commFocus != null) goGlobal();
@@ -2390,7 +2419,9 @@ function runQuery() {
   if (qt && qt !== '未分类' && SW1_MEMBERS[qt] && !exactMatches(qt).length) {  // 申万一级全名：二级精确匹配优先
     document.getElementById('q').value = qt; setSw1(qt); return;
   }
+  if (!exactMatches(qt).length && !(DATA.expand_rules || {})[qt] && conceptQuery(qt, 'exact')) return;  // 题材同名
   const all = expandQuery(q);
+  if (!all.length && conceptQuery(qt, 'fuzzy')) return;  // 二级模糊也落空 → 题材部分匹配 / 相近推荐
   if (!all.length) { setExpandOptions([]); renderPanel(null, []); document.getElementById('pBody').innerHTML = `<div class="empty">未匹配到二级板块，试试「电力」「半导体」「白酒」。</div>`; return; }
   const exact = exactMatches(q);
   const cores = exact.length ? exact : all;  // 无精确匹配（如“新能源”）时聚焦整组，仍可逐个取消
@@ -2401,13 +2432,13 @@ function runQuery() {
 document.getElementById('go').onclick = runQuery;
 document.getElementById('reset').onclick = () => { if (styleFilter) setStyleFilter(null); goGlobal(); };
 document.getElementById('q').addEventListener('keydown', e => { if (e.key === 'Enter') runQuery(); });
-document.getElementById('q').addEventListener('input', () => { if (qMode === 'stock') updateHints(); });
+document.getElementById('q').addEventListener('input', () => updateHints());
 document.getElementById('edgemode').onclick = e => { const b = e.target.closest('button'); if (b) setMode(b.dataset.v); };
 document.getElementById('qmode').onclick = e => {
   const b = e.target.closest('button'); if (!b) return;
   qMode = b.dataset.v;
   [...document.getElementById('qmode').children].forEach(x => x.classList.toggle('active', x === b));
-  document.getElementById('q').placeholder = qMode === 'stock' ? '输入股票名称或代码…' : '查询板块，如：电力、半导体、白酒…';
+  document.getElementById('q').placeholder = qMode === 'stock' ? '输入股票名称或代码…' : qMode === 'concept' ? '查询题材 / 概念，如：培育钻石、液冷服务器…' : '查询板块，如：电力、半导体、白酒…';
   updateHints();
 };
 // ---------------- 区间（1/5/20 日）与逐日回放 ----------------
@@ -2542,7 +2573,7 @@ function setStyleFilter(k) {
   }
   for (let i = 0; i < N; i++) paintNode(i);
   paintRings(); updateWebColors(); renderCommLegend(); renderLegendScale(); renderBoard();
-  if (!coreIds.size && commFocus == null && !sw1Sel) { renderPanel(null, []); rebuildLabels(); resetView(); } else updateLabelOpacity();
+  if (!coreIds.size && commFocus == null && !sw1Sel && !conceptSel) { renderPanel(null, []); rebuildLabels(); resetView(); } else updateLabelOpacity();
 }
 {
   const t = document.getElementById('pTitle');
@@ -2557,7 +2588,7 @@ function setStyleFilter(k) {
 function setSw1(k) {
   k = k && SW1_MEMBERS[k] ? k : null;
   if (typeof stopTour === 'function' && !touring) stopTour();
-  coreIds = new Set(); commFocus = null; expandOptions = []; renderExpandChips();
+  coreIds = new Set(); commFocus = null; conceptSel = null; expandOptions = []; renderExpandChips();
   sw1Sel = k;
   refreshFocus();
   if (k) setDockMode('detail', { fromFocus: true });
@@ -2588,6 +2619,135 @@ function syncSw1Ui() {
   const sel = document.getElementById('sw1Select'); if (!sel) return;
   sel.value = sw1Sel || ''; sel.classList.toggle('on', !!sw1Sel);
   document.getElementById('sw1Clear').hidden = !sw1Sel;
+}
+// ---------------- 题材 / 概念叠加层：同花顺题材、东财概念 → 成分股所在的申万二级 ----------------
+// 内嵌只有概念名索引（DATA.concepts.list）；成分明细在 sector_concepts.json，第一次选概念时才加载。
+const CONCEPTS = DATA.concepts && Array.isArray(DATA.concepts.list) && DATA.concepts.list.length ? DATA.concepts : null;
+const CC_LABEL = (CONCEPTS && CONCEPTS.sources) || {};
+const CC_ORDER = Object.fromEntries(Object.keys(CC_LABEL).map((k, i) => [k, i]));  // 同分时按配置里的来源顺序
+const CC_LIST = CONCEPTS ? CONCEPTS.list.map(([src, name, n, nIn, nSec]) => ({ src, name, n, nIn, nSec, key: `${src}:${name}`, norm: ccNorm(name) })) : [];
+let ccLoad = null, ccToken = 0;
+function ccNorm(s) { return String(s || '').trim().toLowerCase().replace(/[\s（）()·\-_]/g, '').replace(/(概念股?|题材|板块)$/, ''); }
+function ccBigrams(s) { const out = new Set(); for (let i = 0; i < s.length - 1; i++) out.add(s.slice(i, i + 2)); if (s.length === 1) out.add(s); return out; }
+// 打分：同名 100 > 前缀 80 > 包含 60 > 被包含 50 > 字对重合（相近，只做推荐）20–40
+function conceptMatches(q, limit = 12) {
+  const qn = ccNorm(q); if (!qn || !CC_LIST.length) return [];
+  const qb = ccBigrams(qn), out = [];
+  for (const c of CC_LIST) {
+    let s = 0;
+    if (c.norm === qn) s = 100; else if (c.norm.startsWith(qn)) s = 80; else if (c.norm.includes(qn)) s = 60;
+    else if (qn.length >= 2 && c.norm.length >= 2 && qn.includes(c.norm)) s = 50;
+    else if (qb.size) { let hit = 0; for (const b of ccBigrams(c.norm)) if (qb.has(b)) hit++; if (hit) s = 20 + 20 * hit / qb.size; }
+    if (s) out.push({ ...c, score: s });
+  }
+  out.sort((a, b) => b.score - a.score || (a.score >= 50 ? a.name.length - b.name.length : 0) || (CC_ORDER[a.src] ?? 9) - (CC_ORDER[b.src] ?? 9) || b.n - a.n);
+  return out.slice(0, limit);
+}
+function loadConcepts() {
+  if (!CONCEPTS) return Promise.reject(new Error('未生成概念数据'));
+  if (!ccLoad) ccLoad = fetch(CONCEPTS.file, { credentials: 'same-origin', cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }).catch(e => { ccLoad = null; throw e; });
+  return ccLoad;
+}
+function ccSrcTag(src) { return `<span class="cc-src cc-${escHtml(src)}">${escHtml(CC_LABEL[src] || src)}</span>`; }
+function ccFind(key) { return CC_LIST.find(c => c.key === key) || null; }
+async function selectConcept(m, { alts = null } = {}) {
+  if (typeof m === 'string') m = ccFind(m);
+  if (!m) return false;
+  if (typeof stopTour === 'function' && !touring) stopTour();
+  const tok = ++ccToken;
+  let lz;
+  try { lz = await loadConcepts(); } catch (e) {
+    document.getElementById('pTitle').textContent = m.name;
+    document.getElementById('pBody').innerHTML = `<div class="empty">概念成分加载失败（${escHtml(e.message)}），请重新生成：python -m scripts.reports.gen_sector_corr_cloud --from-cache</div>`;
+    setDockMode('detail', { fromFocus: true }); return false;
+  }
+  if (tok !== ccToken) return false;
+  const idx = (lz.concepts || {})[m.key] || [], F = lz.fields || ['code', 'name', 'sector', 'last', 'r20'];
+  const stocks = idx.map(i => { const r = lz.stocks[i] || []; return Object.fromEntries(F.map((f, k) => [f, r[k] ?? null])); });
+  const bySec = {}, loose = [];
+  for (const s of stocks) { if (s.sector && nodeById[s.sector]) (bySec[s.sector] ||= []).push(s); else loose.push(s); }
+  const secIds = Object.keys(bySec);
+  const cnt = id => bySec[id].length, share = id => cnt(id) / Math.max(cnt(id), +(nodeById[id].n || 0));
+  const maxCnt = Math.max(1, ...secIds.map(cnt)), maxShare = Math.max(1e-6, ...secIds.map(share));
+  const w = Object.fromEntries(secIds.map(id => [id, 0.65 * Math.sqrt(cnt(id) / maxCnt) + 0.35 * Math.sqrt(share(id) / maxShare)]));
+  secIds.sort((a, b) => cnt(b) - cnt(a) || share(b) - share(a));
+  const top = secIds.filter(id => cnt(id) === maxCnt);
+  const cores = maxCnt >= 2 && top.length <= 3 ? top : [];
+  const mean = xs => xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
+  const lasts = stocks.map(s => s.last).filter(v => v != null), r20s = stocks.map(s => s.r20).filter(v => v != null);
+  const same = CC_LIST.filter(c => c.name === m.name && c.key !== m.key);
+  const others = (alts || conceptMatches(m.name, 8)).filter(c => c.key !== m.key && !same.some(x => x.key === c.key)).slice(0, 5);
+  coreIds = new Set(); commFocus = null; sw1Sel = null; expandOptions = []; renderExpandChips();
+  conceptSel = { key: m.key, src: m.src, name: m.name, label: CC_LABEL[m.src] || m.src, stocks, bySec, loose, secIds, w, cores, cnt: Object.fromEntries(secIds.map(id => [id, cnt(id)])),
+    share: Object.fromEntries(secIds.map(id => [id, share(id)])), agg: { last: mean(lasts), r20: mean(r20s), nLast: lasts.length, nR20: r20s.length, up: lasts.filter(v => v > 0).length },
+    asOf: lz.as_of || CONCEPTS.as_of || '', same, others };
+  document.getElementById('q').value = m.name;
+  document.getElementById('hints').innerHTML = '';
+  refreshFocus();
+  setDockMode('detail', { fromFocus: true });
+  resetView();
+  renderTrail();
+  return true;
+}
+function clearConcept() { if (!conceptSel) return; conceptSel = null; refreshFocus(); resetView(); }
+function conceptTransition() {
+  const c = conceptSel;
+  startTransition({ origin: c.cores[0] || c.secIds[0] || null, cores: new Set(c.cores), hop1: new Set(c.secIds.filter(id => !c.cores.includes(id))), strength: id => c.w[id] ?? 0.3 });
+}
+function conceptLabels(limit) {
+  const c = conceptSel;
+  setLabels(c.secIds.slice(0, limit).map((id, i) => ({ id, text: `${id} ${c.cnt[id]}只`, color: i === 0 ? '#ffd27a' : '#e8eefc', priority: 200 - i, pin: c.cores.includes(id) })));
+}
+function renderConceptPanel() {
+  const c = conceptSel, a = c.agg, cls = v => v == null ? '' : v >= 0 ? 'pos' : 'neg';
+  syncStyleBadge(null);
+  document.getElementById('pTitle').textContent = c.name;
+  document.getElementById('pMeta').innerHTML = `${ccSrcTag(c.src)}题材 · ${c.stocks.length} 只成分 · 落在 ${c.secIds.length} 个二级${infoBtn('concept', '题材叠加说明')}`;
+  document.getElementById('pKv').innerHTML = `<b>成分</b><span>${c.stocks.length} 只${c.loose.length ? `（点云外 ${c.loose.length}）` : ''}</span><b>等权当日</b><span class="${cls(a.last)}">${fmtRet(a.last)}${a.nLast ? ` · ${a.up}/${a.nLast} 涨` : ''}</span><b>等权近${CONCEPTS.return_days || 20}日</b><span class="${cls(a.r20)}">${fmtRet(a.r20)}</span><b>行情</b><span>${escHtml(c.asOf || '-')}</span>`;
+  const chip = (x, on) => `<button type="button" class="chip cc-alt${on ? ' active' : ''}" data-ck="${escHtml(x.key)}">${ccSrcTag(x.src)}${escHtml(x.name)}<small> ${x.n}</small></button>`;
+  const altHtml = (c.same.length || c.others.length) ? `<div class="cc-alts">${c.same.map(x => chip(x)).join('')}${c.others.length ? `<span class="cc-alts-l">相近</span>${c.others.map(x => chip(x)).join('')}` : ''}</div>` : '';
+  const stk = s => `<li class="cc-stk" data-id="${escHtml(s.sector || '')}"><span>${escHtml(s.name)}<span class="sub2">${escHtml(s.code)}</span></span><span class="cc-r"><b class="${cls(s.last)}">${fmtRet(s.last)}</b><small class="${cls(s.r20)}">${fmtRet(s.r20)}</small></span></li>`;
+  const ord = xs => xs.slice().sort((p, q) => (q.last ?? -1e9) - (p.last ?? -1e9));
+  const groups = c.secIds.map(id => { const k = commOf(id); return `<li class="cc-sec" data-id="${escHtml(id)}"><span>${escHtml(id)}${styleTag(id)}<span class="sub2">${c.cnt[id]} 只 · 占该二级 ${Math.round(c.share[id] * 100)}% · ${cdot(k)}${commName(k)}</span></span><span class="cc-w" style="--w:${Math.round(c.w[id] * 100)}%"></span></li>${ord(c.bySec[id]).map(stk).join('')}`; }).join('');
+  const loose = c.loose.length ? `<li class="cc-sec cc-loose"><span>点云外<span class="sub2">无申万二级映射，或其二级不在点云</span></span><span></span></li>${ord(c.loose).map(stk).join('')}` : '';
+  const body = document.getElementById('pBody');
+  body.innerHTML = `${altHtml}<div class="sec"><span>按申万二级分组（成分数 · 占比）</span><span>当日 / 近${CONCEPTS.return_days || 20}日</span></div><ul class="list cc-list">${groups}${loose}</ul><div class="cc-foot"><button type="button" class="chip" id="ccClear">× 清除题材</button></div>`;
+  body.querySelectorAll('li[data-id]').forEach(li => li.onclick = () => { const id = li.dataset.id; if (!id || !nodeById[id]) return; document.getElementById('q').value = id; setExpandOptions([]); step([id]); });
+  body.querySelectorAll('.cc-alt').forEach(b => b.onclick = () => selectConcept(b.dataset.ck));
+  document.getElementById('ccClear').onclick = () => { clearConcept(); };
+  renderMembers(null); renderSuggest(null);
+}
+function conceptSuggestPanel(q, cm) {
+  renderPanel(null, []);
+  document.getElementById('pTitle').textContent = '未找到';
+  document.getElementById('pMeta').innerHTML = `没有名为「${escHtml(q)}」的二级、一级或题材${infoBtn('concept', '题材叠加说明')}`;
+  document.getElementById('pKv').innerHTML = '';
+  document.getElementById('pBody').innerHTML = cm.length ? `<div class="sec"><span>相近题材（点击查看）</span><span></span></div><div class="cc-alts">${cm.slice(0, 8).map(x => `<button type="button" class="chip cc-alt" data-ck="${escHtml(x.key)}">${ccSrcTag(x.src)}${escHtml(x.name)}<small> ${x.n}</small></button>`).join('')}</div>` : `<div class="empty">也没有相近的题材。</div>`;
+  document.getElementById('pBody').querySelectorAll('.cc-alt').forEach(b => b.onclick = () => selectConcept(b.dataset.ck));
+  setDockMode('detail', { fromFocus: true });
+}
+// 题材提示：题材模式列出全部匹配（含相近）；板块模式只在没有二级 / 一级同名时补充 ≥ 包含级别的题材
+function renderConceptHints(q) {
+  const box = document.getElementById('hints');
+  if (!CONCEPTS) { box.innerHTML = ''; return; }
+  let cm = conceptMatches(q, qMode === 'concept' ? 10 : 5);
+  if (qMode !== 'concept') { const qt = q.trim(); if (exactMatches(qt).length || SW1_MEMBERS[qt] || styleQuery(qt) || qt.length < 2) cm = []; cm = cm.filter(x => x.score >= 50); }
+  if (!cm.length) { box.innerHTML = qMode === 'concept' ? `<div class="empty">未匹配到题材</div>` : ''; return; }
+  box.innerHTML = cm.map(x => `<div data-ck="${escHtml(x.key)}" class="cc-hint"><b>${escHtml(x.name)}</b>${ccSrcTag(x.src)} ${x.n} 只 · ${x.nSec} 个二级${x.score < 50 ? ' · 相近' : ''}</div>`).join('');
+  box.querySelectorAll('div[data-ck]').forEach(el => el.onclick = () => selectConcept(el.dataset.ck, { alts: cm }));
+}
+// 板块模式的题材分支：同名题材（无二级同名 / 查询扩展同名词时）直接选中；二级模糊也落空时取包含级别的题材，否则给相近推荐
+function conceptQuery(qt, stage) {
+  if (!CONCEPTS || !qt) return false;
+  const cm = conceptMatches(qt);
+  if (stage === 'exact') { if (cm.length && cm[0].score >= 100) { selectConcept(cm[0], { alts: cm }); return true; } return false; }
+  if (cm.length && cm[0].score >= 50) { selectConcept(cm[0], { alts: cm }); return true; }
+  if (cm.length) { conceptSuggestPanel(qt, cm); return true; }
+  return false;
+}
+if (CONCEPTS) {
+  const qm = document.getElementById('qmode');
+  qm.insertAdjacentHTML('beforeend', `<button type="button" data-v="concept" title="同花顺题材 / 东财概念">题材</button>`);
 }
 function syncSw1Badge(id) {
   const b = document.getElementById('pSw1'); if (!b) return;
@@ -2717,6 +2877,18 @@ INFO.sw1 = { title: '申万一级', html: () => {
     '「按申万一级」着色：节点色 = 一级行业；图例每行是一个一级（二级数 | 上涨占比 | 均值），点击行与上面的选择相同。',
     '搜索框输入一级全名（如「电力设备」「医药生物」）即选中该行业；若输入同时是某个二级名（忽略末尾「Ⅱ」）或查询扩展里的精确项，按原规则聚焦二级；其余模糊词（如「新能源」）仍走查询扩展。',
     a ? `当前：<b>${sw1Sel}</b> · ${periodLabel()}均值 ${fmtRet(a.avg)} · 上涨 ${a.nUp}/${a.n}（${R_DATES[dayIdx] || ''}）` : '',
+  ]);
+} };
+INFO.concept = { title: '题材 / 概念叠加', html: () => {
+  const c = conceptSel, by = {};
+  for (const x of CC_LIST) by[x.src] = (by[x.src] || 0) + 1;
+  return infoList([
+    `来源：${Object.entries(by).map(([k, v]) => `${escHtml(CC_LABEL[k] || k)} ${v} 个`).join('、')}（本地分类库，成分为 0/1 关系，无权重；成分少于 ${CONCEPTS ? CONCEPTS.min_members : '-'} 只的不收录；东财板块已滤掉行业 / 地域 / 融资融券等市场属性板块）。`,
+    '选中一个题材：点亮其成分股所在的申万二级，其余变暗。亮度和大小 = 该二级里的成分数（主）与占该二级成分的比例（辅）；成分最多的二级加亮放大。',
+    '详情按二级分组列出成分股：最近一日涨跌 / 近 20 日累计涨跌；汇总为全部成分的等权平均。这是最新行情快照，不随回放日期变化。',
+    '搜索：「题材」模式只搜题材（支持部分名称，并给出相近题材）。「板块」模式下先按原规则：风格词 → 二级同名 → 一级全名 → 查询扩展同名词；然后是题材同名 → 二级模糊匹配 → 题材部分匹配；都没有时列出相近题材。',
+    '点二级行或成分股转为聚焦该二级；「× 清除题材」或「全局」取消。',
+    c ? `当前：<b>${escHtml(c.name)}</b>（${escHtml(c.label)}）· ${c.stocks.length} 只 · ${c.secIds.length} 个二级 · 行情 ${escHtml(c.asOf || '-')}` : '',
   ]);
 } };
 INFO.styleWhy = { title: '风格判定依据', html: () => { const id = (document.getElementById('pStyle') || {}).dataset?.id || [...coreIds][0]; return id ? `<p><b>${escHtml(id)}</b></p>${styleWhyHtml(id)}` : '<p>请先聚焦一个板块</p>'; } };
@@ -2992,13 +3164,16 @@ function fps() { if (frameTimes.length < 2) return 0; return Math.round((frameTi
   }
   if (!flying) controls.update();
   if (++frame % 6 === 0) declutterLabels();
+  { const cd = camera.position.distanceTo(controls.target); scene.fog.density = 0.0018 * Math.min(1, 380 / Math.max(1, cd)); }  // 取景拉远（手机可见区很小 / 题材分散）时减淡雾，远处高亮点不至于看不清
   renderer.render(scene, camera);
 })();
 window.__scc = {
   camera, controls, pickNode, three: THREE_SOURCE, fps,
   screenOf: id => { const n = nodeById[id]; if (!n) return null; camera.updateMatrixWorld(); _v.set(n.x, n.y, n.z).project(camera); return _v.z > 1 ? null : toScreen(_v); }, step, goTrail, goGlobal, startTour, stopTour, graph: GRAPH,
   get coreIds() { return [...coreIds]; }, get mode() { return mode; }, get colorBy() { return colorBy; },
-  setColorBy: v => window.__setColorBy(v), get riskAppetite() { return raNow; }, get styleSum() { return styleSum; }, get styleLinkCount() { return styleLinks ? styleLinks.userData.n : 0; }, info: () => window.__scc_info, setStyleFilter: k => setStyleFilter(k), get styleFilter() { return styleFilter; }, styleWhy: id => styleWhyHtml(id), get tipId() { return tipId; }, visibleRect: () => visibleRect(), frameIds: () => coreIds.size ? [...new Set([...coreIds, ...egoOf([...coreIds]).one])] : commFocus != null && commById[commFocus] ? commById[commFocus].members.slice() : sw1Sel ? (SW1_MEMBERS[sw1Sel] || []).slice() : styleFilter ? DATA.nodes.filter(n => styleOf(n.id) === styleFilter).map(n => n.id) : [], setSw1: k => setSw1(k), get sw1Sel() { return sw1Sel; }, sw1List: () => SW1_LIST.map(k => [k, SW1_MEMBERS[k].length]), sw1Agg: k => sw1Agg(k), nodeScreen: id => { const n = nodeById[id]; _v.set(n.x, n.y, n.z).project(camera); return toScreen(_v); },
+  setColorBy: v => window.__setColorBy(v), get riskAppetite() { return raNow; }, get styleSum() { return styleSum; }, get styleLinkCount() { return styleLinks ? styleLinks.userData.n : 0; }, info: () => window.__scc_info, setStyleFilter: k => setStyleFilter(k), get styleFilter() { return styleFilter; }, styleWhy: id => styleWhyHtml(id), get tipId() { return tipId; }, visibleRect: () => visibleRect(), frameIds: () => coreIds.size ? [...new Set([...coreIds, ...egoOf([...coreIds]).one])] : commFocus != null && commById[commFocus] ? commById[commFocus].members.slice() : sw1Sel ? (SW1_MEMBERS[sw1Sel] || []).slice() : conceptSel ? conceptSel.secIds.slice() : styleFilter ? DATA.nodes.filter(n => styleOf(n.id) === styleFilter).map(n => n.id) : [], setSw1: k => setSw1(k), get sw1Sel() { return sw1Sel; }, sw1List: () => SW1_LIST.map(k => [k, SW1_MEMBERS[k].length]), sw1Agg: k => sw1Agg(k), nodeScreen: id => { const n = nodeById[id]; _v.set(n.x, n.y, n.z).project(camera); return toScreen(_v); },
+  selectConcept: (k, o) => selectConcept(k, o), clearConcept, conceptMatches: (q, n) => conceptMatches(q, n).map(({ norm, ...x }) => x), loadConcepts,
+  get conceptSel() { const c = conceptSel; return c && { key: c.key, name: c.name, src: c.src, n: c.stocks.length, loose: c.loose.length, secs: c.secIds.map(id => [id, c.cnt[id], +c.share[id].toFixed(3), +c.w[id].toFixed(3)]), cores: c.cores, agg: c.agg, asOf: c.asOf }; },
   get commFocus() { return commFocus; }, get trail() { return trail.map(entryLabel); }, get trailIdx() { return trailIdx; },
   get flying() { return !!flight; }, get animating() { return performance.now() < litAnimUntil; }, get pulses() { return pulses.length; },
   get drawCalls() { return renderer.info.render.calls; }, get dayIdx() { return dayIdx; }, get period() { return curP(); },
@@ -3053,6 +3228,7 @@ def main() -> None:
         payload["stale_weeks"] = int(CFG["stale_weeks"])
         print("从缓存加载，刷新 stock_index / sector_members…")
         payload = attach_daily(attach_graph(attach_stock_payload(payload)))
+        payload = attach_concepts(payload)  # 题材叠加：内嵌概念索引 + 懒加载 output/sector_concepts.json
         OUTPUT_JSON.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         OUTPUT_HTML.parent.mkdir(parents=True, exist_ok=True)
         OUTPUT_HTML.write_text(render_html(payload), encoding="utf-8")
@@ -3070,6 +3246,7 @@ def main() -> None:
     piv, resid = piv.loc[piv.index >= START], resid.loc[resid.index >= START]
     print(f"  板块 {piv.shape[1]} · 交易日 {piv.shape[0]} · 截止 {piv.index.max().date()}")
     payload = attach_daily(attach_graph(pack_payload(piv, resid, meta, bench=bench)))
+    payload = attach_concepts(payload)
     g = payload["graph"]
     print(f"  社区 {len(g['communities'])} 个（Q={g['modularity']}）· 桥梁 {len(g['bridges'])} 个")
     print(f"  节点 {payload['n_sectors']} · 同步边 {len(payload['edges'])} · 领先边 {len(payload['lead_edges'])}")

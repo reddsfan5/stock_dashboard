@@ -177,3 +177,30 @@ graph:                       # 同步图社区与桥梁（scripts/reports/sector
     城商行Ⅱ: 银行保险
 
 stale_weeks: 2               # 关系样本截止日落后行情超过 N 周时，页脚标红提示重算
+
+# 题材 / 概念叠加层（scripts/reports/sector_concepts.py）：搜索概念 → 点亮其成分股所在的申万二级。
+# 成分来自本地 classifications DB（0/1 成分，无权重）；明细写到 output/sector_concepts.json，页面首次搜索概念时才加载。
+concepts:
+  enabled: true
+  db: state/classifications.sqlite3
+  output: output/sector_concepts.json
+  min_members: 3             # 成分股少于此数的概念不收录
+  max_members: 0             # 0 = 不设上限
+  return_days: 20            # 成分股近 N 日累计涨跌（另有最近一日）
+  sources:                   # 按顺序展示；新增来源只需在 DB 有对应 source/kind
+    - key: ths
+      label: 同花顺
+      source: ths
+      kind: 同花顺题材
+    - key: em
+      label: 东财
+      source: eastmoney
+      kind: 数据商板块         # 东财板块混有行业 / 地域 / 市场属性，下面过滤掉
+      exclude_suffix: ["板块", "Ⅱ", "Ⅲ"]   # 地域板块、申万式行业层级
+      exclude_shenwan_names: true          # 与申万行业同名的东财行业板块
+      exclude: [融资融券, 深股通, 沪股通, 创业板综, 富时罗素, 标准普尔, MSCI中国, 机构重仓, 基金重仓, QFII重仓,
+                社保重仓, 券商重仓, 信托重仓, 保险重仓, 养老金, 转债标的, AH股, ST股, 次新股, 行业龙头, 独角兽,
+                东方财富热股, 趋势股, 超跌股, 股权分散, 百元股, 低价股, 微利股, 红利股, 价值股, 周期股, 高成长股,
+                最近多板, 中字头, 长期破净]
+      exclude_regex: ["盘股$", "盘成长$", "盘价值$", "风格$", "^昨日", "^破", "市净率$", "报(预|首|扭|续|略)",
+                      "_$", "成份$", "^(深成|中证|上证|深证|沪深|科创|创业成份|HS)\\d*"]
