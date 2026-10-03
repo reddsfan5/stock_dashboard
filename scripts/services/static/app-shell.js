@@ -16,6 +16,7 @@
     {key:'grid',href:'/grid_simulator.html',label:'网格回放',icon:'⊞',group:'交易训练'},
     {key:'journal',href:'/stock_journal.html',label:'选股日记',icon:'▤',group:'研究复盘'},
     {key:'sectors',href:'/sector_atlas.html',label:'板块图谱',icon:'◈',group:'研究复盘'},
+    {key:'reading',href:'/reading.html',label:'阅读心法',icon:'❦',group:'研究复盘'},
     {key:'home',href:'/index.html',label:'全部工具',icon:'⋯',group:'研究复盘'}
   ];
   // 标的页是带具体代码的详情页，保留页面状态映射但不作为无目标标的的侧栏入口。

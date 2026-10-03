@@ -21,6 +21,7 @@ MARKET_GAP_BACKTEST_URL = "http://127.0.0.1:8765/market_gap_backtest.html"
 DAILY_OPS_URL = "http://127.0.0.1:8765/daily_ops.html"
 SHORTLIST_URL = "http://127.0.0.1:8765/shortlist.html"
 SHORTLIST_MONITOR_URL = "http://127.0.0.1:8765/shortlist_monitor.html"
+READING_URL = "http://127.0.0.1:8765/reading.html"
 SERVICE_URLS = {
     "dashboard.html": DASHBOARD_URL,
     "minute_view.html": MINUTE_VIEW_URL,
@@ -35,6 +36,7 @@ SERVICE_URLS = {
     "daily_ops.html": DAILY_OPS_URL,
     "shortlist.html": SHORTLIST_URL,
     "shortlist_monitor.html": SHORTLIST_MONITOR_URL,
+    "reading.html": READING_URL,
 }
 
 # 用户视角的导航结构：高频入口在前，低频研究与历史实验在后。
@@ -69,6 +71,17 @@ GROUPS = [
         "items": [
             ("trading_trainer.html", "🎯", "T+1无剧透交易训练", "日K与分时逐步揭示，显示当时可见的盘中量比、VWAP和风险指标，并严格执行T+1", "T+1训练"),
             ("grid_simulator.html", "🕸️", "T+0网格动态回放", "逐分钟播放到价触发型与成交驱动型网格的委托、成交、持仓和净值", "T+0回放"),
+        ],
+    },
+    {
+        "id": "reading",
+        "nav": "阅读心法",
+        "kicker": "长文精读 · 随时翻阅",
+        "title": "阅读 · 心法",
+        "description": "前辈心法、交易技巧与买卖逻辑的长文；带目录、重点提示框和术语释义，文章由 config/reading.yaml 配置。",
+        "tone": "reading",
+        "items": [
+            ("reading.html", "📖", "阅读 · 心法书库", "按前辈心法 / 技巧 / 买卖逻辑分类陈列；首篇：炒股养家心法系统教程", "前辈心法"),
         ],
     },
     {
@@ -222,7 +235,7 @@ def generate():
 <title>A股量化系统 — 工作台导航</title>
 <link rel="stylesheet" href="/assets/app.css">
 <style>
-:root{{--bg:var(--app-bg,#f3f5f8);--card:var(--app-surface,#fff);--blue:var(--app-accent,#2563eb);--text:var(--app-text,#182033);--muted:var(--app-muted,#687386);--border:var(--app-border,#e4e8ef);--daily:#2563eb;--training:#7c3aed;--results:#0f9f6e;--simulation:#d97706;--research:#536277;--archive:#7b8494}}
+:root{{--bg:var(--app-bg,#f3f5f8);--card:var(--app-surface,#fff);--blue:var(--app-accent,#2563eb);--text:var(--app-text,#182033);--muted:var(--app-muted,#687386);--border:var(--app-border,#e4e8ef);--daily:#2563eb;--training:#7c3aed;--results:#0f9f6e;--simulation:#d97706;--research:#536277;--archive:#7b8494;--reading:#b42318}}
 *{{margin:0;padding:0;box-sizing:border-box}}
 html{{scroll-behavior:smooth;scroll-padding-top:120px}}
 body{{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei","Helvetica Neue",sans-serif;background:var(--bg);color:var(--text);font-size:14px;min-height:100vh}}
@@ -248,6 +261,7 @@ main{{max-width:1300px;margin:0 auto;padding:8px 32px 20px}}
 .section-simulation{{--accent:var(--simulation)}}
 .section-research{{--accent:var(--research)}}
 .section-archive{{--accent:var(--archive)}}
+.section-reading{{--accent:var(--reading)}}
 .section-heading{{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin-bottom:14px}}
 .kicker{{font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--accent);margin-bottom:5px}}
 .section h2{{font-size:20px;line-height:1.3}}

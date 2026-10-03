@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""刷新交互页 shell、板块图谱与每日操盘清单。
+"""刷新交互页 shell、板块图谱、阅读心法与每日操盘清单。
 
 与 ``minute_viewer --serve`` 启动时的再生集合对齐，供日更 reports 阶段调用，
 避免必须重启 HTTP 进程才能看到新的静态壳与清单页。
@@ -59,6 +59,13 @@ def main() -> int:
         print("✓ 板块图谱")
     except Exception as exc:
         print(f"! 板块图谱刷新失败（非关键）: {exc}")
+
+    try:
+        from scripts.reports.gen_reading import generate as generate_reading
+        generate_reading()
+        print("✓ 阅读心法")
+    except Exception as exc:
+        print(f"! 阅读心法刷新失败（非关键）: {exc}")
 
     try:
         _refresh_daily_ops()

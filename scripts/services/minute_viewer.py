@@ -1424,6 +1424,11 @@ def main():
         from scripts.reports.gen_sector_atlas import generate as generate_sector_atlas
         generate_sector_atlas()
         try:
+            from scripts.reports.gen_reading import generate as generate_reading
+            generate_reading()
+        except Exception as exc:
+            print(f"! 阅读心法刷新失败（不影响交互服务）: {exc}")
+        try:
             from scripts.reports.gen_daily_ops import generate as generate_daily_ops
             generate_daily_ops(skip_sector=True)
         except Exception as exc:

@@ -1,0 +1,51 @@
+# 阅读 / 心法 板块配置（scripts/reports/gen_reading.py 读取）
+#
+# 新增文章：
+#   1. 在 content/reading/<id>/ 放 article.md（图片放同目录 images/，正文用相对路径 images/xxx.png 引用）
+#   2. 在下面 articles 里加一条（id 与目录名一致），category 取 categories 里的 id
+#   3. 运行：python -m scripts.reports.gen_reading
+# 标注语法（::: 提示框、==高亮==、[[术语]]）见 docs/34-阅读板块.md；术语释义统一维护在 config/reading_glossary.yaml。
+
+title: 阅读 · 心法
+subtitle: 前辈心法、交易技巧与买卖逻辑的长文精读
+output_page: reading.html        # 书库首页（output/ 下）
+article_dir: reading             # 文章页输出到 output/reading/<id>.html
+
+categories:                      # 顺序即书库首页的分区顺序；没有文章的分类显示"待收录"
+  - id: masters
+    name: 前辈心法
+    icon: "☯"
+    description: 游资与职业交易者的交易哲学、心路与体系
+  - id: techniques
+    name: 技巧
+    icon: "✦"
+    description: 看盘、复盘、仓位等可直接练习的具体技巧
+  - id: trade-logic
+    name: 买卖逻辑
+    icon: "⇄"
+    description: 买点、卖点与持仓决策背后的推理链
+
+# 提示框类型：正文用 "::: <type> 可选标题" … ":::" 包裹。
+# 以 💡 / ⚠️ 开头的段落或引用会自动套用 emoji_map 对应类型，无需改原文。
+callouts:
+  core:    {label: 核心心法, icon: "◆", tone: core}
+  tip:     {label: 解读, icon: "💡", tone: tip}
+  warn:    {label: 警示, icon: "⚠️", tone: warn}
+  quote:   {label: 金句, icon: "❝", tone: quote}
+  summary: {label: 核心要点, icon: "★", tone: summary, auto_terms: false}   # auto_terms: false → 框内不自动加术语气泡
+  note:    {label: 说明, icon: "ⓘ", tone: note, auto_terms: false}
+emoji_map:
+  "💡": tip
+  "⚠️": warn
+
+articles:
+  - id: chaogu-yangjia
+    title: 炒股养家心法：从总体到实战的系统教程
+    category: masters
+    author: 炒股养家（原文语录） · 教程整理
+    source: content/reading/chaogu-yangjia/article.md
+    order: 1
+    summary: 把《70 后游资翘楚炒股养家心法语录》重新整理成"道 · 势 · 术 · 法 · 心"五层学习路线：群体博弈、情绪周期、分阶段打法、买卖与仓位、心态信念，附情景练习与检查清单。
+    tags: [情绪周期, 龙头, 仓位, 短线]
+    glossary_auto: true          # 每个术语在全文首次出现处自动加释义气泡
+    added: 2026-10-03
