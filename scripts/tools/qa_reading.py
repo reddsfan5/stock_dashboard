@@ -17,6 +17,47 @@ from playwright.sync_api import sync_playwright
 ROOT = Path(__file__).resolve().parents[2]
 SHOTS = ROOT / "output" / "ui-qa" / "reading"
 ARTICLE = "/reading/chaogu-yangjia.html"
+SERIES = {  # 系列 id → 期望篇数；每个系列第 1 篇截图
+    "asking": ["asking-1-life", "asking-2-longtou", "asking-3-trading", "asking-4-mind"],
+    "zhiye": ["zhiye-1-life", "zhiye-2-core", "zhiye-3-mode", "zhiye-4-growth"],
+}
+MERMAID_OK = """() => {
+  const pres = [...document.querySelectorAll('pre.mermaid')];
+  return pres.length > 0 && pres.every(p => p.querySelector('svg'));
+}"""
+
+
+def check_series(page, base: str, name: str, problems: list) -> None:
+    """系列文章：mermaid 全部渲染且无语法错误、系列导航与上一篇/下一篇、无横向溢出。"""
+    for sid, ids in SERIES.items():
+        for k, aid in enumerate(ids):
+            page.goto(f"{base}/reading/{aid}.html", wait_until="networkidle")
+            try:
+                page.wait_for_function(MERMAID_OK, timeout=20000)
+            except Exception:
+                problems.append(f"{name}: {aid} mermaid 未全部渲染")
+            bad = page.evaluate("[...document.querySelectorAll('pre.mermaid')].filter(p=>/Syntax error|Parse error/i.test(p.textContent)).length")
+            check(bad == 0, f"{name}: {aid} 有 {bad} 个 mermaid 语法错误", problems)
+            check(page.evaluate("document.documentElement.scrollWidth<=innerWidth+1"), f"{name}: {aid} 横向溢出", problems)
+            check(page.locator("nav.rd-series li").count() == len(ids), f"{name}: {aid} 系列导航篇数不对", problems)
+            check(page.locator("nav.rd-series li.is-current").inner_text().startswith(str(k + 1)), f"{name}: {aid} 系列当前篇高亮不对", problems)
+            check(page.locator(".rd-pager-prev").count() == (1 if k else 0), f"{name}: {aid} 上一篇链接不对", problems)
+            check(page.locator(".rd-pager-next").count() == (1 if k < len(ids) - 1 else 0), f"{name}: {aid} 下一篇链接不对", problems)
+            for sel in ("aside.rd-callout--summary", "aside.rd-callout--note", "details", "input[type=checkbox]", ".rd-term[data-term]", "mark"):
+                check(page.locator(sel).count() > 0, f"{name}: {aid} 缺少 {sel}", problems)
+            check(page.locator("#来源").count() == 1, f"{name}: {aid} 缺少来源章节", problems)
+            if k == 0:
+                page.screenshot(path=str(SHOTS / f"{sid}-article-top-{name}.png"))
+                page.locator("pre.mermaid svg").first.scroll_into_view_if_needed()
+                page.evaluate("window.scrollBy(0,-120)")
+                page.wait_for_timeout(250)
+                page.screenshot(path=str(SHOTS / f"{sid}-article-mermaid-{name}.png"))
+                page.locator("details").first.scroll_into_view_if_needed()
+                page.locator("details > summary").first.click()
+                page.evaluate("window.scrollBy(0,-160)")
+                page.wait_for_timeout(250)
+                page.screenshot(path=str(SHOTS / f"{sid}-article-selfcheck-{name}.png"))
+                page.screenshot(path=str(SHOTS / f"{sid}-article-full-{name}.png"), full_page=True)
 
 
 def check(cond, msg, problems):
@@ -50,9 +91,15 @@ def run(base: str) -> int:
             page.on("response", lambda r: failed.append(f"{r.status} {r.url}") if r.status >= 400 else None)
 
             page.goto(base + "/reading.html", wait_until="networkidle")
-            check(page.locator(".rd-card[data-article]").count() >= 1, f"{name}: 书库没有文章卡片", problems)
+            check(page.locator(".rd-card[data-article], .rd-series-card").count() >= 1, f"{name}: 书库没有文章卡片", problems)
+            for sid, ids in SERIES.items():
+                card = page.locator(f'.rd-series-card[data-series="{sid}"]')
+                check(card.count() == 1 and card.locator(".rd-series-list li").count() == len(ids), f"{name}: 书库 {sid} 系列卡片不对", problems)
+            check(page.locator('.rd-series-card[data-series="chaogu-yangjia"]').count() == 1, f"{name}: 书库缺少炒股养家系列", problems)
             check(page.evaluate("document.documentElement.scrollWidth<=innerWidth+1"), f"{name}: 书库页横向溢出", problems)
             page.screenshot(path=str(SHOTS / f"library-{name}.png"), full_page=True)
+
+            check_series(page, base, name, problems)
 
             page.goto(base + ARTICLE, wait_until="networkidle")
             page.wait_for_function("document.querySelectorAll('pre.mermaid svg').length>=10", timeout=20000)

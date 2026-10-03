@@ -18,11 +18,31 @@
       var pct = parseFloat(store.get('rdProgress:' + el.dataset.progressFor, '0')) || 0;
       if (pct >= 97) el.textContent = '已读完 ✓';
       else if (pct >= 3) el.textContent = '已读 ' + Math.round(pct) + '% · 继续 →';
+      if (el.tagName === 'EM') {
+        if (pct >= 97) el.textContent = ' · ✓';
+        else if (pct >= 3) el.textContent = ' · ' + Math.round(pct) + '%';
+      }
+    });
+    document.querySelectorAll('[data-series-articles]').forEach(function (card) {
+      var ids = (card.dataset.seriesArticles || '').split(',').filter(Boolean);
+      var done = 0, started = 0;
+      ids.forEach(function (id) {
+        var pct = parseFloat(store.get('rdProgress:' + id, '0')) || 0;
+        if (pct >= 97) done += 1; else if (pct >= 3) started += 1;
+      });
+      var out = card.querySelector('[data-series-progress]');
+      if (out && (done || started)) out.textContent = '已读完 ' + done + '/' + ids.length;
     });
   }
 
   // ---------------------------------------------------------------- article
   function initArticle(article) {
+    // 系列导航在窄屏横向滚动：把当前篇滚到可见处（只滚动列表本身，不动页面）
+    var seriesCur = document.querySelector('.rd-series li.is-current');
+    if (seriesCur && seriesCur.parentNode.scrollWidth > seriesCur.parentNode.clientWidth) {
+      var list = seriesCur.parentNode;
+      list.scrollLeft = Math.max(0, seriesCur.offsetLeft - list.offsetLeft - 12);
+    }
     var page = readJSON('rdPage', {});
     var id = page.id || article.dataset.article;
     var progressBar = $('rdProgress');

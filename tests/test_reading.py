@@ -61,6 +61,88 @@ class ReadingConfigTest(unittest.TestCase):
         with self.assertRaises(ReadingConfigError):
             load_config(self._config("  - {id: Bad_ID, title: G, category: masters}\n"), self.root)
 
+    def _series_config(self, series: str, articles: str):
+        for aid in ("s1", "s2", "s3", "solo"):
+            write(self.root / f"content/reading/{aid}/article.md", f"# {aid}\n\n## 一\n\n正文\n")
+        return write(self.root / "config/reading.yaml",
+                     "categories:\n  - {id: masters, name: 前辈心法}\n  - {id: tips, name: 技巧}\n"
+                     "series:\n" + series + "articles:\n" + articles)
+
+    def test_series_groups_articles_in_order_and_inherits_category(self):
+        path = self._series_config(
+            "  - {id: ask, name: A 系列, category: masters}\n  - {id: empty, name: 空系列, category: tips}\n",
+            "  - {id: s2, title: S2, series: ask, order: 2}\n"
+            "  - {id: solo, title: Solo, category: masters, order: 5}\n"
+            "  - {id: s1, title: S1, series: ask, order: 1}\n"
+            "  - {id: s3, title: S3, category: masters, series: ask, order: 3}\n")
+        cfg = load_config(path, self.root)
+        self.assertEqual([s["id"] for s in cfg["series"]], ["ask"])  # 空系列不展示
+        ser = cfg["series"][0]
+        self.assertEqual([a["id"] for a in ser["articles"]], ["s1", "s2", "s3"])
+        self.assertEqual(cfg["articles"][0]["category"], "masters")
+        by_id = {a["id"]: a for a in cfg["articles"]}
+        self.assertEqual(gen_reading.series_members(cfg, by_id["s2"]), ser["articles"])
+        self.assertEqual(gen_reading.series_members(cfg, by_id["solo"]), [])
+
+    def test_series_validation(self):
+        bad = [
+            ("  - {id: ask, name: A, category: nope}\n", "  - {id: s1, title: S1, series: ask}\n"),
+            ("  - {id: ask, category: masters}\n", "  - {id: s1, title: S1, series: ask}\n"),
+            ("  - {id: ask, name: A, category: masters}\n  - {id: ask, name: B, category: masters}\n", "  - {id: s1, title: S1, series: ask}\n"),
+            ("  - {id: ask, name: A, category: masters}\n", "  - {id: s1, title: S1, series: ghost}\n"),
+            ("  - {id: ask, name: A, category: masters}\n", "  - {id: s1, title: S1, category: tips, series: ask}\n"),
+        ]
+        for series, articles in bad:
+            with self.subTest(series=series, articles=articles), self.assertRaises(ReadingConfigError):
+                load_config(self._series_config(series, articles), self.root)
+
+    def test_series_library_card_nav_and_pager(self):
+        path = self._series_config(
+            "  - {id: ask, name: A 系列, category: masters, description: 简介}\n",
+            "  - {id: s1, title: S1, series: ask, order: 1}\n  - {id: s2, title: S2, short_title: 第二篇, series: ask, order: 2}\n"
+            "  - {id: s3, title: S3, series: ask, order: 3}\n  - {id: solo, title: Solo, category: masters, order: 9}\n")
+        write(self.root / "config/reading_glossary.yaml", "terms: {}\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            generate(path, self.root / "config/reading_glossary.yaml", out, self.root)
+            index = (out / "reading.html").read_text(encoding="utf-8")
+            self.assertEqual(index.count('class="rd-card rd-series-card"'), 1)
+            self.assertIn("A 系列 <small>（3 篇）</small>", index)
+            self.assertIn('data-series-articles="s1,s2,s3"', index)
+            self.assertLess(index.index("/reading/s1.html"), index.index("/reading/s2.html"))
+            self.assertIn('data-article="solo"', index)
+            s2 = (out / "reading/s2.html").read_text(encoding="utf-8")
+            self.assertIn('class="rd-series"', s2)
+            self.assertIn("第 2 / 3 篇", s2)
+            self.assertIn('aria-current="page"><span class="rd-series-no">2</span><span>第二篇</span>', s2)
+            self.assertIn('rd-pager-prev" href="/reading/s1.html"', s2)
+            self.assertIn('rd-pager-next" href="/reading/s3.html"', s2)
+            s3 = (out / "reading/s3.html").read_text(encoding="utf-8")
+            self.assertNotIn("rd-pager-next", s3)  # 系列末篇不跳到系列外
+            solo = (out / "reading/solo.html").read_text(encoding="utf-8")
+            self.assertNotIn('class="rd-series"', solo)
+            self.assertNotIn("rd-pager-prev", solo)
+
+    def test_repo_series_have_sources_disclaimer_and_interactive_blocks(self):
+        cfg = load_config()
+        names = {s["id"]: s for s in cfg["series"]}
+        self.assertEqual(len(names["asking"]["articles"]), 4)
+        self.assertEqual(len(names["zhiye"]["articles"]), 4)
+        self.assertIn("chaogu-yangjia", names)
+        for sid in ("asking", "zhiye"):
+            for art in names[sid]["articles"]:
+                text = art["source_path"].read_text(encoding="utf-8")
+                with self.subTest(article=art["id"]):
+                    self.assertEqual(art["category"], "masters")
+                    self.assertIn("::: note", text)
+                    self.assertIn("不构成任何投资建议", text)
+                    self.assertIn("::: summary", text)
+                    self.assertIn("```mermaid", text)
+                    self.assertIn("<details>", text)
+                    self.assertIn("- [ ]", text)
+                    self.assertIn("## 来源", text)
+                    self.assertRegex(text.split("## 来源", 1)[1], r"https?://")
+
 
 class MarkdownRenderTest(unittest.TestCase):
     def test_github_style_slug_keeps_existing_anchor_links(self):

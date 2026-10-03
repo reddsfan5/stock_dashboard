@@ -4,6 +4,8 @@
 #   1. 在 content/reading/<id>/ 放 article.md（图片放同目录 images/，正文用相对路径 images/xxx.png 引用）
 #   2. 在下面 articles 里加一条（id 与目录名一致），category 取 categories 里的 id
 #   3. 运行：python -m scripts.reports.gen_reading
+# 系列：在 series 里登记（id/name/category/description），文章写 series: <id>，
+#   同系列文章按 order 排序；书库把同系列合并成一张"X 系列（n 篇）"卡片，文章页显示系列导航，上一篇/下一篇只在系列内跳转。
 # 标注语法（::: 提示框、==高亮==、[[术语]]）见 docs/34-阅读板块.md；术语释义统一维护在 config/reading_glossary.yaml。
 
 title: 阅读 · 心法
@@ -42,6 +44,29 @@ emoji_map:
   "💡": tip
   "⚠️": warn
 
+series:                          # 可选：把多篇文章组织成有序系列（书库合并展示，文章页系列内导航）
+  - id: chaogu-yangjia
+    name: 炒股养家系列
+    category: masters
+    icon: "养"
+    author: 炒股养家 · 情绪周期派
+    description: 情绪周期、群体博弈与"道势术法心"的系统整理。
+    tags: [情绪周期, 龙头, 仓位]
+  - id: asking
+    name: Asking 系列
+    category: masters
+    icon: "A"
+    author: Asking（多方报道称本名邱宝裕，"A 神"） · 闽发 / 淘股吧早期超短代表
+    description: 从两次爆仓到"十几万到几千万"的超短传奇：龙头战法、追涨与守株待兔、半仓试错的仓位纪律，以及"心态占七分"的内功。
+    tags: [龙头, 追涨, 守株待兔, 仓位]
+  - id: zhiye
+    name: 职业炒手系列
+    category: masters
+    icon: "职"
+    author: 职业炒手（"校长"，多方转载称本名王涛） · 成都帮
+    description: "\"弱市不做\"的空仓哲学、先大盘后板块再个股的主流热点打法、回撤控制演进，以及\"第一个 10 倍\"的成长路径。"
+    tags: [空仓, 主流热点, 打板, 回撤]
+
 articles:
   - id: chaogu-yangjia
     title: 炒股养家心法：从总体到实战的系统教程
@@ -52,4 +77,101 @@ articles:
     summary: 把《70 后游资翘楚炒股养家心法语录》重新整理成"道 · 势 · 术 · 法 · 心"五层学习路线：群体博弈、情绪周期、分阶段打法、买卖与仓位、心态信念，附情景练习与检查清单。
     tags: [情绪周期, 龙头, 仓位, 短线]
     glossary_auto: true          # 每个术语在全文首次出现处自动加释义气泡
+    added: 2026-10-03
+    series: chaogu-yangjia
+  - id: asking-1-life
+    title: "Asking ①：人物与经历——两次爆仓后的超短传奇"
+    short_title: 人物与经历
+    category: masters
+    series: asking
+    author: Asking（论坛语录） · 主题整理
+    source: content/reading/asking-1-life/article.md
+    order: 11
+    summary: "94 年入市、期货三个月打爆、母亲帮忙借来的十几万重返股市，到闽发论坛上“资金从 10 几万到几千万”；再到 2025 年公开转向一级市场。附时间线与传闻辨析。"
+    tags: [人物, 经历, 闽发论坛]
+    glossary_auto: true
+    added: 2026-10-03
+  - id: asking-2-longtou
+    title: "Asking ②：龙头战法——龙头只在转势初期出现"
+    short_title: 龙头战法
+    category: masters
+    series: asking
+    author: Asking（论坛语录） · 主题整理
+    source: content/reading/asking-2-longtou/article.md
+    order: 12
+    summary: "什么才是真龙头：先于大盘、带动板块、看启动时机而非盘子大小；龙头与超强势股的区别，出击的大局观条件与“有量就能来钱”。"
+    tags: [龙头, 大局观, 量]
+    glossary_auto: true
+    added: 2026-10-03
+  - id: asking-3-trading
+    title: "Asking ③：追涨与守株待兔——半仓试错的仓位纪律"
+    short_title: 追涨·守株待兔·仓位
+    category: masters
+    series: asking
+    author: Asking（论坛语录） · 主题整理
+    source: content/reading/asking-3-trading/article.md
+    order: 13
+    summary: "“只做超强势股的追涨和守株待兔”：追涨与低吸各用在什么品种，半仓→全仓的加仓条件，失败不加仓，弱市忍手、强市踩节奏；附流程图与检查清单。"
+    tags: [追涨, 守株待兔, 仓位]
+    glossary_auto: true
+    added: 2026-10-03
+  - id: asking-4-mind
+    title: "Asking ④：心态与语录精选——三分技术，七分心态"
+    short_title: 心态·语录
+    category: masters
+    series: asking
+    author: Asking（论坛语录） · 主题整理
+    source: content/reading/asking-4-mind/article.md
+    order: 14
+    summary: "“只跟市场走，不预测，不操纵”“小钱要博，大钱要稳”“跟随”：按主题整理有出处的语录，并标注流传但原始出处待考的说法。"
+    tags: [心态, 语录, 跟随]
+    glossary_auto: true
+    added: 2026-10-03
+  - id: zhiye-1-life
+    title: "职业炒手 ①：人物与经历——“校长”的十年百万与两年四千万"
+    short_title: 人物与经历
+    category: masters
+    series: zhiye
+    author: 职业炒手（论坛语录） · 主题整理
+    source: content/reading/zhiye-1-life/article.md
+    order: 21
+    summary: "淘股吧“校长”、成都帮代表人物：在 100 万以下徘徊近十年，熊市不亏、两年冲上四千万；发起淘股吧实盘赛，2012 年阳光私募夺冠后隐退。附时间线与待考说明。"
+    tags: [人物, 经历, 成都帮]
+    glossary_auto: true
+    added: 2026-10-03
+  - id: zhiye-2-core
+    title: "职业炒手 ②：核心心法——弱市不做，空仓是最重要的技术"
+    short_title: 弱市不做·空仓
+    category: masters
+    series: zhiye
+    author: 职业炒手（论坛语录） · 主题整理
+    source: content/reading/zhiye-2-core/article.md
+    order: 22
+    summary: "“短线炒手第一原则——弱市不做”：为什么空仓比任何进攻模式都重要、回撤从 30% 压到 5% 的演进、熊市反弹见顶特征与弱市战术切换。"
+    tags: [空仓, 回撤, 弱市]
+    glossary_auto: true
+    added: 2026-10-03
+  - id: zhiye-3-mode
+    title: "职业炒手 ③：选股与买卖——咬准主线，打最强板块的最早涨停"
+    short_title: 主流热点·龙头·打板
+    category: masters
+    series: zhiye
+    author: 职业炒手（论坛语录） · 主题整理
+    source: content/reading/zhiye-3-mode/article.md
+    order: 23
+    summary: "先大盘、再板块、再个股：主流的判断、“眼到手到心到”做龙头、打板的品种要求与时间型模式，以及“待时、顺势、借势、造势”四层境界。"
+    tags: [主流热点, 龙头, 打板]
+    glossary_auto: true
+    added: 2026-10-03
+  - id: zhiye-4-growth
+    title: "职业炒手 ④：成长路径与语录——从入门到第一个 10 倍"
+    short_title: 成长路径·语录
+    category: masters
+    series: zhiye
+    author: 职业炒手（论坛语录） · 主题整理
+    source: content/reading/zhiye-4-growth/article.md
+    order: 24
+    summary: "学习的四个阶段、理解力与控制力、“战战兢兢，如履薄冰”的内功口诀、推荐书目，以及按主题整理的语录金句。"
+    tags: [成长, 心态, 语录]
+    glossary_auto: true
     added: 2026-10-03

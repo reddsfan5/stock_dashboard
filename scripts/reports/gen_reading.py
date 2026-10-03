@@ -54,6 +54,21 @@ def load_config(path: Path = CONFIG_PATH, root: Path = ROOT) -> dict:
     cat_ids = [str(c.get("id", "")).strip() for c in categories]
     if "" in cat_ids or len(set(cat_ids)) != len(cat_ids):
         raise ReadingConfigError("分类 id 不能为空且不能重复")
+    series_list = []
+    series_ids = set()
+    for raw in data.get("series") or []:
+        ser = dict(raw)
+        sid = str(ser.get("id", "")).strip()
+        if not re.fullmatch(r"[a-z0-9][a-z0-9-]*", sid) or sid in series_ids:
+            raise ReadingConfigError(f"系列 id 无效或重复：{sid!r}")
+        if ser.get("category") not in cat_ids:
+            raise ReadingConfigError(f"系列 {sid} 的分类 {ser.get('category')!r} 不在 categories 里")
+        if not ser.get("name"):
+            raise ReadingConfigError(f"系列 {sid} 缺少 name")
+        ser["id"] = sid
+        series_ids.add(sid)
+        series_list.append(ser)
+    series_by_id = {s_["id"]: s_ for s_ in series_list}
     articles = []
     seen = set()
     for raw in data.get("articles") or []:
@@ -66,6 +81,13 @@ def load_config(path: Path = CONFIG_PATH, root: Path = ROOT) -> dict:
         seen.add(aid)
         if not art.get("title"):
             raise ReadingConfigError(f"文章 {aid} 缺少 title")
+        if art.get("series"):
+            ser = series_by_id.get(str(art["series"]))
+            if not ser:
+                raise ReadingConfigError(f"文章 {aid} 的系列 {art['series']!r} 不在 series 里")
+            art.setdefault("category", ser["category"])
+            if art["category"] != ser["category"]:
+                raise ReadingConfigError(f"文章 {aid} 的分类与所属系列 {ser['id']} 不一致")
         if art.get("category") not in cat_ids:
             raise ReadingConfigError(f"文章 {aid} 的分类 {art.get('category')!r} 不在 categories 里")
         source = art.get("source") or f"content/reading/{aid}/article.md"
@@ -80,8 +102,11 @@ def load_config(path: Path = CONFIG_PATH, root: Path = ROOT) -> dict:
         art["added"] = str(art.get("added", "") or "")
         articles.append(art)
     articles.sort(key=lambda a: (cat_ids.index(a["category"]), a["order"], a["id"]))
+    for ser in series_list:
+        ser["articles"] = [a for a in articles if a.get("series") == ser["id"]]
     data["categories"] = categories
     data["articles"] = articles
+    data["series"] = [s_ for s_ in series_list if s_["articles"]]
     data.setdefault("title", "阅读 · 心法")
     data.setdefault("subtitle", "")
     data.setdefault("output_page", "reading.html")
@@ -247,6 +272,7 @@ def build_article_html(article: dict, body: str, meta: dict, config: dict, gloss
   <div class="rd-hero-row"><div class="rd-tags">{tags}</div>
   <div class="rd-tools">{_legend_html(config)}<button type="button" class="rd-toggle rd-toggle--desktop" id="rdTocToggle" aria-controls="rdToc" aria-pressed="true" title="显示/隐藏目录（快捷键 T）">☰ 目录</button><button type="button" class="rd-toggle rd-toggle--desktop" id="rdWidthToggle" aria-pressed="false" title="正文栏宽：标准 / 宽（快捷键 W）">↔ 宽栏</button><div class="rd-font" role="group" aria-label="字号"><button type="button" data-font="-1" aria-label="减小字号">A−</button><button type="button" data-font="1" aria-label="增大字号">A+</button></div></div></div>
 </header>
+{_series_nav_html(config, article)}
 <div class="rd-layout">
   <aside class="rd-toc" id="rdToc" aria-label="文章目录">
     <div class="rd-toc-head"><span>目录</span><button type="button" class="rd-toc-collapse" id="rdTocCollapse" aria-controls="rdToc" title="收起目录（快捷键 T）">« 收起</button><button type="button" class="rd-toc-close" aria-label="关闭目录">✕</button></div>
@@ -270,6 +296,29 @@ def build_article_html(article: dict, body: str, meta: dict, config: dict, gloss
 """
 
 
+def _series_card_html(config: dict, ser: dict, metas: Dict[str, dict]) -> str:
+    members = ser["articles"]
+    minutes = sum(metas[a["id"]]["minutes"] for a in members)
+    rows = []
+    for i, a in enumerate(members, 1):
+        m = metas[a["id"]]
+        rows.append(
+            f'<li><a href="/{config["article_dir"]}/{e(a["id"])}.html" data-article="{e(a["id"])}"><span class="rd-series-no">{i}</span>'
+            f'<span class="rd-series-title"><strong>{e(a.get("short_title") or a["title"])}</strong><small>{e(a.get("summary", ""))}</small></span>'
+            f'<span class="rd-series-meta">{m["minutes"]} 分钟<em data-progress-for="{e(a["id"])}"></em></span></a></li>'
+        )
+    tags = "".join(f'<span class="rd-tag">{e(t)}</span>' for t in ser.get("tags", []) or [])
+    ids = ",".join(a["id"] for a in members)
+    return f"""<section class="rd-card rd-series-card" data-series="{e(ser['id'])}" data-series-articles="{e(ids)}">
+  <div class="rd-card-top"><span class="rd-card-icon" aria-hidden="true">{e(ser.get('icon', '📚'))}</span><span class="rd-card-meta">{len(members)} 篇 · 共约 {minutes} 分钟 · <span data-series-progress>未开始</span></span></div>
+  <h3>{e(ser['name'])} <small>（{len(members)} 篇）</small></h3>
+  <p class="rd-card-author">{e(ser.get('author', ''))}</p>
+  <p class="rd-card-summary">{e(ser.get('description', ''))}</p>
+  <ol class="rd-series-list">{''.join(rows)}</ol>
+  <div class="rd-card-foot"><div class="rd-tags">{tags}</div></div>
+</section>"""
+
+
 def build_index_html(config: dict, metas: Dict[str, dict]) -> str:
     sections = []
     nav = []
@@ -277,7 +326,15 @@ def build_index_html(config: dict, metas: Dict[str, dict]) -> str:
         arts = [a for a in config["articles"] if a["category"] == cat["id"]]
         nav.append(f'<a href="#{e(cat["id"])}">{e(cat.get("icon", ""))} {e(cat["name"])}<span>{len(arts)}</span></a>')
         cards = []
+        done_series = set()
         for a in arts:
+            ser = series_of(config, a)
+            if ser:
+                if ser["id"] in done_series:
+                    continue
+                done_series.add(ser["id"])
+                cards.append(_series_card_html(config, ser, metas))
+                continue
             m = metas[a["id"]]
             tags = "".join(f'<span class="rd-tag">{e(t)}</span>' for t in a["tags"])
             cards.append(f"""<a class="rd-card" href="/{config['article_dir']}/{e(a['id'])}.html" data-article="{e(a['id'])}">
@@ -311,6 +368,35 @@ def build_index_html(config: dict, metas: Dict[str, dict]) -> str:
 """
 
 
+def series_of(config: dict, article: dict) -> Optional[dict]:
+    sid = article.get("series")
+    return next((s_ for s_ in config.get("series", []) if s_["id"] == sid), None) if sid else None
+
+
+def series_members(config: dict, article: dict) -> List[dict]:
+    ser = series_of(config, article)
+    return list(ser["articles"]) if ser else []
+
+
+def _series_nav_html(config: dict, article: dict) -> str:
+    ser = series_of(config, article)
+    if not ser:
+        return ""
+    members = ser["articles"]
+    pos = members.index(article) + 1
+    items = []
+    for i, a in enumerate(members, 1):
+        label = e(a.get("short_title") or a["title"])
+        if a is article:
+            items.append(f'<li class="is-current" aria-current="page"><span class="rd-series-no">{i}</span><span>{label}</span></li>')
+        else:
+            items.append(f'<li><a href="/{config["article_dir"]}/{e(a["id"])}.html"><span class="rd-series-no">{i}</span><span>{label}</span></a></li>')
+    return (
+        f'<nav class="rd-series" aria-label="{e(ser["name"])}"><div class="rd-series-head"><span class="rd-series-name">{e(ser.get("icon", "📚"))} {e(ser["name"])}</span>'
+        f'<span class="rd-series-pos">第 {pos} / {len(members)} 篇</span></div><ol>{"".join(items)}</ol></nav>'
+    )
+
+
 # ------------------------------------------------------------- generate
 def generate(config_path: Path = CONFIG_PATH, glossary_path: Path = GLOSSARY_PATH, out_dir: Path = OUTPUT_DIR, root: Path = ROOT) -> List[Path]:
     config = load_config(config_path, root)
@@ -338,7 +424,9 @@ def generate(config_path: Path = CONFIG_PATH, glossary_path: Path = GLOSSARY_PAT
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src, dest)
     for idx, article in enumerate(config["articles"]):
-        same = [a for a in config["articles"] if a["category"] == article["category"]]
+        same = series_members(config, article) or [
+            a for a in config["articles"] if a["category"] == article["category"] and not a.get("series")
+        ]
         pos = same.index(article)
         neighbours = (same[pos - 1] if pos > 0 else None, same[pos + 1] if pos + 1 < len(same) else None)
         html = build_article_html(article, rendered[article["id"]], metas[article["id"]], config, glossary, neighbours)
