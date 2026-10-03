@@ -135,9 +135,13 @@ class ReadingConfigTest(unittest.TestCase):
         self.assertEqual([a["id"] for a in names["zhang"]["articles"]], ["zhang-1-life", "zhang-2-style"])
         self.assertEqual([a["id"] for a in names["buffett"]["articles"]],
                          ["buffett-1-life", "buffett-2-moat", "buffett-3-value", "buffett-4-competence", "buffett-5-cases"])
+        self.assertEqual([a["id"] for a in names["zhao"]["articles"]], ["zhao-1-life", "zhao-2-style"])
+        self.assertEqual([a["id"] for a in names["xiaoeyu"]["articles"]], ["xiaoeyu-1-life", "xiaoeyu-2-style"])
+        self.assertEqual([a["id"] for a in names["tuixue"]["articles"]],
+                         ["tuixue-1-life", "tuixue-2-mode", "tuixue-3-xiaoming"])
         self.assertIn("value", [c["id"] for c in cfg["categories"]])  # 价值投资：巴菲特，后续芒格、段永平
         expected_cat = {"buffett": "value"}
-        for sid in ("asking", "zhiye", "chaogu-yangjia", "gaipian", "zhang", "buffett"):
+        for sid in ("asking", "zhiye", "chaogu-yangjia", "gaipian", "zhang", "buffett", "zhao", "xiaoeyu", "tuixue"):
             for art in names[sid]["articles"]:
                 text = art["source_path"].read_text(encoding="utf-8")
                 with self.subTest(article=art["id"]):

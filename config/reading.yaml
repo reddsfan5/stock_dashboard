@@ -35,7 +35,7 @@ categories:                      # 顺序即书库首页的分区顺序；没有
     icon: "⇄"
     description: 买点、卖点与持仓决策背后的推理链
   # 扩展规划（新增人物时按此归类；分类没有文章时书库显示"待收录"，所以不提前建空分类）：
-  #   前辈心法 masters：炒股养家 / Asking / 职业炒手 / 钙片 / 章盟主；后续：赵老哥、小鳄鱼、退学炒股
+  #   前辈心法 masters：炒股养家 / Asking / 职业炒手 / 钙片 / 章盟主 / 赵老哥 / 小鳄鱼 / 退学炒股
   #   价值投资 value：巴菲特；后续：芒格、段永平
   #   海外交易经典（计划，id 建议 classics）：利弗莫尔等海外投机/交易经典，收录时再新增此分类
 
@@ -90,6 +90,30 @@ series:                          # 可选：把多篇文章组织成有序系列
     author: 章盟主（本名章建平） · 杭州元老级游资（据媒体）
     description: "从 5 万元到\"游资盟主\"：只依据证监会公告和主流媒体报道，梳理他的足迹、大资金打法、挫折与 2024 年罚单，并给流传的\"语录\"做辨伪。本人从不接受采访，大量细节待考。"
     tags: [大资金, 龙虎榜, 主升浪, 合规]
+
+  - id: zhao
+    name: 赵老哥系列
+    category: masters
+    icon: "赵"
+    author: 赵老哥（据媒体报道本名赵强） · 绍兴新生代游资
+    description: "“八年一万倍”的打板手：只用他淘股吧博客里寥寥几篇原帖和主流媒体报道，梳理足迹、打法与大资金之后的转变，并给流传的“十一条语录”做辨伪。"
+    tags: [打板, 模式, 大资金, 语录辨伪]
+
+  - id: xiaoeyu
+    name: 小鳄鱼系列
+    category: masters
+    icon: "鳄"
+    author: 小鳄鱼（化名） · 南京 90 后游资
+    description: "媒体口中的“90 后游资代表”：一篇 2014 年终总结（大局观 + 节奏感），一套按行情切换的隔日交易框架，以及龙虎榜上的成败案例。本人从不受访，身份与师承多数待考。"
+    tags: [隔日交易, 大局观, 节奏感, 反包]
+
+  - id: tuixue
+    name: 退学炒股系列
+    category: masters
+    icon: "退"
+    author: 退学炒股（"退神"） · 淘股吧实盘选手
+    description: "从配资爆仓、退学职业炒股到公开实盘 14 个月 150 倍：逐日写下的《我和小明》是一份罕见的交易心理日记。三篇分别讲实盘经历、确定性与仓位的交易模式、与心魔相处的心理学。"
+    tags: [实盘, 确定性, 分仓, 心态]
 
   - id: buffett
     name: 巴菲特系列
@@ -436,6 +460,91 @@ articles:
     order: 55
     summary: "纺织厂的“愚蠢决定”、喜诗、华盛顿邮报的四毛买一块、GEICO 的成本优势、可口可乐与 US Air 的正反案例，中英对照语录卡与“查不到出处”的待考清单。"
     tags: [案例, 语录, 待考]
+    glossary_auto: true
+    added: 2026-10-04
+
+  - id: zhao-1-life
+    title: "赵老哥 ①：人物与足迹——“八年一万倍”的原帖、席位与争议"
+    short_title: 人物与足迹
+    category: masters
+    series: zhao
+    author: 赵老哥（原帖与媒体报道） · 主题整理
+    source: content/reading/zhao-1-life/article.md
+    order: 61
+    summary: "能确认什么、不能确认什么；博客里的几篇原帖（含“感谢中国神车”）；中国中车与“赵一万”；席位、杠杆与 2015 年的挫折。"
+    tags: [人物, 经历, 待考]
+    glossary_auto: true
+    added: 2026-10-04
+  - id: zhao-2-style
+    title: "赵老哥 ②：打板、模式与语录辨伪——“别做自己模式外的操作”"
+    short_title: 打板·模式·辨伪
+    category: masters
+    series: zhao
+    author: 赵老哥（原帖与媒体报道） · 主题整理
+    source: content/reading/zhao-2-style/article.md
+    order: 62
+    summary: "可溯源的三句原话、媒体归纳的板上买与次日处理、界面新闻复盘的案例、大资金为何偏爱大票，以及“十一条语录”的辨伪方法。"
+    tags: [打板, 模式, 语录辨伪]
+    glossary_auto: true
+    added: 2026-10-04
+  - id: xiaoeyu-1-life
+    title: "小鳄鱼 ①：人物与足迹——90 后游资代表，和他那篇年终总结"
+    short_title: 人物与足迹
+    category: masters
+    series: xiaoeyu
+    author: 小鳄鱼（媒体报道与流传自述） · 主题整理
+    source: content/reading/xiaoeyu-1-life/article.md
+    order: 71
+    summary: "化名、未受访的南京 90 后游资：哪些可信哪些待考、时间线、2014 年“1800w 到 6700w”的年终总结（大局观与节奏感），以及席位与媒体画像。"
+    tags: [人物, 经历, 待考]
+    glossary_auto: true
+    added: 2026-10-04
+  - id: xiaoeyu-2-style
+    title: "小鳄鱼 ②：隔日交易框架——六种手法、揣摩与势"
+    short_title: 隔日交易框架
+    category: masters
+    series: xiaoeyu
+    author: 小鳄鱼（媒体报道与流传自述） · 主题整理
+    source: content/reading/xiaoeyu-2-style/article.md
+    order: 72
+    summary: "追板、分时点火、低吸潜伏、超跌反弹、波段搏主升、空仓六种手法按行情切换；揣摩与势；龙虎榜上的四种路数和失手的单子。"
+    tags: [隔日交易, 手法, 案例]
+    glossary_auto: true
+    added: 2026-10-04
+  - id: tuixue-1-life
+    title: "退学炒股 ①：人物与实盘——从爆仓退学到 14 个月 150 倍"
+    short_title: 人物与实盘
+    category: masters
+    series: tuixue
+    author: 退学炒股（淘股吧原帖） · 主题整理
+    source: content/reading/tuixue-1-life/article.md
+    order: 81
+    summary: "配资爆仓、退学职业炒股、两段公开实盘与两次主动终止、成名后“五次破 300 万又跌回”，以及他如何看待自己的成绩。"
+    tags: [人物, 实盘, 经历]
+    glossary_auto: true
+    added: 2026-10-04
+  - id: tuixue-2-mode
+    title: "退学炒股 ②：交易模式——确定性、分仓与“赚钱的感觉”"
+    short_title: 确定性·分仓
+    category: masters
+    series: tuixue
+    author: 退学炒股（淘股吧原帖） · 主题整理
+    source: content/reading/tuixue-2-mode/article.md
+    order: 82
+    summary: "不拘形式只要确定性、三种高成功率场景、从全仓到回撤线的仓位演变、错了就割与不盲目纠错、牛市思维是毒药、2019 年补课情绪周期。"
+    tags: [模式, 仓位, 卖出]
+    glossary_auto: true
+    added: 2026-10-04
+  - id: tuixue-3-xiaoming
+    title: "退学炒股 ③：《我和小明》——与心魔相处的交易心理学"
+    short_title: 我和小明·心理
+    category: masters
+    series: tuixue
+    author: 退学炒股（淘股吧原帖） · 主题整理
+    source: content/reading/tuixue-3-xiaoming/article.md
+    order: 83
+    summary: "小明是谁、三种最想操作的时刻、踏空为何比亏钱难受、连胜后的大亏、常见偏执、观众与借钱，以及知行合一。"
+    tags: [心态, 心理, 语录]
     glossary_auto: true
     added: 2026-10-04
 

@@ -26,10 +26,14 @@ SERIES = {  # 系列 id → 有序文章
     "gaipian": ["gaipian-1-life", "gaipian-2-heli", "gaipian-3-discipline"],
     "zhang": ["zhang-1-life", "zhang-2-style"],
     "buffett": ["buffett-1-life", "buffett-2-moat", "buffett-3-value", "buffett-4-competence", "buffett-5-cases"],
+    "zhao": ["zhao-1-life", "zhao-2-style"],
+    "xiaoeyu": ["xiaoeyu-1-life", "xiaoeyu-2-style"],
+    "tuixue": ["tuixue-1-life", "tuixue-2-mode", "tuixue-3-xiaoming"],
 }
 SHOT_AS = {"asking-1-life": "asking-article", "zhiye-1-life": "zhiye-article",
            "yangjia-3-dashi": "yangjia-split-article", "yangjia-7-thread": "yangjia-new-article",
-           "gaipian-2-heli": "gaipian-article", "zhang-1-life": "zhang-article", "buffett-3-value": "buffett-article"}
+           "gaipian-2-heli": "gaipian-article", "zhang-1-life": "zhang-article", "buffett-3-value": "buffett-article",
+           "zhao-2-style": "zhao-article", "xiaoeyu-2-style": "xiaoeyu-article", "tuixue-3-xiaoming": "tuixue-article"}
 MERMAID_OK = """() => {
   const pres = [...document.querySelectorAll('pre.mermaid')];
   return pres.length > 0 && pres.every(p => p.querySelector('svg'));
