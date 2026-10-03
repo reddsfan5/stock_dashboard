@@ -178,6 +178,19 @@ HEAD = """<!doctype html>
 """
 
 
+def _layout_style(config: dict) -> str:
+    """reading.yaml 的 layout.measure_chars / wide_chars → 正文栏宽 CSS 变量（每行汉字数）。"""
+    layout = config.get("layout") or {}
+    parts = []
+    for key, var in (("measure_chars", "--rd-measure-ch"), ("wide_chars", "--rd-wide-ch")):
+        if key in layout:
+            value = int(layout[key])
+            if not 30 <= value <= 100:
+                raise ReadingConfigError(f"layout.{key} 应在 30–100 之间：{value}")
+            parts.append(f"{var}:{value}")
+    return f' style="{";".join(parts)}"' if parts else ""
+
+
 def _legend_html(config: dict) -> str:
     rows = []
     for kind, spec in config["callouts"].items():
@@ -221,7 +234,8 @@ def build_article_html(article: dict, body: str, meta: dict, config: dict, gloss
     if article["added"]:
         meta_bits.append(f"收录 {article['added']}")
     meta_line = " · ".join(e(x) for x in meta_bits if x)
-    return HEAD.format(title=e(article["title"]) + " · 阅读") + f"""<body class="app-workbench rd-page" data-page="reading">
+    return HEAD.format(title=e(article["title"]) + " · 阅读") + f"""<body class="app-workbench rd-page" data-page="reading"{_layout_style(config)}>
+<script>try{{if(localStorage.getItem('rdToc')==='collapsed')document.body.classList.add('rd-toc-collapsed');if(localStorage.getItem('rdWidth')==='wide')document.body.classList.add('rd-wide')}}catch(e){{}}</script>
 <div id="app-shell" data-active="reading"></div>
 <div class="rd-progress" aria-hidden="true"><span id="rdProgress"></span></div>
 <main class="rd-main">
@@ -231,11 +245,11 @@ def build_article_html(article: dict, body: str, meta: dict, config: dict, gloss
   <h1>{e(article['title'])}</h1>
   <p class="rd-meta">{meta_line}</p>
   <div class="rd-hero-row"><div class="rd-tags">{tags}</div>
-  <div class="rd-tools">{_legend_html(config)}<div class="rd-font" role="group" aria-label="字号"><button type="button" data-font="-1" aria-label="减小字号">A−</button><button type="button" data-font="1" aria-label="增大字号">A+</button></div></div></div>
+  <div class="rd-tools">{_legend_html(config)}<button type="button" class="rd-toggle rd-toggle--desktop" id="rdTocToggle" aria-controls="rdToc" aria-pressed="true" title="显示/隐藏目录（快捷键 T）">☰ 目录</button><button type="button" class="rd-toggle rd-toggle--desktop" id="rdWidthToggle" aria-pressed="false" title="正文栏宽：标准 / 宽（快捷键 W）">↔ 宽栏</button><div class="rd-font" role="group" aria-label="字号"><button type="button" data-font="-1" aria-label="减小字号">A−</button><button type="button" data-font="1" aria-label="增大字号">A+</button></div></div></div>
 </header>
 <div class="rd-layout">
   <aside class="rd-toc" id="rdToc" aria-label="文章目录">
-    <div class="rd-toc-head"><span>目录</span><button type="button" class="rd-toc-close" aria-label="关闭目录">✕</button></div>
+    <div class="rd-toc-head"><span>目录</span><button type="button" class="rd-toc-collapse" id="rdTocCollapse" aria-controls="rdToc" title="收起目录（快捷键 T）">« 收起</button><button type="button" class="rd-toc-close" aria-label="关闭目录">✕</button></div>
     <nav>{_toc_html(meta['toc'])}</nav>
   </aside>
   <article class="rd-article" id="rdArticle" data-article="{e(article['id'])}">

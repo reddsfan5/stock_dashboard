@@ -141,10 +141,23 @@ class GenerateTest(unittest.TestCase):
             self.assertIn('rd-callout--summary', page)
             self.assertIn('id="rdGlossary"', page)
             self.assertNotIn("::: ", page)
-            self.assertNotIn("==", re.sub(r"<pre class=\"mermaid\">.*?</pre>", "", page, flags=re.S))
+            self.assertNotIn("==", re.sub(r"<pre class=\"mermaid\">.*?</pre>|<script.*?</script>", "", page, flags=re.S))
             index = (out / "reading.html").read_text(encoding="utf-8")
             self.assertIn('/reading/chaogu-yangjia.html', index)
             self.assertIn('待收录', index)  # 技巧 / 买卖逻辑暂无文章
+
+    def test_layout_width_and_toc_toggle_controls(self):
+        self.assertEqual(gen_reading._layout_style({"layout": {"measure_chars": 56, "wide_chars": 70}}),
+                         ' style="--rd-measure-ch:56;--rd-wide-ch:70"')
+        self.assertEqual(gen_reading._layout_style({}), "")
+        with self.assertRaises(ReadingConfigError):
+            gen_reading._layout_style({"layout": {"measure_chars": 200}})
+        with tempfile.TemporaryDirectory() as tmp:
+            generate(out_dir=Path(tmp))
+            page = (Path(tmp) / "reading/chaogu-yangjia.html").read_text(encoding="utf-8")
+        for needle in ('id="rdTocToggle"', 'aria-controls="rdToc"', 'id="rdTocCollapse"', 'id="rdWidthToggle"', "--rd-measure-ch:56",
+                       "localStorage.getItem('rdToc')==='collapsed'"):
+            self.assertIn(needle, page)
 
     def test_shared_nav_lists_reading(self):
         shell = (ROOT / "scripts/services/static/app-shell.js").read_text(encoding="utf-8")

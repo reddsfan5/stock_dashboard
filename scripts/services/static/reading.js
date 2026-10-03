@@ -42,6 +42,49 @@
       });
     });
 
+    // 桌面端：目录收起/展开、正文栏宽（标准/宽），状态存本机
+    var body = document.body;
+    var tocToggle = $('rdTocToggle'), tocCollapse = $('rdTocCollapse'), widthToggle = $('rdWidthToggle');
+    function syncToggles() {
+      var collapsed = body.classList.contains('rd-toc-collapsed');
+      if (tocToggle) { tocToggle.setAttribute('aria-pressed', collapsed ? 'false' : 'true'); tocToggle.textContent = collapsed ? '☰ 显示目录' : '☰ 目录'; }
+      if (widthToggle) widthToggle.setAttribute('aria-pressed', body.classList.contains('rd-wide') ? 'true' : 'false');
+    }
+    function setTocCollapsed(collapsed, focusTarget) {
+      var anchor = currentAnchor();
+      body.classList.toggle('rd-toc-collapsed', collapsed);
+      store.set('rdToc', collapsed ? 'collapsed' : 'open');
+      syncToggles();
+      restoreAnchor(anchor);
+      if (focusTarget) focusTarget.focus({ preventScroll: true });
+    }
+    function setWide(wide) {
+      var anchor = currentAnchor();
+      body.classList.toggle('rd-wide', wide);
+      store.set('rdWidth', wide ? 'wide' : 'standard');
+      syncToggles();
+      restoreAnchor(anchor);
+    }
+    // 版式变化后保持当前阅读的标题在视口内的相对位置
+    function currentAnchor() {
+      var hs = article.querySelectorAll('h2[id],h3[id],p');
+      for (var i = 0; i < hs.length; i++) { var t = hs[i].getBoundingClientRect().top; if (t >= 60) return { el: hs[i], top: t }; }
+      return null;
+    }
+    function restoreAnchor(a) { if (a && window.scrollY > 0) window.scrollBy(0, a.el.getBoundingClientRect().top - a.top); }
+    if (tocToggle) tocToggle.addEventListener('click', function () { setTocCollapsed(!body.classList.contains('rd-toc-collapsed')); });
+    if (tocCollapse) tocCollapse.addEventListener('click', function () { setTocCollapsed(true, $('rdTocFab')); });
+    if (widthToggle) widthToggle.addEventListener('click', function () { setWide(!body.classList.contains('rd-wide')); });
+    document.addEventListener('keydown', function (e) {
+      if (e.metaKey || e.ctrlKey || e.altKey || e.defaultPrevented) return;
+      var tag = (e.target && e.target.tagName) || '';
+      if (/^(INPUT|TEXTAREA|SELECT)$/.test(tag) || (e.target && e.target.isContentEditable)) return;
+      if (window.matchMedia('(max-width: 860px)').matches) return;
+      if (e.key === 't' || e.key === 'T') { e.preventDefault(); setTocCollapsed(!body.classList.contains('rd-toc-collapsed')); }
+      else if (e.key === 'w' || e.key === 'W') { e.preventDefault(); setWide(!body.classList.contains('rd-wide')); }
+    });
+    syncToggles();
+
     // 阅读进度 + 续读位置
     var ticking = false;
     function progress() {
@@ -102,7 +145,11 @@
       if (fab) fab.setAttribute('aria-expanded', open ? 'true' : 'false');
       if (open && current && links[current]) links[current].scrollIntoView({ block: 'center' });
     }
-    if (fab) fab.addEventListener('click', function () { openToc(!toc.classList.contains('is-open')); });
+    if (fab) fab.addEventListener('click', function () {
+      // 桌面端目录收起时，悬浮按钮用于展开侧栏；手机端打开底部抽屉
+      if (!window.matchMedia('(max-width: 860px)').matches) { setTocCollapsed(false, $('rdTocCollapse')); return; }
+      openToc(!toc.classList.contains('is-open'));
+    });
     if (scrim) scrim.addEventListener('click', function () { openToc(false); });
     var closeBtn = toc && toc.querySelector('.rd-toc-close');
     if (closeBtn) closeBtn.addEventListener('click', function () { openToc(false); });

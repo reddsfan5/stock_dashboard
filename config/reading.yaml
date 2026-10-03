@@ -11,6 +11,10 @@ subtitle: 前辈心法、交易技巧与买卖逻辑的长文精读
 output_page: reading.html        # 书库首页（output/ 下）
 article_dir: reading             # 文章页输出到 output/reading/<id>.html
 
+layout:                          # 文章页正文栏宽（每行汉字数，随 A−/A+ 字号缩放）
+  measure_chars: 56              # 标准：17px 字号约 950px
+  wide_chars: 70                 # 宽栏（工具栏"↔ 宽栏"切换）：约 1200px，视口不够时自动收窄
+
 categories:                      # 顺序即书库首页的分区顺序；没有文章的分类显示"待收录"
   - id: masters
     name: 前辈心法

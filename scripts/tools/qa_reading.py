@@ -35,6 +35,8 @@ def run(base: str) -> int:
         browser = p.chromium.launch()
         for name, opts in {
             "desktop-1440": {"viewport": {"width": 1440, "height": 900}},
+            "desktop-1280": {"viewport": {"width": 1280, "height": 800}},
+            "desktop-1728": {"viewport": {"width": 1728, "height": 1000}},
             "iphone13": dict(p.devices["iPhone 13"]),
         }.items():
             opts.pop("default_browser_type", None)
@@ -89,6 +91,44 @@ def run(base: str) -> int:
                 page.wait_for_timeout(500)
             else:
                 check(page.locator("#rdToc a.is-active").count() == 1, f"{name}: 目录未高亮当前章节", problems)
+                width = lambda: page.evaluate("Math.round(document.getElementById('rdArticle').getBoundingClientRect().width)")
+                page.locator("#第-3-章-第一性原理交易的本质是群体博弈").scroll_into_view_if_needed()
+                page.evaluate("window.scrollBy(0,-80)")
+                page.wait_for_timeout(250)
+                open_w = width()
+                page.screenshot(path=str(SHOTS / f"toc-open-{name}.png"))
+                page.locator("#rdTocCollapse").click()
+                page.wait_for_timeout(250)
+                check(not page.locator("#rdToc").is_visible(), f"{name}: 目录未收起", problems)
+                check(page.evaluate("document.activeElement.id") == "rdTocFab", f"{name}: 收起后焦点未移到悬浮目录按钮", problems)
+                check(page.evaluate("scrollY") > 500, f"{name}: 收起目录后滚动位置丢失", problems)
+                collapsed_w = width()
+                check(collapsed_w >= open_w, f"{name}: 收起目录后正文没有变宽 {open_w}->{collapsed_w}", problems)
+                page.screenshot(path=str(SHOTS / f"toc-collapsed-{name}.png"))
+                page.reload(wait_until="networkidle")
+                check(not page.locator("#rdToc").is_visible(), f"{name}: 收起状态未持久化", problems)
+                check(page.locator("#rdTocFab").is_visible(), f"{name}: 收起后缺少悬浮目录按钮", problems)
+                page.locator("#rdTocFab").click()
+                page.wait_for_timeout(200)
+                check(page.locator("#rdToc").is_visible(), f"{name}: 悬浮按钮未展开目录", problems)
+                page.keyboard.press("t")
+                page.keyboard.press("t")
+                page.wait_for_timeout(200)
+                check(page.locator("#rdToc").is_visible(), f"{name}: 快捷键 T 未切换目录", problems)
+                page.locator("#rdWidthToggle").click()
+                page.wait_for_timeout(250)
+                wide_w = width()
+                page.locator("#rdTocToggle").click()
+                page.wait_for_timeout(250)
+                wide_collapsed_w = width()
+                page.locator("#第-3-章-第一性原理交易的本质是群体博弈").scroll_into_view_if_needed()
+                page.evaluate("window.scrollBy(0,-80)")
+                page.screenshot(path=str(SHOTS / f"wide-collapsed-{name}.png"))
+                page.locator("#rdWidthToggle").click()
+                page.locator("#rdTocToggle").click()
+                page.wait_for_timeout(200)
+                fs = page.evaluate("parseFloat(getComputedStyle(document.getElementById('rdArticle')).fontSize)")
+                print(f"{name}: 正文栏宽 标准+目录 {open_w}px（约 {open_w / fs / 1.015:.0f} 字/行） · 标准收起目录 {collapsed_w}px · 宽+目录 {wide_w}px · 宽收起目录 {wide_collapsed_w}px（约 {wide_collapsed_w / fs / 1.015:.0f} 字/行）")
                 page.screenshot(path=str(SHOTS / f"toc-{name}.png"))
             page.screenshot(path=str(SHOTS / f"article-full-{name}.png"), full_page=True)
             # 深色模式
