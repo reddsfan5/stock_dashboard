@@ -107,6 +107,7 @@ def load_config(path: Path = CONFIG_PATH, root: Path = ROOT) -> dict:
     data["categories"] = categories
     data["articles"] = articles
     data["series"] = [s_ for s_ in series_list if s_["articles"]]
+    data["redirects"] = _load_redirects(data.get("redirects") or [], {a["id"] for a in articles})
     data.setdefault("title", "阅读 · 心法")
     data.setdefault("subtitle", "")
     data.setdefault("output_page", "reading.html")
@@ -114,6 +115,66 @@ def load_config(path: Path = CONFIG_PATH, root: Path = ROOT) -> dict:
     data["callouts"] = data.get("callouts") or {}
     data["emoji_map"] = data.get("emoji_map") or {}
     return data
+
+
+def _load_redirects(raw_list, article_ids) -> List[dict]:
+    """旧文章 id → 新文章：保留旧链接（含 #锚点）、阅读进度与清单勾选。"""
+    out, seen = [], set()
+    for raw in raw_list:
+        r = dict(raw)
+        old = str(r.get("from", "")).strip()
+        if not re.fullmatch(r"[a-z0-9][a-z0-9-]*", old) or old in seen or old in article_ids:
+            raise ReadingConfigError(f"redirects.from 无效、重复或与现有文章同名：{old!r}")
+        parts = [str(x) for x in (r.get("parts") or [])]
+        to = str(r.get("to") or (parts[0] if parts else ""))
+        for target in [to, *parts, *([str(r["tasks_to"])] if r.get("tasks_to") else [])]:
+            if target not in article_ids:
+                raise ReadingConfigError(f"redirects {old} 指向不存在的文章：{target!r}")
+        seen.add(old)
+        out.append({"from": old, "to": to, "parts": parts, "tasks_to": str(r.get("tasks_to") or "")})
+    return out
+
+
+def build_redirect_html(redirect: dict, config: dict, metas: Dict[str, dict]) -> str:
+    """跳转页：#锚点 → 所在新文章；旧进度按字数比例分摊到各篇并跳到续读的那篇；清单勾选迁移一次。"""
+    base = f"/{config['article_dir']}/"
+    anchors: Dict[str, str] = {}
+    spans = []
+    parts = redirect["parts"]
+    if parts:
+        total = sum(metas[pid]["chars"] for pid in parts) or 1
+        acc = 0.0
+        for pid in parts:
+            for h in metas[pid]["result"].headings:
+                if h.level in (2, 3):
+                    anchors.setdefault(h.id, pid)
+            share = metas[pid]["chars"] / total * 100
+            spans.append([pid, round(acc, 2), round(acc + share, 2)])
+            acc += share
+    data = json.dumps({"old": redirect["from"], "to": redirect["to"], "base": base, "anchors": anchors,
+                       "spans": spans, "tasks": redirect["tasks_to"]}, ensure_ascii=False)
+    target = f"{base}{e(redirect['to'])}.html"
+    script = """(function(){var C=%s;var S=window.localStorage;
+function g(k){try{return S.getItem(k)}catch(x){return null}}function s(k,v){try{S.setItem(k,v)}catch(x){}}
+var h='';try{h=decodeURIComponent(location.hash.slice(1))}catch(x){}
+var pct=parseFloat(g('rdProgress:'+C.old))||0;
+if(!g('rdMigrated:'+C.old)){
+  if(pct>0)C.spans.forEach(function(p){var v=pct>=p[2]?100:pct<=p[1]?0:(pct-p[1])/(p[2]-p[1])*100;
+    if(v>(parseFloat(g('rdProgress:'+p[0]))||0))s('rdProgress:'+p[0],v.toFixed(1));});
+  if(C.tasks)for(var i=0;i<200;i++){var v=g('rdTask:'+C.old+':'+i);if(v!==null&&g('rdTask:'+C.tasks+':'+i)===null)s('rdTask:'+C.tasks+':'+i,v);}
+  s('rdMigrated:'+C.old,'1');}
+var to=C.to,hash='';
+if(h&&C.anchors[h]){to=C.anchors[h];hash=location.hash;}
+else if(pct>=3&&pct<97){C.spans.forEach(function(p){if(pct>=p[1]&&pct<p[2])to=p[0];});}
+location.replace(C.base+to+'.html'+hash);})();""" % data.replace("</", "<\\/")
+    return f"""<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex"><title>文章已拆分为系列 · 正在跳转</title>
+<link rel="canonical" href="{target}">
+<noscript><meta http-equiv="refresh" content="0; url={target}"></noscript>
+<script id="rdRedirect">{script}</script></head>
+<body><p style="font:15px/1.7 system-ui;padding:24px">这篇文章已拆分为系列文章，正在跳转…… <a href="{target}">如未自动跳转请点这里</a></p></body></html>
+"""
 
 
 def load_glossary(path: Path = GLOSSARY_PATH) -> Dict[str, dict]:
@@ -432,6 +493,13 @@ def generate(config_path: Path = CONFIG_PATH, glossary_path: Path = GLOSSARY_PAT
         html = build_article_html(article, rendered[article["id"]], metas[article["id"]], config, glossary, neighbours)
         path = art_root / f"{article['id']}.html"
         path.write_text(html, encoding="utf-8")
+        written.append(path)
+    for redirect in config.get("redirects", []):
+        path = art_root / f"{redirect['from']}.html"
+        path.write_text(build_redirect_html(redirect, config, metas), encoding="utf-8")
+        old_img = art_root / redirect["from"]
+        if old_img.is_dir():
+            shutil.rmtree(old_img)
         written.append(path)
     index = out_dir / config["output_page"]
     index.write_text(build_index_html(config, metas), encoding="utf-8")

@@ -50,7 +50,7 @@ series:                          # 可选：把多篇文章组织成有序系列
     category: masters
     icon: "养"
     author: 炒股养家 · 情绪周期派
-    description: 情绪周期、群体博弈与"道势术法心"的系统整理。
+    description: 情绪周期、群体博弈与"道势术法心"：前 6 篇是心法语录的系统教程（原长文拆分），后 4 篇收录原帖问答、热点与情绪的补充问答和媒体报道。
     tags: [情绪周期, 龙头, 仓位]
   - id: asking
     name: Asking 系列
@@ -68,17 +68,126 @@ series:                          # 可选：把多篇文章组织成有序系列
     tags: [空仓, 主流热点, 打板, 回撤]
 
 articles:
-  - id: chaogu-yangjia
-    title: 炒股养家心法：从总体到实战的系统教程
+  - id: yangjia-1-overview
+    title: "炒股养家 ①：总览与人物——一张图看懂养家心法"
+    short_title: 总览与人物
+    series: chaogu-yangjia
     category: masters
     author: 炒股养家（原文语录） · 教程整理
-    source: content/reading/chaogu-yangjia/article.md
+    source: content/reading/yangjia-1-overview/article.md
     order: 1
-    summary: 把《70 后游资翘楚炒股养家心法语录》重新整理成"道 · 势 · 术 · 法 · 心"五层学习路线：群体博弈、情绪周期、分阶段打法、买卖与仓位、心态信念，附情景练习与检查清单。
-    tags: [情绪周期, 龙头, 仓位, 短线]
+    summary: "教程拆分第 1 篇：一句话读懂心法、\"道势术法心\"全景图，以及从 90 多万亏到不到 40 万、再到 600 万的心路与\"信念\"二字。"
+    tags: [总览, 人物, 信念]
     glossary_auto: true          # 每个术语在全文首次出现处自动加释义气泡
     added: 2026-10-03
+  - id: yangjia-2-emotion
+    title: "炒股养家 ②：群体博弈与情绪周期——交易的第一性原理"
+    short_title: 群体博弈与情绪周期
     series: chaogu-yangjia
+    category: masters
+    author: 炒股养家（原文语录） · 教程整理
+    source: content/reading/yangjia-2-emotion/article.md
+    order: 2
+    summary: "场外买力 vs 场内卖压的核心公式、弱势里的逆转时刻、\"主力是散户\"，以及赚钱效应与亏钱效应的两个自我强化循环。"
+    tags: [群体博弈, 情绪周期]
+    glossary_auto: true          # 每个术语在全文首次出现处自动加释义气泡
+    added: 2026-10-03
+  - id: yangjia-3-dashi
+    title: "炒股养家 ③：大局观与分阶段打法——强势、弱势初中末"
+    short_title: 大局观与分阶段打法
+    series: chaogu-yangjia
+    category: masters
+    author: 炒股养家（原文语录） · 教程整理
+    source: content/reading/yangjia-3-dashi/article.md
+    order: 3
+    summary: "多因素共振与权重、大盘与个股的四种组合、\"判断为末，应变为本\"，以及强势/弱势初期/中期/末期的分阶段打法。"
+    tags: [大局观, 分阶段]
+    glossary_auto: true          # 每个术语在全文首次出现处自动加释义气泡
+    added: 2026-10-03
+  - id: yangjia-4-trade
+    title: "炒股养家 ④：选股、买点与卖出——热点、切题与\"假如空仓\""
+    short_title: 选股·买点·卖出
+    series: chaogu-yangjia
+    category: masters
+    author: 炒股养家（原文语录） · 教程整理
+    source: content/reading/yangjia-4-trade/article.md
+    order: 4
+    summary: "选股只有两类、切题原则、龙头还是跟风、打板的 3～5 板原则；没有止损只有买卖，用\"假如我现在空仓\"测试处理持仓。"
+    tags: [选股, 打板, 卖出]
+    glossary_auto: true          # 每个术语在全文首次出现处自动加释义气泡
+    added: 2026-10-03
+  - id: yangjia-5-position
+    title: "炒股养家 ⑤：仓位、赢面与心态——胜率 × 涨跌空间比"
+    short_title: 仓位·赢面·心态
+    series: chaogu-yangjia
+    category: masters
+    author: 炒股养家（原文语录） · 教程整理
+    source: content/reading/yangjia-5-position/article.md
+    order: 5
+    summary: "满仓的两个条件、按胜率下注、重仓节奏与资金规模、控制回撤；\"情绪是情绪，操作是操作\"的心态与信念。"
+    tags: [仓位, 赢面, 心态]
+    glossary_auto: true          # 每个术语在全文首次出现处自动加释义气泡
+    added: 2026-10-03
+  - id: yangjia-6-practice
+    title: "炒股养家 ⑥：实战演练、误区与金句——每日流程与检查清单"
+    short_title: 实战·误区·金句
+    series: chaogu-yangjia
+    category: masters
+    author: 炒股养家（原文语录） · 教程整理
+    source: content/reading/yangjia-6-practice/article.md
+    order: 6
+    summary: "每日八步决策流程、预判—试错—确认—加仓、五道情景题、可打印检查清单与复盘模板、十大误区、金句速查卡与页码索引。"
+    tags: [实战, 清单, 金句]
+    glossary_auto: true          # 每个术语在全文首次出现处自动加释义气泡
+    added: 2026-10-03
+  - id: yangjia-7-thread
+    title: "炒股养家 ⑦：原帖现场——2010 年《我如何在股市赚了200万》问答"
+    short_title: 原帖现场·2010 问答
+    series: chaogu-yangjia
+    category: masters
+    author: 炒股养家（论坛原帖/媒体报道） · 主题整理
+    source: content/reading/yangjia-7-thread/article.md
+    order: 7
+    summary: "回到语录诞生的地方：2010 年 5–8 月淘股吧原帖里，养家如何回答\"怎么赚的\"\"做什么模式\"\"要不要辞职炒股\"，以及刺拳试错、两招师承与对量化的看法。"
+    tags: [原帖, 问答, 信念]
+    glossary_auto: true          # 每个术语在全文首次出现处自动加释义气泡
+    added: 2026-10-03
+  - id: yangjia-8-hotspot
+    title: "炒股养家 ⑧：热点分级与涨停板——主流、支流与\"容易被砸的板\""
+    short_title: 热点分级·涨停板
+    series: chaogu-yangjia
+    category: masters
+    author: 炒股养家（论坛原帖/媒体报道） · 主题整理
+    source: content/reading/yangjia-8-hotspot/article.md
+    order: 8
+    summary: "网友整理的养家问答里，教程未覆盖的部分：主流/次主流/支流/非主流的分级与策略、投资性与投机性涨停、哪些板容易被砸、9:30 买什么、大小品种与板块梯度。"
+    tags: [热点, 涨停板, 主流]
+    glossary_auto: true          # 每个术语在全文首次出现处自动加释义气泡
+    added: 2026-10-03
+  - id: yangjia-9-gauge
+    title: "炒股养家 ⑨：情绪仪表盘——领涨领跌统计、崩溃标准与反弹三段"
+    short_title: 情绪仪表盘·反弹
+    series: chaogu-yangjia
+    category: masters
+    author: 炒股养家（论坛原帖/媒体报道） · 主题整理
+    source: content/reading/yangjia-9-gauge/article.md
+    order: 9
+    summary: "养家怎么\"量\"情绪：前日强势股次日表现、各周期领涨领跌、情绪崩溃的特征，以及下跌趋势里的阶段与历史案例、\"从 asking 那儿学到了什么\"。"
+    tags: [情绪, 崩溃, 反弹]
+    glossary_auto: true          # 每个术语在全文首次出现处自动加释义气泡
+    added: 2026-10-03
+  - id: yangjia-10-media
+    title: "炒股养家 ⑩：媒体视角与传闻辨析——席位、一字板与多点出击"
+    short_title: 媒体视角·传闻辨析
+    series: chaogu-yangjia
+    category: masters
+    author: 炒股养家（论坛原帖/媒体报道） · 主题整理
+    source: content/reading/yangjia-10-media/article.md
+    order: 10
+    summary: "界面新闻 2019 年对其席位与操盘方式的梳理：排一字板、高位打板有赢有亏、近端次新、隔日为主与多点出击；以及网传生平信息的可信度辨析。"
+    tags: [媒体, 龙虎榜, 传闻]
+    glossary_auto: true          # 每个术语在全文首次出现处自动加释义气泡
+    added: 2026-10-03
   - id: asking-1-life
     title: "Asking ①：人物与经历——两次爆仓后的超短传奇"
     short_title: 人物与经历
@@ -175,3 +284,12 @@ articles:
     tags: [成长, 心态, 语录]
     glossary_auto: true
     added: 2026-10-03
+
+# 旧文章拆分/改名后保留旧链接：生成 output/reading/<from>.html 跳转页
+#   - 带 #锚点 的旧链接跳到含该小节的新文章；无锚点时按旧阅读进度跳到续读的那篇，否则跳 to
+#   - parts：旧长文按顺序拆成的新文章，旧进度按字数比例分摊到各篇；tasks_to：旧清单勾选迁移到哪篇（序号不变）
+redirects:
+  - from: chaogu-yangjia
+    to: yangjia-1-overview
+    parts: [yangjia-1-overview, yangjia-2-emotion, yangjia-3-dashi, yangjia-4-trade, yangjia-5-position, yangjia-6-practice]
+    tasks_to: yangjia-6-practice

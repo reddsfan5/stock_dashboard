@@ -16,15 +16,43 @@ from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parents[2]
 SHOTS = ROOT / "output" / "ui-qa" / "reading"
-ARTICLE = "/reading/chaogu-yangjia.html"
-SERIES = {  # 系列 id → 期望篇数；每个系列第 1 篇截图
+ARTICLE = "/reading/yangjia-2-emotion.html"   # 带图片、术语与长目录的教程拆分篇，做完整交互检查
+OLD_URL = "/reading/chaogu-yangjia.html"        # 拆分前的旧长文：应跳转并迁移进度
+SERIES = {  # 系列 id → 有序文章
+    "chaogu-yangjia": ["yangjia-1-overview", "yangjia-2-emotion", "yangjia-3-dashi", "yangjia-4-trade", "yangjia-5-position",
+                       "yangjia-6-practice", "yangjia-7-thread", "yangjia-8-hotspot", "yangjia-9-gauge", "yangjia-10-media"],
     "asking": ["asking-1-life", "asking-2-longtou", "asking-3-trading", "asking-4-mind"],
     "zhiye": ["zhiye-1-life", "zhiye-2-core", "zhiye-3-mode", "zhiye-4-growth"],
 }
+SHOT_AS = {"asking-1-life": "asking-article", "zhiye-1-life": "zhiye-article",
+           "yangjia-3-dashi": "yangjia-split-article", "yangjia-7-thread": "yangjia-new-article"}
 MERMAID_OK = """() => {
   const pres = [...document.querySelectorAll('pre.mermaid')];
   return pres.length > 0 && pres.every(p => p.querySelector('svg'));
 }"""
+
+
+def check_redirect(page, base: str, name: str, problems: list) -> None:
+    """旧长文 URL：按旧进度跳到续读篇、迁移进度与清单勾选；带 #章节 的旧链接跳到对应新文章。"""
+    page.goto(base + "/reading.html", wait_until="domcontentloaded")
+    page.evaluate("""() => { Object.keys(localStorage).filter(k => /^rd(Progress|Task|Migrated):/.test(k)).forEach(k => localStorage.removeItem(k));
+        localStorage.setItem('rdProgress:chaogu-yangjia', '50'); localStorage.setItem('rdTask:chaogu-yangjia:0', '1'); }""")
+    page.goto(base + OLD_URL, wait_until="domcontentloaded")
+    page.wait_for_url(lambda u: "chaogu-yangjia" not in u, timeout=10000)
+    page.wait_for_load_state("networkidle")
+    landed = page.url.split("/reading/")[-1]
+    store = page.evaluate("() => ({p1: localStorage.getItem('rdProgress:yangjia-1-overview'), p6: localStorage.getItem('rdProgress:yangjia-6-practice'), t: localStorage.getItem('rdTask:yangjia-6-practice:0')})")
+    check(landed.startswith(("yangjia-3-dashi", "yangjia-4-trade")), f"{name}: 旧链接 50% 进度应续读到第 ③/④ 篇，实际 {landed}", problems)
+    check(store["p1"] == "100.0", f"{name}: 旧进度未迁移到第 ① 篇 {store}", problems)
+    check(store["p6"] in (None, "0.0"), f"{name}: 未读部分不应标记进度 {store}", problems)
+    check(store["t"] == "1", f"{name}: 旧清单勾选未迁移 {store}", problems)
+    page.goto(base + OLD_URL + "#第-9-章-仓位与赢面胜率--涨跌空间比", wait_until="domcontentloaded")
+    page.wait_for_url(lambda u: "yangjia-5-position" in u, timeout=10000)
+    check("#" in page.url, f"{name}: 旧锚点跳转丢了 #章节 {page.url}", problems)
+    page.wait_for_load_state("networkidle")
+    if name in ("desktop-1440", "iphone13"):
+        page.screenshot(path=str(SHOTS / f"redirect-anchor-{name}.png"))
+    page.evaluate("() => Object.keys(localStorage).filter(k => /^rd(Progress|Task|Migrated):/.test(k)).forEach(k => localStorage.removeItem(k))")
 
 
 def check_series(page, base: str, name: str, problems: list) -> None:
@@ -46,18 +74,19 @@ def check_series(page, base: str, name: str, problems: list) -> None:
             for sel in ("aside.rd-callout--summary", "aside.rd-callout--note", "details", "input[type=checkbox]", ".rd-term[data-term]", "mark"):
                 check(page.locator(sel).count() > 0, f"{name}: {aid} 缺少 {sel}", problems)
             check(page.locator("#来源").count() == 1, f"{name}: {aid} 缺少来源章节", problems)
-            if k == 0:
-                page.screenshot(path=str(SHOTS / f"{sid}-article-top-{name}.png"))
+            if aid in SHOT_AS:
+                tag = SHOT_AS[aid]
+                page.screenshot(path=str(SHOTS / f"{tag}-top-{name}.png"))
                 page.locator("pre.mermaid svg").first.scroll_into_view_if_needed()
                 page.evaluate("window.scrollBy(0,-120)")
                 page.wait_for_timeout(250)
-                page.screenshot(path=str(SHOTS / f"{sid}-article-mermaid-{name}.png"))
+                page.screenshot(path=str(SHOTS / f"{tag}-mermaid-{name}.png"))
                 page.locator("details").first.scroll_into_view_if_needed()
                 page.locator("details > summary").first.click()
                 page.evaluate("window.scrollBy(0,-160)")
                 page.wait_for_timeout(250)
-                page.screenshot(path=str(SHOTS / f"{sid}-article-selfcheck-{name}.png"))
-                page.screenshot(path=str(SHOTS / f"{sid}-article-full-{name}.png"), full_page=True)
+                page.screenshot(path=str(SHOTS / f"{tag}-selfcheck-{name}.png"))
+                page.screenshot(path=str(SHOTS / f"{tag}-full-{name}.png"), full_page=True)
 
 
 def check(cond, msg, problems):
@@ -95,14 +124,15 @@ def run(base: str) -> int:
             for sid, ids in SERIES.items():
                 card = page.locator(f'.rd-series-card[data-series="{sid}"]')
                 check(card.count() == 1 and card.locator(".rd-series-list li").count() == len(ids), f"{name}: 书库 {sid} 系列卡片不对", problems)
-            check(page.locator('.rd-series-card[data-series="chaogu-yangjia"]').count() == 1, f"{name}: 书库缺少炒股养家系列", problems)
+            check(page.locator('.rd-card[data-article="chaogu-yangjia"], a[href="/reading/chaogu-yangjia.html"]').count() == 0, f"{name}: 书库仍显示旧长文", problems)
             check(page.evaluate("document.documentElement.scrollWidth<=innerWidth+1"), f"{name}: 书库页横向溢出", problems)
             page.screenshot(path=str(SHOTS / f"library-{name}.png"), full_page=True)
 
             check_series(page, base, name, problems)
+            check_redirect(page, base, name, problems)
 
             page.goto(base + ARTICLE, wait_until="networkidle")
-            page.wait_for_function("document.querySelectorAll('pre.mermaid svg').length>=10", timeout=20000)
+            page.wait_for_function(MERMAID_OK, timeout=20000)
             check(page.evaluate("document.documentElement.scrollWidth<=innerWidth+1"), f"{name}: 文章页横向溢出", problems)
             page.screenshot(path=str(SHOTS / f"article-top-{name}.png"))
             # 图片全部加载
@@ -134,7 +164,7 @@ def run(base: str) -> int:
                 page.wait_for_timeout(350)
                 check(page.locator("#rdToc").is_visible(), f"{name}: 目录抽屉未打开", problems)
                 page.screenshot(path=str(SHOTS / f"toc-{name}.png"))
-                page.locator(".rd-toc-list > li > a").nth(6).click()
+                page.locator(".rd-toc-list a:visible").nth(2).click()
                 page.wait_for_timeout(500)
             else:
                 check(page.locator("#rdToc a.is-active").count() == 1, f"{name}: 目录未高亮当前章节", problems)

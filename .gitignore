@@ -18,6 +18,8 @@ intersection.html
 *.png
 !docs/assets/
 !docs/assets/*.png
+!content/reading/*/images/
+!content/reading/*/images/*.png
 
 # 日志
 *.log

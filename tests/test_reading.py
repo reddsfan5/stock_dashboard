@@ -1,3 +1,4 @@
+import json
 import re
 import tempfile
 import textwrap
@@ -36,7 +37,7 @@ class ReadingConfigTest(unittest.TestCase):
         cfg = load_config()
         self.assertEqual([c["name"] for c in cfg["categories"]][:3], ["前辈心法", "技巧", "买卖逻辑"])
         first = cfg["articles"][0]
-        self.assertEqual(first["id"], "chaogu-yangjia")
+        self.assertEqual(first["id"], "yangjia-1-overview")
         self.assertEqual(first["category"], "masters")
         self.assertTrue(first["source_path"].is_file())
         self.assertIn("core", cfg["callouts"])
@@ -128,8 +129,8 @@ class ReadingConfigTest(unittest.TestCase):
         names = {s["id"]: s for s in cfg["series"]}
         self.assertEqual(len(names["asking"]["articles"]), 4)
         self.assertEqual(len(names["zhiye"]["articles"]), 4)
-        self.assertIn("chaogu-yangjia", names)
-        for sid in ("asking", "zhiye"):
+        self.assertEqual(len(names["chaogu-yangjia"]["articles"]), 10)
+        for sid in ("asking", "zhiye", "chaogu-yangjia"):
             for art in names[sid]["articles"]:
                 text = art["source_path"].read_text(encoding="utf-8")
                 with self.subTest(article=art["id"]):
@@ -142,6 +143,55 @@ class ReadingConfigTest(unittest.TestCase):
                     self.assertIn("- [ ]", text)
                     self.assertIn("## 来源", text)
                     self.assertRegex(text.split("## 来源", 1)[1], r"https?://")
+
+
+class RedirectTest(unittest.TestCase):
+    def test_repo_redirect_keeps_old_url_anchors_progress_and_tasks(self):
+        cfg = load_config()
+        red = {r["from"]: r for r in cfg["redirects"]}["chaogu-yangjia"]
+        self.assertEqual(red["to"], "yangjia-1-overview")
+        self.assertEqual(len(red["parts"]), 6)
+        self.assertEqual(red["tasks_to"], "yangjia-6-practice")
+        self.assertFalse((ROOT / "content/reading/chaogu-yangjia").exists())
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            (out / "reading/chaogu-yangjia/images").mkdir(parents=True)  # 旧图片目录会被清掉
+            generate(out_dir=out)
+            page = (out / "reading/chaogu-yangjia.html").read_text(encoding="utf-8")
+            self.assertFalse((out / "reading/chaogu-yangjia").exists())
+            data = json.loads(re.search(r"var C=(\{.*?\});var S=", page, flags=re.S).group(1))
+            self.assertEqual(data["anchors"]["第-9-章-仓位与赢面胜率--涨跌空间比"], "yangjia-5-position")
+            self.assertEqual(data["anchors"]["第-0-章-一句话读懂这份资料"], "yangjia-1-overview")
+            self.assertEqual(data["anchors"]["附录-原文结构与页码索引"], "yangjia-6-practice")
+            spans = data["spans"]
+            self.assertEqual([s_[0] for s_ in spans], red["parts"])
+            self.assertEqual(spans[0][1], 0)
+            self.assertAlmostEqual(spans[-1][2], 100, delta=0.1)
+            for a, b in zip(spans, spans[1:]):
+                self.assertAlmostEqual(a[2], b[1], delta=0.02)
+            self.assertEqual(data["tasks"], "yangjia-6-practice")
+            self.assertIn('url=/reading/yangjia-1-overview.html', page)  # 无 JS 回退
+            self.assertIn("location.replace", page)
+            self.assertIn("rdMigrated:", page)
+            # 旧清单的勾选序号能原样对应到新文章（第 ⑥ 篇的清单前没有新增复选框）
+            old_tasks = 13
+            sixth = (out / "reading/yangjia-6-practice.html").read_text(encoding="utf-8")
+            self.assertEqual(sixth.count('type="checkbox"'), old_tasks)
+
+    def test_redirect_validation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write(root / "content/reading/a/article.md", "# a\n")
+            base = "categories:\n  - {id: masters, name: 前辈心法}\narticles:\n  - {id: a, title: A, category: masters}\n"
+            for redirects in ("redirects:\n  - {from: a, to: a}\n",            # 与现有文章同名
+                              "redirects:\n  - {from: old, to: ghost}\n",      # 指向不存在
+                              "redirects:\n  - {from: old, to: a, parts: [a, nope]}\n",
+                              "redirects:\n  - {from: Old_X, to: a}\n",
+                              "redirects:\n  - {from: old, to: a}\n  - {from: old, to: a}\n"):
+                with self.subTest(redirects=redirects), self.assertRaises(ReadingConfigError):
+                    load_config(write(root / "config/reading.yaml", base + redirects), root)
+            cfg = load_config(write(root / "config/reading.yaml", base + "redirects:\n  - {from: old, parts: [a]}\n"), root)
+            self.assertEqual(cfg["redirects"][0]["to"], "a")
 
 
 class MarkdownRenderTest(unittest.TestCase):
@@ -208,24 +258,37 @@ class GenerateTest(unittest.TestCase):
             out = Path(tmp)
             written = generate(out_dir=out)
             self.assertEqual(written[0], out / "reading.html")
-            page = (out / "reading/chaogu-yangjia.html").read_text(encoding="utf-8")
-            imgs = re.findall(r'<img src="([^"]+)"', page)
-            self.assertEqual(len(imgs), 4)
-            for src in imgs:
-                self.assertTrue(src.startswith("/reading/chaogu-yangjia/images/"), src)
-                self.assertTrue((out / src.lstrip("/")).is_file(), src)
-            ids = set(re.findall(r'<h[23] id="([^"]+)"', page))
-            toc_links = re.findall(r'data-toc="([^"]+)"', page)
-            self.assertGreater(len(toc_links), 50)
-            self.assertTrue(set(toc_links) <= ids)
-            self.assertTrue(set(re.findall(r'href="#([^"]+)"', page)) <= ids)
-            self.assertIn('data-active="reading"', page)
-            self.assertIn('rd-callout--summary', page)
-            self.assertIn('id="rdGlossary"', page)
-            self.assertNotIn("::: ", page)
-            self.assertNotIn("==", re.sub(r"<pre class=\"mermaid\">.*?</pre>|<script.*?</script>", "", page, flags=re.S))
+            parts = ["yangjia-1-overview", "yangjia-2-emotion", "yangjia-3-dashi", "yangjia-4-trade", "yangjia-5-position", "yangjia-6-practice"]
+            total_imgs, total_toc = 0, 0
+            for aid in parts:
+                page = (out / f"reading/{aid}.html").read_text(encoding="utf-8")
+                imgs = re.findall(r'<img src="([^"]+)"', page)
+                total_imgs += len(imgs)
+                for src in imgs:
+                    self.assertTrue(src.startswith(f"/reading/{aid}/images/"), src)
+                    self.assertTrue((out / src.lstrip("/")).is_file(), src)
+                ids = set(re.findall(r'<h[23] id="([^"]+)"', page))
+                toc_links = re.findall(r'data-toc="([^"]+)"', page)
+                total_toc += len(toc_links)
+                self.assertTrue(set(toc_links) <= ids)
+                self.assertTrue(set(re.findall(r'href="#([^"]+)"', page)) <= ids)
+                self.assertIn('data-active="reading"', page)
+                self.assertIn('rd-callout--summary', page)
+                self.assertIn('id="rdGlossary"', page)
+                self.assertNotIn("::: ", page)
+                self.assertNotIn("==", re.sub(r"<pre class=\"mermaid\">.*?</pre>|<script.*?</script>", "", page, flags=re.S))
+            self.assertEqual(total_imgs, 4)  # 原长文的 4 张图全部跟随所在章节
+            self.assertGreater(total_toc, 50)
+            # 跨篇链接（含锚点）都指向存在的小节
+            heading_ids = {p.stem: set(re.findall(r'\sid="([^"]+)"', p.read_text(encoding="utf-8"))) for p in (out / "reading").glob("*.html")}
+            for p in (out / "reading").glob("yangjia-*.html"):
+                for aid, anchor in re.findall(r'href="/reading/([a-z0-9-]+)\.html(?:#([^"]*))?"', p.read_text(encoding="utf-8")):
+                    self.assertIn(aid, heading_ids, f"{p.stem} -> {aid}")
+                    if anchor:
+                        self.assertIn(anchor, heading_ids[aid], f"{p.stem} -> {aid}#{anchor}")
             index = (out / "reading.html").read_text(encoding="utf-8")
-            self.assertIn('/reading/chaogu-yangjia.html', index)
+            self.assertIn('/reading/yangjia-1-overview.html', index)
+            self.assertNotIn('/reading/chaogu-yangjia.html', index)  # 旧长文只保留跳转页，不进书库
             self.assertIn('待收录', index)  # 技巧 / 买卖逻辑暂无文章
 
     def test_layout_width_and_toc_toggle_controls(self):
@@ -236,7 +299,7 @@ class GenerateTest(unittest.TestCase):
             gen_reading._layout_style({"layout": {"measure_chars": 200}})
         with tempfile.TemporaryDirectory() as tmp:
             generate(out_dir=Path(tmp))
-            page = (Path(tmp) / "reading/chaogu-yangjia.html").read_text(encoding="utf-8")
+            page = (Path(tmp) / "reading/yangjia-1-overview.html").read_text(encoding="utf-8")
         for needle in ('id="rdTocToggle"', 'aria-controls="rdToc"', 'id="rdTocCollapse"', 'id="rdWidthToggle"', "--rd-measure-ch:56",
                        "localStorage.getItem('rdToc')==='collapsed'"):
             self.assertIn(needle, page)
