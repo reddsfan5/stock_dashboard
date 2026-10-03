@@ -67,6 +67,14 @@ series:                          # 可选：把多篇文章组织成有序系列
     description: "\"弱市不做\"的空仓哲学、先大盘后板块再个股的主流热点打法、回撤控制演进，以及\"第一个 10 倍\"的成长路径。"
     tags: [空仓, 主流热点, 打板, 回撤]
 
+  - id: gaipian
+    name: 钙片系列
+    category: masters
+    icon: "钙"
+    author: 钙片（"钙总"） · 淘股吧早期短线选手
+    description: "炒股养家口中\"强势阶段学钙片做主升浪\"的那位前辈：市场合力与股性、只买龙头、整体性止损与\"现金为王\"。资料以论坛老帖为主，身份信息多数待考。"
+    tags: [主升浪, 龙头, 股性, 止损]
+
 articles:
   - id: yangjia-1-overview
     title: "炒股养家 ①：总览与人物——一张图看懂养家心法"
@@ -288,6 +296,43 @@ articles:
 # 旧文章拆分/改名后保留旧链接：生成 output/reading/<from>.html 跳转页
 #   - 带 #锚点 的旧链接跳到含该小节的新文章；无锚点时按旧阅读进度跳到续读的那篇，否则跳 to
 #   - parts：旧长文按顺序拆成的新文章，旧进度按字数比例分摊到各篇；tasks_to：旧清单勾选迁移到哪篇（序号不变）
+  - id: gaipian-1-life
+    title: "钙片 ①：人物与足迹——养家口中“做主升浪”的那位前辈"
+    short_title: 人物与足迹
+    category: masters
+    series: gaipian
+    author: 钙片（论坛老帖） · 主题整理
+    source: content/reading/gaipian-1-life/article.md
+    order: 31
+    summary: "淘股吧早期短线选手“钙片”：被炒股养家点名的强势主升浪派。能确认什么、不能确认什么，长帖的作者归属依据，2008–2018 年时间线与“代码 + 八个感叹号”的后期风格。"
+    tags: [人物, 经历, 待考]
+    glossary_auto: true
+    added: 2026-10-03
+  - id: gaipian-2-heli
+    title: "钙片 ②：市场合力与股性——只买龙头，不买龙头的亲戚"
+    short_title: 市场合力·股性·龙头
+    category: masters
+    series: gaipian
+    author: 钙片（论坛老帖） · 主题整理
+    source: content/reading/gaipian-2-heli/article.md
+    order: 32
+    summary: "合力就是主流趋势；股票有性格；只做分时“完美与流畅”的；第一个涨停的换手决定后路；只买龙头不买亲戚；市场不相信真相。"
+    tags: [合力, 股性, 龙头]
+    glossary_auto: true
+    added: 2026-10-03
+  - id: gaipian-3-discipline
+    title: "钙片 ③：制度、止损与活着——整体性止损、现金为王与语录卡"
+    short_title: 制度·止损·语录
+    category: masters
+    series: gaipian
+    author: 钙片（论坛老帖） · 主题整理
+    source: content/reading/gaipian-3-discipline/article.md
+    order: 33
+    summary: "走势背离预期就出局、看总市值的整体性止损、先划禁区的制度、计划即买入条件、现金为王与守株待兔，以及带出处的语录卡。"
+    tags: [止损, 仓位, 心态, 语录]
+    glossary_auto: true
+    added: 2026-10-03
+
 redirects:
   - from: chaogu-yangjia
     to: yangjia-1-overview

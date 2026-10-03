@@ -130,7 +130,9 @@ class ReadingConfigTest(unittest.TestCase):
         self.assertEqual(len(names["asking"]["articles"]), 4)
         self.assertEqual(len(names["zhiye"]["articles"]), 4)
         self.assertEqual(len(names["chaogu-yangjia"]["articles"]), 10)
-        for sid in ("asking", "zhiye", "chaogu-yangjia"):
+        self.assertEqual([a["id"] for a in names["gaipian"]["articles"]],
+                         ["gaipian-1-life", "gaipian-2-heli", "gaipian-3-discipline"])
+        for sid in ("asking", "zhiye", "chaogu-yangjia", "gaipian"):
             for art in names[sid]["articles"]:
                 text = art["source_path"].read_text(encoding="utf-8")
                 with self.subTest(article=art["id"]):

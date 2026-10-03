@@ -23,9 +23,11 @@ SERIES = {  # 系列 id → 有序文章
                        "yangjia-6-practice", "yangjia-7-thread", "yangjia-8-hotspot", "yangjia-9-gauge", "yangjia-10-media"],
     "asking": ["asking-1-life", "asking-2-longtou", "asking-3-trading", "asking-4-mind"],
     "zhiye": ["zhiye-1-life", "zhiye-2-core", "zhiye-3-mode", "zhiye-4-growth"],
+    "gaipian": ["gaipian-1-life", "gaipian-2-heli", "gaipian-3-discipline"],
 }
 SHOT_AS = {"asking-1-life": "asking-article", "zhiye-1-life": "zhiye-article",
-           "yangjia-3-dashi": "yangjia-split-article", "yangjia-7-thread": "yangjia-new-article"}
+           "yangjia-3-dashi": "yangjia-split-article", "yangjia-7-thread": "yangjia-new-article",
+           "gaipian-2-heli": "gaipian-article"}
 MERMAID_OK = """() => {
   const pres = [...document.querySelectorAll('pre.mermaid')];
   return pres.length > 0 && pres.every(p => p.querySelector('svg'));
