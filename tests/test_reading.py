@@ -35,7 +35,7 @@ class ReadingConfigTest(unittest.TestCase):
 
     def test_repo_config_is_valid_and_first_article_is_masters(self):
         cfg = load_config()
-        self.assertEqual([c["name"] for c in cfg["categories"]][:3], ["前辈心法", "技巧", "买卖逻辑"])
+        self.assertEqual([c["name"] for c in cfg["categories"]][:4], ["前辈心法", "价值投资", "技巧", "买卖逻辑"])
         first = cfg["articles"][0]
         self.assertEqual(first["id"], "yangjia-1-overview")
         self.assertEqual(first["category"], "masters")
@@ -132,11 +132,16 @@ class ReadingConfigTest(unittest.TestCase):
         self.assertEqual(len(names["chaogu-yangjia"]["articles"]), 10)
         self.assertEqual([a["id"] for a in names["gaipian"]["articles"]],
                          ["gaipian-1-life", "gaipian-2-heli", "gaipian-3-discipline"])
-        for sid in ("asking", "zhiye", "chaogu-yangjia", "gaipian"):
+        self.assertEqual([a["id"] for a in names["zhang"]["articles"]], ["zhang-1-life", "zhang-2-style"])
+        self.assertEqual([a["id"] for a in names["buffett"]["articles"]],
+                         ["buffett-1-life", "buffett-2-moat", "buffett-3-value", "buffett-4-competence", "buffett-5-cases"])
+        self.assertIn("value", [c["id"] for c in cfg["categories"]])  # 价值投资：巴菲特，后续芒格、段永平
+        expected_cat = {"buffett": "value"}
+        for sid in ("asking", "zhiye", "chaogu-yangjia", "gaipian", "zhang", "buffett"):
             for art in names[sid]["articles"]:
                 text = art["source_path"].read_text(encoding="utf-8")
                 with self.subTest(article=art["id"]):
-                    self.assertEqual(art["category"], "masters")
+                    self.assertEqual(art["category"], expected_cat.get(sid, "masters"))
                     self.assertIn("::: note", text)
                     self.assertIn("不构成任何投资建议", text)
                     self.assertIn("::: summary", text)

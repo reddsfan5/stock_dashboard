@@ -22,6 +22,10 @@ categories:                      # 顺序即书库首页的分区顺序；没有
     name: 前辈心法
     icon: "☯"
     description: 游资与职业交易者的交易哲学、心路与体系
+  - id: value
+    name: 价值投资
+    icon: "◎"
+    description: 以企业价值为锚的长期投资：护城河、安全边际、能力圈与资本配置
   - id: techniques
     name: 技巧
     icon: "✦"
@@ -30,6 +34,10 @@ categories:                      # 顺序即书库首页的分区顺序；没有
     name: 买卖逻辑
     icon: "⇄"
     description: 买点、卖点与持仓决策背后的推理链
+  # 扩展规划（新增人物时按此归类；分类没有文章时书库显示"待收录"，所以不提前建空分类）：
+  #   前辈心法 masters：炒股养家 / Asking / 职业炒手 / 钙片 / 章盟主；后续：赵老哥、小鳄鱼、退学炒股
+  #   价值投资 value：巴菲特；后续：芒格、段永平
+  #   海外交易经典（计划，id 建议 classics）：利弗莫尔等海外投机/交易经典，收录时再新增此分类
 
 # 提示框类型：正文用 "::: <type> 可选标题" … ":::" 包裹。
 # 以 💡 / ⚠️ 开头的段落或引用会自动套用 emoji_map 对应类型，无需改原文。
@@ -74,6 +82,22 @@ series:                          # 可选：把多篇文章组织成有序系列
     author: 钙片（"钙总"） · 淘股吧早期短线选手
     description: "炒股养家口中\"强势阶段学钙片做主升浪\"的那位前辈：市场合力与股性、只买龙头、整体性止损与\"现金为王\"。资料以论坛老帖为主，身份信息多数待考。"
     tags: [主升浪, 龙头, 股性, 止损]
+
+  - id: zhang
+    name: 章盟主系列
+    category: masters
+    icon: "章"
+    author: 章盟主（本名章建平） · 杭州元老级游资（据媒体）
+    description: "从 5 万元到\"游资盟主\"：只依据证监会公告和主流媒体报道，梳理他的足迹、大资金打法、挫折与 2024 年罚单，并给流传的\"语录\"做辨伪。本人从不接受采访，大量细节待考。"
+    tags: [大资金, 龙虎榜, 主升浪, 合规]
+
+  - id: buffett
+    name: 巴菲特系列
+    category: value
+    icon: "巴"
+    author: 沃伦·巴菲特 · 伯克希尔·哈撒韦
+    description: 以伯克希尔致股东信和《格雷厄姆-多德村的超级投资者》为一手来源：从烟蒂到好生意、护城河、安全边际与市场先生、能力圈与资本配置，以及带出处的中英对照语录卡。
+    tags: [护城河, 安全边际, 能力圈, 长期持有]
 
 articles:
   - id: yangjia-1-overview
@@ -293,9 +317,6 @@ articles:
     glossary_auto: true
     added: 2026-10-03
 
-# 旧文章拆分/改名后保留旧链接：生成 output/reading/<from>.html 跳转页
-#   - 带 #锚点 的旧链接跳到含该小节的新文章；无锚点时按旧阅读进度跳到续读的那篇，否则跳 to
-#   - parts：旧长文按顺序拆成的新文章，旧进度按字数比例分摊到各篇；tasks_to：旧清单勾选迁移到哪篇（序号不变）
   - id: gaipian-1-life
     title: "钙片 ①：人物与足迹——养家口中“做主升浪”的那位前辈"
     short_title: 人物与足迹
@@ -333,6 +354,94 @@ articles:
     glossary_auto: true
     added: 2026-10-03
 
+  - id: zhang-1-life
+    title: "章盟主 ①：人物与足迹——从 5 万元到“游资盟主”，哪些是真的"
+    short_title: 人物与足迹
+    category: masters
+    series: zhang
+    author: 章盟主（媒体报道） · 主题整理
+    source: content/reading/zhang-1-life/article.md
+    order: 41
+    summary: "能确认什么、不能确认什么：证监会公告里的身份信息、时间线、财联社梳理的成名三战、席位标注与证实的区别、家族账户，以及 2024 年的谣言与罚单。"
+    tags: [人物, 经历, 合规, 待考]
+    glossary_auto: true
+    added: 2026-10-04
+  - id: zhang-2-style
+    title: "章盟主 ②：打法、挫折与“语录”辨伪——从龙虎榜和持仓看一位大资金游资"
+    short_title: 打法·挫折·辨伪
+    category: masters
+    series: zhang
+    author: 章盟主（媒体报道） · 主题整理
+    source: content/reading/zhang-2-style/article.md
+    order: 42
+    summary: "媒体怎么归纳他的打法、打法如何随资金规模演变、流传“语录”的辨伪、挫折清单，以及普通人能学什么、不该学什么。"
+    tags: [打法, 大资金, 语录辨伪]
+    glossary_auto: true
+    added: 2026-10-04
+  - id: buffett-1-life
+    title: "巴菲特 ①：人物与历程——从“烟蒂”到伯克希尔的六十年"
+    short_title: 人物与历程
+    category: value
+    series: buffett
+    author: 巴菲特（致股东信） · 主题整理
+    source: content/reading/buffett-1-life/article.md
+    order: 51
+    summary: "一张成绩单、时间线、格雷厄姆的“40 美分买 1 美元”、伯克希尔本身就是烟蒂的教训、芒格带来的转变，以及 2026 年交棒阿贝尔。"
+    tags: [人物, 经历, 格雷厄姆, 芒格]
+    glossary_auto: true
+    added: 2026-10-04
+  - id: buffett-2-moat
+    title: "巴菲特 ②：护城河与好生意——城堡、喜诗糖果与三种“储蓄账户”"
+    short_title: 护城河·好生意
+    category: value
+    series: buffett
+    author: 巴菲特（致股东信） · 主题整理
+    source: content/reading/buffett-2-moat/article.md
+    order: 52
+    summary: "经济城堡与持久的护城河、喜诗糖果这门“梦想中的生意”、伟大/良好/糟糕三种储蓄账户、好公司合理价胜过一般公司便宜价、只跨一尺高的栏。"
+    tags: [护城河, 好生意, 喜诗糖果]
+    glossary_auto: true
+    added: 2026-10-04
+  - id: buffett-3-value
+    title: "巴菲特 ③：安全边际与市场先生——价格是你付出的，价值是你得到的"
+    short_title: 安全边际·市场先生
+    category: value
+    series: buffett
+    author: 巴菲特（致股东信） · 主题整理
+    source: content/reading/buffett-3-value/article.md
+    order: 53
+    summary: "内在价值是一个估计、安全边际是能承重三万磅的桥、风险与回报反着来、市场先生是来服务你的，以及与情绪周期派的对照。"
+    tags: [安全边际, 估值, 市场先生]
+    glossary_auto: true
+    added: 2026-10-04
+  - id: buffett-4-competence
+    title: "巴菲特 ④：能力圈、集中与资本配置——知道边界，少犯大错"
+    short_title: 能力圈·资本配置
+    category: value
+    series: buffett
+    author: 巴菲特（致股东信） · 主题整理
+    source: content/reading/buffett-4-competence/article.md
+    order: 54
+    summary: "能力圈的边界、know-nothing 与 know-something 的集中/分散之辨、十年与十分钟、不作为的智慧、规模是业绩的锚、拖延纠错是最大的罪过、浮存金。"
+    tags: [能力圈, 仓位, 纠错, 资本配置]
+    glossary_auto: true
+    added: 2026-10-04
+  - id: buffett-5-cases
+    title: "巴菲特 ⑤：经典案例与语录——伯克希尔、喜诗、华盛顿邮报、GEICO、可口可乐"
+    short_title: 经典案例·语录
+    category: value
+    series: buffett
+    author: 巴菲特（致股东信） · 主题整理
+    source: content/reading/buffett-5-cases/article.md
+    order: 55
+    summary: "纺织厂的“愚蠢决定”、喜诗、华盛顿邮报的四毛买一块、GEICO 的成本优势、可口可乐与 US Air 的正反案例，中英对照语录卡与“查不到出处”的待考清单。"
+    tags: [案例, 语录, 待考]
+    glossary_auto: true
+    added: 2026-10-04
+
+# 旧文章拆分/改名后保留旧链接：生成 output/reading/<from>.html 跳转页
+#   - 带 #锚点 的旧链接跳到含该小节的新文章；无锚点时按旧阅读进度跳到续读的那篇，否则跳 to
+#   - parts：旧长文按顺序拆成的新文章，旧进度按字数比例分摊到各篇；tasks_to：旧清单勾选迁移到哪篇（序号不变）
 redirects:
   - from: chaogu-yangjia
     to: yangjia-1-overview
