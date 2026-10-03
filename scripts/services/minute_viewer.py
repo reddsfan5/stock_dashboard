@@ -701,7 +701,7 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
                 "service": "stock-interactive-web",
                 "version": 1,
                 "listen_host": self.server.server_address[0],
-                "features": ["minute", "grid", "trainer", "journal", "news", "market_context", "training_loop", "watchlist", "watchlist_monitor", "symbol_context", "hypotheses", "shortlist_history", "shortlist_monitor", "auth"],
+                "features": ["minute", "grid", "trainer", "journal", "news", "market_brief", "market_context", "training_loop", "watchlist", "watchlist_monitor", "symbol_context", "hypotheses", "shortlist_history", "shortlist_monitor", "auth"],
                 "pid": os.getpid(),
             })
         if parsed.path == "/api/minute/search":
@@ -803,6 +803,8 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
                 return self._send_json({"error": f"读取日计划失败: {exc}"}, status=500)
         if parsed.path.startswith("/api/news/"):
             return self._news_get(parsed)
+        if parsed.path.startswith("/api/market-brief/"):
+            return self._market_brief_get(parsed)
         if parsed.path in ("/api/trainer/market-context", "/api/market/context"):
             return self._market_context_get(parsed)
         if parsed.path.startswith("/api/journal/"):
@@ -1253,6 +1255,33 @@ class MinuteRequestHandler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _market_brief_get(self, parsed):
+        from data.market_briefs import MarketBriefRepository
+
+        params = parse_qs(parsed.query)
+        try:
+            repository = MarketBriefRepository(read_only=True)
+            if parsed.path == "/api/market-brief/dates":
+                result = repository.dates(limit=params.get("limit", ["180"])[0])
+            elif parsed.path == "/api/market-brief/day":
+                revision = params.get("revision", [None])[0]
+                result = repository.day(
+                    params.get("date", [""])[0],
+                    revision=int(revision) if revision else None,
+                    kind=params.get("kind", [None])[0],
+                )
+            elif parsed.path == "/api/market-brief/latest":
+                result = repository.latest(params.get("kind", [""])[0])
+            else:
+                return self._send_json({"error": "接口不存在"}, status=404)
+            return self._send_json(result)
+        except LookupError as exc:
+            return self._send_json({"error": str(exc)}, status=404)
+        except (TypeError, ValueError) as exc:
+            return self._send_json({"error": str(exc)}, status=400)
+        except Exception as exc:
+            return self._send_json({"error": f"读取市场简报失败: {exc}"}, status=500)
+
     def log_message(self, fmt, *args):
         if self.path.startswith("/api/"):
             sys.stdout.write("  API " + (fmt % args) + "\n")
@@ -1335,6 +1364,7 @@ def serve(repository: MinuteRepository, trainer, journal, news, market_context, 
     print(f"✓ T+1 交易训练: http://{host}:{port}/trading_trainer.html")
     print(f"✓ 选股日记工作台: http://{host}:{port}/stock_journal.html")
     print(f"✓ 市场资讯复盘: http://{host}:{port}/market_news.html")
+    print(f"✓ 市场简报: http://{host}:{port}/market_brief.html")
     print(f"✓ 观察池跟踪: http://{host}:{port}/watchlist.html")
     print(f"✓ 观察池收益监控: http://{host}:{port}/watchlist_monitor.html")
     print(f"✓ 每日精选收益监控: http://{host}:{port}/shortlist_monitor.html")
@@ -1375,6 +1405,7 @@ def main():
         from data.market_news import MarketNewsRepository
         from data.market_context import MarketContextService
         from scripts.services.market_news import write_app as write_news_app
+        from scripts.services.market_brief import write_app as write_brief_app
         from scripts.services.watchlist import (
             WatchlistService, write_app as write_watchlist_app,
         )
@@ -1386,6 +1417,7 @@ def main():
         write_trainer_app()
         write_journal_app()
         write_news_app()
+        write_brief_app()
         write_watchlist_app()
         write_watchlist_monitor_app()
         write_symbol_app()

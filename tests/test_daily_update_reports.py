@@ -29,6 +29,7 @@ class DailyUpdateReportsTest(unittest.TestCase):
     def test_reports_stage_rebuilds_market_and_screening_pages(self, run):
         run.side_effect = [
             subprocess.CompletedProcess([], 0, stdout="行情完成\n", stderr=""),
+            subprocess.CompletedProcess([], 0, stdout="点云涨跌快照完成\n", stderr=""),
             subprocess.CompletedProcess([], 0, stdout="选股完成\n", stderr=""),
             subprocess.CompletedProcess([], 0, stdout="交互页面完成\n", stderr=""),
         ]
@@ -37,11 +38,13 @@ class DailyUpdateReportsTest(unittest.TestCase):
 
         self.assertTrue(ok)
         self.assertIn("选股与交互页面已刷新", message)
-        self.assertEqual(run.call_count, 3)
+        self.assertEqual(run.call_count, 4)
         commands = [call.args[0] for call in run.call_args_list]
         self.assertEqual(commands[0][-2:], ["-m", "scripts.reports.gen_market"])
-        self.assertEqual(commands[1][-2:], ["-m", "scripts.screen"])
-        self.assertEqual(commands[2][-2:], ["-m", "scripts.reports.refresh_apps"])
+        self.assertEqual(commands[1][-3:], ["scripts.reports.gen_sector_corr_cloud", "--from-cache", "--no-nav"])
+        self.assertEqual(commands[2][-2:], ["-m", "scripts.screen"])
+        self.assertEqual(commands[3][-2:], ["-m", "scripts.reports.refresh_apps"])
+        self.assertEqual(details["板块点云涨跌快照"]["returncode"], 0)
         self.assertEqual(details["选股仪表盘"]["returncode"], 0)
         self.assertEqual(details["交互页面与日常清单"]["returncode"], 0)
 

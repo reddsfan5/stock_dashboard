@@ -139,6 +139,7 @@ th{{color:var(--muted)}}.num{{text-align:right;font-variant-numeric:tabular-nums
     <a class="primary" href="/trading_trainer.html">进入交易训练</a>
     <a href="/watchlist.html">观察池</a>
     <a href="/market_news.html">市场资讯</a>
+    <a href="/market_brief.html">市场简报</a>
     <a href="/index.html">全部导航</a>
   </div>
 </div>
@@ -157,6 +158,7 @@ th{{color:var(--muted)}}.num{{text-align:right;font-variant-numeric:tabular-nums
       <a class="item" href="/stock_journal.html"><div class="icon">📓</div><div><b>选股日记</b><span>把结论推进到「已笔记」，并挂到案例时间线</span></div></a>
       <a class="item" href="/shortlist.html"><div class="icon">🧭</div><div><b>从精选进入标的研究</b><span>在每日精选、仪表盘或观察池中点击具体代码，打开对应的标的上下文</span></div></a>
       <a class="item" href="/market_news.html"><div class="icon">📰</div><div><b>市场资讯</b><span>收盘后核对重要消息是否改变判断</span></div></a>
+      <a class="item" href="/market_brief.html"><div class="icon">🧭</div><div><b>市场简报</b><span>盘前建立情境，收盘验证风格和资讯传导</span></div></a>
     </div>
   </div>
 

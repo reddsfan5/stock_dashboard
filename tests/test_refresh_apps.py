@@ -22,7 +22,11 @@ class RefreshAppsTest(unittest.TestCase):
         result = main()
 
         self.assertEqual(result, 1)
-        self.assertEqual(run_write_app.call_count, 6)
+        self.assertEqual(run_write_app.call_count, 7)
+        self.assertIn(
+            ("市场简报", "scripts.services.market_brief"),
+            [call.args for call in run_write_app.call_args_list],
+        )
         generate_sector_atlas.assert_called_once_with()
 
 

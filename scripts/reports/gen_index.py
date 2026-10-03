@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""生成 output/index.html 导航页，按使用场景和访问频率组织入口。"""
+"""生成按使用场景组织的全部工具导航页。"""
 
 import os
 import sys
@@ -14,6 +14,7 @@ GRID_SIMULATOR_URL = "http://127.0.0.1:8765/grid_simulator.html"
 TRADING_TRAINER_URL = "http://127.0.0.1:8765/trading_trainer.html"
 STOCK_JOURNAL_URL = "http://127.0.0.1:8765/stock_journal.html"
 MARKET_NEWS_URL = "http://127.0.0.1:8765/market_news.html"
+MARKET_BRIEF_URL = "http://127.0.0.1:8765/market_brief.html"
 WATCHLIST_URL = "http://127.0.0.1:8765/watchlist.html"
 SYMBOL_URL = "http://127.0.0.1:8765/symbol.html"
 MARKET_GAP_BACKTEST_URL = "http://127.0.0.1:8765/market_gap_backtest.html"
@@ -27,6 +28,7 @@ SERVICE_URLS = {
     "trading_trainer.html": TRADING_TRAINER_URL,
     "stock_journal.html": STOCK_JOURNAL_URL,
     "market_news.html": MARKET_NEWS_URL,
+    "market_brief.html": MARKET_BRIEF_URL,
     "watchlist.html": WATCHLIST_URL,
     "symbol.html": SYMBOL_URL,
     "market_gap_backtest.html": MARKET_GAP_BACKTEST_URL,
@@ -49,7 +51,8 @@ GROUPS = [
             ("shortlist.html", "🧾", "每日精选", "多维拼装的每日 10～15 只精选标的：形态命中、量价、板块强度、观察池与风险提示", "每日选股"),
             ("dashboard.html", "🎛️", "选股仪表盘", "技术形态扫描叠加量比、换手、动量、风险和估值指标，可筛选排序并查看K线", "每日选股"),
             ("watchlist.html", "👀", "观察池与次日跟踪", "从选股结果加入观察/待买，跟踪次日收益与申万一级板块强度", "每日选股"),
-            ("market_news.html", "📰", "市场资讯复盘", "同花顺市场级重要资讯按早盘、午间、收盘归档，支持按模拟时刻防剧透查看并记录消息如何影响判断", "消息时间轴"),
+            ("market_news.html", "📰", "市场资讯中心", "聚合同花顺、东方财富、华尔街见闻、开盘啦、韭研公社与官方来源；按事件去重、标注可信等级并支持无剧透复盘", "事件与来源链"),
+            ("market_brief.html", "🧭", "市场简报", "08:00 前汇总八条关键资讯并建立盘前情境，19:15 结合资讯解释风格并复盘晨间判断", "盘前收盘闭环"),
             ("stock_journal.html", "📓", "选股日记工作台", "日K叠加决策记录，内嵌分时可从开盘动态回放，按当时可见行情记录心理与交易逻辑", "决策记录"),
             ("market_overview.html", "🌐", "整体行情统计", "每日资金量、大盘走势与申万1/2级板块强度轮动", "市场全景"),
             ("market_heatmap.html", "🧭", "板块轮动热力图", "申万1/2级 × 20～120日窗口，观察板块强弱和轮动方向", "板块跟踪"),
@@ -228,6 +231,7 @@ body{{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHe
 .header h1{{font-size:26px;font-weight:700;letter-spacing:.01em}}
 .header .sub{{color:#b5c1d9;font-size:13px;line-height:1.7;margin-top:7px}}
 .quick-nav-wrap{{position:sticky;top:48px;z-index:10;background:rgba(243,245,248,.94);backdrop-filter:blur(12px);border-bottom:1px solid var(--border)}}
+body.app-workbench[data-page=home] .quick-nav-wrap{{position:sticky;top:var(--app-nav-h,56px);z-index:900}}
 .quick-nav{{max-width:1300px;margin:0 auto;padding:10px 32px;display:flex;gap:8px;overflow-x:auto;scrollbar-width:none}}
 .quick-nav::-webkit-scrollbar{{display:none}}
 .nav-link{{display:inline-flex;align-items:center;gap:7px;white-space:nowrap;text-decoration:none;color:#475267;background:#fff;border:1px solid var(--border);border-radius:999px;padding:8px 12px;font-size:12px;font-weight:600}}
@@ -267,7 +271,7 @@ main{{max-width:1300px;margin:0 auto;padding:8px 32px 20px}}
 .section-archive .card{{background:#fafbfc;box-shadow:none}}
 .footer{{text-align:center;color:#929baa;font-size:11px;padding:18px 24px 30px}}
 @media (max-width:700px){{
-  html{{scroll-padding-top:62px}}
+  html{{scroll-padding-top:112px}}
   .header{{padding:24px 18px 21px}}
   .header h1{{font-size:21px}}
   .header .sub{{font-size:12px}}
@@ -284,25 +288,9 @@ main{{max-width:1300px;margin:0 auto;padding:8px 32px 20px}}
   .desc{{margin-right:14px}}
 }}
 
-.ops-hero{{max-width:1300px;margin:0 auto;padding:22px 32px 8px}}
-.ops-hero-card{{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:22px 24px;box-shadow:0 1px 2px rgba(18,27,49,.04),0 10px 28px rgba(18,27,49,.05)}}
-.ops-hero-kicker{{font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--daily);margin-bottom:6px}}
-.ops-hero h2{{font-size:24px;line-height:1.25;margin:0}}
-.ops-hero .lead{{color:var(--muted);font-size:13px;line-height:1.65;margin-top:8px;max-width:720px}}
-.ops-ctas{{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}}
-.ops-cta{{display:inline-flex;align-items:center;justify-content:center;height:40px;padding:0 16px;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;border:1px solid var(--border);background:#fff;color:var(--text)}}
-.ops-cta:hover{{text-decoration:none;border-color:#b7caf5;background:#f3f7ff}}
-.ops-cta-primary{{background:var(--blue);border-color:var(--blue);color:#fff}}
-.ops-cta-primary:hover{{filter:brightness(1.05);background:var(--blue);color:#fff}}
-.ops-tips{{display:flex;flex-wrap:wrap;gap:10px 18px;margin-top:14px;color:var(--muted);font-size:12px;line-height:1.5}}
-.ops-tips span{{display:inline-flex;align-items:center;gap:6px}}
 .tools-label{{max-width:1300px;margin:18px auto 0;padding:0 32px;font-size:12px;font-weight:700;letter-spacing:.06em;color:#8a94a6;text-transform:none}}
 @media (max-width:700px){{
-  .ops-hero{{padding:16px 14px 4px}}
-  .ops-hero-card{{padding:16px}}
-  .ops-hero h2{{font-size:20px}}
   .tools-label{{padding:0 14px}}
-  .ops-cta{{height:38px;padding:0 12px;font-size:12px}}
 }}
 .app-caps-fallback{{display:none}}
 @media (prefers-reduced-motion:reduce){{html{{scroll-behavior:auto}}.card{{transition:none}}.app-reveal{{opacity:1;transform:none}}}}
@@ -317,21 +305,6 @@ main{{max-width:1300px;margin:0 auto;padding:8px 32px 20px}}
   </div>
 </header>
 {digest_section}
-<section class="ops-hero" aria-label="今日操盘">
-  <div class="ops-hero-card app-reveal">
-    <div class="ops-hero-kicker">今日操盘</div>
-    <h2>每日操盘，从这里开始</h2>
-    <p class="lead">先过每日操盘清单，再进入训练、观察池与资讯。下面保留完整工具归档，需要时再展开。</p>
-    <div class="ops-ctas">
-      <a class="ops-cta ops-cta-primary" href="{DAILY_OPS_URL}">打开每日清单</a>
-      <a class="ops-cta" href="{TRADING_TRAINER_URL}">进入交易训练</a>
-      <a class="ops-cta" href="{SHORTLIST_URL}">每日精选</a>
-      <a class="ops-cta" href="{WATCHLIST_URL}">观察池</a>
-      <a class="ops-cta" href="{MARKET_NEWS_URL}">市场资讯</a>
-    </div>
-
-  </div>
-</section>
 <div class="tools-label" id="all-tools">全部工具</div>
 <div class="quick-nav-wrap" aria-label="页面分类导航">
   <nav class="quick-nav">{nav_links}</nav>

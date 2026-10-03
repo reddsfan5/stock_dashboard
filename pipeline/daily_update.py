@@ -40,6 +40,7 @@ STATUS_FILE = os.path.join(PROJECT_DIR, "cache", "daily_update_status.json")
 STAGES = ("stocks", "etfs", "index", "minute", "enrich", "validate", "news", "market_context", "stock_facts", "watchlist_track", "watchlist_monitor", "reports")
 REPORT_JOBS = (
     ("行情与板块报告", (sys.executable, "-m", "scripts.reports.gen_market")),
+    ("板块点云涨跌快照", (sys.executable, "-m", "scripts.reports.gen_sector_corr_cloud", "--from-cache", "--no-nav")),
     ("选股仪表盘", (sys.executable, "-m", "scripts.screen")),
     ("交互页面与日常清单", (sys.executable, "-m", "scripts.reports.refresh_apps")),
 )

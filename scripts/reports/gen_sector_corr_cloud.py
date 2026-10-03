@@ -48,6 +48,7 @@ KLINE_CACHE = PROJECT_DIR / "cache" / "stock_kline_cache.parquet"
 OUTPUT_HTML = PROJECT_DIR / "output" / "sector_corr_cloud.html"
 OUTPUT_JSON = PROJECT_DIR / "cache" / "sector_corr_cloud.json"
 MOM1 = PROJECT_DIR / "cache" / "indicators_mom1.parquet"
+STOCK_KLINE = PROJECT_DIR / "cache" / "stock_kline_cache.parquet"
 
 QUERY_EXPAND: dict[str, dict] = {
     "电力": {"exact": ["电力"], "contains": ["电力", "电网", "电源", "火电", "水电", "绿电", "储能", "风电", "光伏"]},
@@ -391,6 +392,56 @@ def _stock_last_from_mom1(codes: list[str]) -> dict[str, float]:
         return {}
 
 
+def _latest_market_snapshot(info: pd.DataFrame, sw2_col: str, sector_ids: set[str]) -> dict:
+    """用每日行情缓存刷新涨跌榜；相关结构无需随之重算。"""
+    empty = {"as_of": None, "stock_last": {}, "sector_last": {}, "sector_cum20": {}, "coverage": 0.0}
+    if not STOCK_KLINE.exists():
+        return empty
+    try:
+        dates = pd.read_parquet(STOCK_KLINE, columns=["日期"])["日期"]
+        dates = pd.to_datetime(dates, errors="coerce").dropna()
+        sessions = pd.Index(dates.unique()).sort_values()
+        if sessions.empty:
+            return empty
+        recent = sessions[-20:]
+        bars = pd.read_parquet(
+            STOCK_KLINE,
+            columns=["代码", "日期", "收盘", "前收"],
+            filters=[("日期", ">=", pd.Timestamp(recent[0]))],
+        )
+        bars["日期"] = pd.to_datetime(bars["日期"], errors="coerce")
+        bars["bare"] = bars["代码"].map(_bare_code)
+        bars["ret"] = np.where(
+            pd.to_numeric(bars["前收"], errors="coerce") > 0,
+            (pd.to_numeric(bars["收盘"], errors="coerce") /
+             pd.to_numeric(bars["前收"], errors="coerce") - 1.0) * 100.0,
+            np.nan,
+        )
+        mapping = info[["代码", sw2_col]].copy()
+        mapping["bare"] = mapping["代码"].map(_bare_code)
+        mapping = mapping.drop_duplicates("bare").rename(columns={sw2_col: "sector"})
+        bars = bars.merge(mapping[["bare", "sector"]], on="bare", how="inner")
+        bars = bars[bars["sector"].isin(sector_ids)]
+        as_of = pd.Timestamp(sessions[-1])
+        today = bars[bars["日期"] == as_of].dropna(subset=["ret"])
+        stock_last = dict(zip(today["bare"], today["ret"].astype(float)))
+        sector_last = today.groupby("sector")["ret"].mean().to_dict()
+        daily = bars.groupby(["日期", "sector"])["ret"].mean().unstack("sector")
+        daily = daily.reindex(recent)
+        sector_cum20 = (((1.0 + daily / 100.0).prod(min_count=1) - 1.0) * 100.0).to_dict()
+        expected = mapping[mapping["sector"].isin(sector_ids)]["bare"].nunique()
+        return {
+            "as_of": as_of.strftime("%Y-%m-%d"),
+            "stock_last": stock_last,
+            "sector_last": sector_last,
+            "sector_cum20": sector_cum20,
+            "coverage": round(len(stock_last) / expected, 4) if expected else 0.0,
+        }
+    except Exception as exc:
+        print(f"  读取最新日线涨跌快照失败: {exc}")
+        return empty
+
+
 def attach_stock_payload(payload: dict) -> dict:
     """Attach stock_index + sector_members for SW2 nodes present in the cloud."""
     sector_ids = {n["id"] for n in payload.get("nodes", [])}
@@ -419,9 +470,22 @@ def attach_stock_payload(payload: dict) -> dict:
         return payload
 
     codes = info["代码"].astype(str).tolist()
-    last_map = _stock_last_from_mom1(codes)
+    snapshot = _latest_market_snapshot(info, sw2_col, sector_ids)
+    last_map = snapshot["stock_last"]
+    if snapshot["as_of"]:
+        for node in payload.get("nodes", []):
+            last = snapshot["sector_last"].get(node["id"])
+            cum20 = snapshot["sector_cum20"].get(node["id"])
+            node["last"] = None if last is None or not np.isfinite(last) else round(float(last), 3)
+            node["cum20"] = None if cum20 is None or not np.isfinite(cum20) else round(float(cum20), 2)
+        payload["market_as_of"] = snapshot["as_of"]
+        payload["market_snapshot_coverage"] = snapshot["coverage"]
+        payload["generated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+        print(f"  最新板块涨跌刷新至 {snapshot['as_of']}（成分覆盖 {snapshot['coverage']:.1%}）")
+    else:
+        last_map = _stock_last_from_mom1(codes)
     missing = [_bare_code(c) for c in codes if _bare_code(c) not in last_map]
-    if missing:
+    if missing and not snapshot["as_of"]:
         print(f"  拉取腾讯行情补齐成分涨跌 {len(missing)} / {len(codes)} …")
         # map bare->original for tx fetch
         bare_to_raw = {}
@@ -620,6 +684,7 @@ def render_html(payload: dict) -> str:
         .replace("__DATA_JSON__", data_json)
         .replace("__START__", str(payload.get("start", "")))
         .replace("__END__", str(payload.get("end", "")))
+        .replace("__MARKET_AS_OF__", str(payload.get("market_as_of") or payload.get("end", "")))
         .replace("__N_SECTORS__", str(payload.get("n_sectors", "")))
         .replace("__CORR_THR__", str(payload.get("corr_thr", "")))
         .replace("__LEAD_THR__", str(payload.get("lead_thr", "")))
@@ -956,7 +1021,7 @@ button:hover,.chip:hover,.chip.active,.seg button.active{border-color:var(--acce
   <div class="fly-body">
     <div class="fly-pane active" id="paneCtrl" data-pane="ctrl">
       <div class="title">申万二级 · 相关点云</div>
-      <div class="sub">去市场 beta 后的残差结构。点颜色/大小=涨跌（红涨绿跌）；连线为持续流动光流。查询可切换「板块 / 标的」。领先传导只显示当前中心板块的最强连接，每个方向保留前3条。当前点云是关系观察，不代表历史时点信号。</div>
+      <div class="sub">去市场 beta 后的残差结构。点颜色/大小与涨跌榜使用 __MARKET_AS_OF__ 最新行情（红涨绿跌）；相关连线使用较长历史样本。查询可切换「板块 / 标的」。领先传导只显示当前中心板块的最强连接，每个方向保留前3条。当前点云是关系观察，不代表历史时点信号。</div>
       <div class="search">
         <div class="seg" id="qmode">
           <button type="button" class="active" data-v="sector">板块</button>
@@ -993,7 +1058,7 @@ button:hover,.chip:hover,.chip.active,.seg button.active{border-color:var(--acce
       <div class="chips" id="presets"></div>
     </div>
     <div class="fly-pane" id="paneBoard" data-pane="board">
-      <div class="board-hd"><span>按当前收益窗口排序</span><span id="boardLabel">当日</span></div>
+      <div class="board-hd"><span>按当前收益窗口排序</span><span><b id="boardLabel">当日</b> · __MARKET_AS_OF__</span></div>
       <ul class="list" id="boardList"></ul>
     </div>
     <div class="fly-pane" id="paneDetail" data-pane="detail">
@@ -1007,7 +1072,7 @@ button:hover,.chip:hover,.chip.active,.seg button.active{border-color:var(--acce
   </div>
 </aside>
 
-<div class="foot">数据 __START__ → __END__ · __N_SECTORS__ 二级 · 同步边 |ρ|≥__CORR_THR__ · 领先周频 |xcorr|≥__LEAD_THR__ · 跟涨观察 __HORIZON__ 日 · 生成 __GENERATED_AT__</div>
+<div class="foot">关系样本 __START__ → __END__ · 涨跌榜 __MARKET_AS_OF__ · __N_SECTORS__ 二级 · 同步边 |ρ|≥__CORR_THR__ · 领先周频 |xcorr|≥__LEAD_THR__ · 跟涨观察 __HORIZON__ 日 · 生成 __GENERATED_AT__</div>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 <script type="module">
 const DATA = __DATA_JSON__;

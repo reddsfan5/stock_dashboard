@@ -70,10 +70,9 @@ body.app-workbench #app-shell { position:static; }
 .wb-dialog-foot button {width:100%;min-height:44px;}
 .app-workbench.wb-modal-open .wb-bottom {display:none;}
 body.app-workbench.wb-modal-open {overflow:hidden;}
-/* Home: useful entry points without a hero consuming the first screen. */
+/* Home: keep category navigation visible below the fixed workbench bar. */
 .app-workbench[data-page=home] .header {padding:24px 32px 12px;}
-.app-workbench[data-page=home] .hero,.app-workbench[data-page=home] .start-card {padding:20px;}
-.app-workbench[data-page=home] .quick-nav-wrap {position:static;background:transparent;}
+.app-workbench[data-page=home] .quick-nav-wrap {position:sticky;top:var(--app-nav-h);z-index:900;background:color-mix(in srgb,var(--app-bg) 94%,transparent);backdrop-filter:blur(12px);}
 .app-workbench[data-page=home] .quick-nav {padding:12px 24px;max-width:100%;}
 .app-workbench[data-page=home] .header h1 {font-size:24px;}
 /* Screening: one data model for summary cards and the complete metric table. */
@@ -307,12 +306,9 @@ body.app-workbench.wb-modal-open {overflow:hidden;}
 .app-workbench .sheet {overflow:hidden;}
 .app-workbench .review-body,.app-workbench .plan-body {overflow:auto;min-height:0;}
 
-.app-workbench[data-page=home] .ops-hero {padding:12px 24px;max-width:1600px;margin:auto;}
-.app-workbench[data-page=home] .ops-hero-card {padding:20px!important;}
-.app-workbench[data-page=home] .ops-hero h2 {font-size:20px;}
 .app-workbench[data-page=watchlist] .wb-details>.panel {padding:0;border:0;box-shadow:none;}
 .app-workbench[data-page=watchlist] .wb-details>.panel>h2 {display:none;}
-@media(max-width:767px){.app-workbench[data-page=home] .ops-hero {padding:12px;}.app-workbench[data-page=home] .grid {grid-template-columns:minmax(0,1fr);}}
+@media(max-width:767px){.app-workbench[data-page=home] .grid {grid-template-columns:minmax(0,1fr);}}
 
 /* Keep the replay market reference in view alongside either chart. */
 body[data-page=trainer] #game {padding-top:0;}
