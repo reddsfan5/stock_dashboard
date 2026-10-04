@@ -124,6 +124,15 @@ class ReadingConfigTest(unittest.TestCase):
             self.assertNotIn('class="rd-series"', solo)
             self.assertNotIn("rd-pager-prev", solo)
 
+    def test_mobile_toc_fab_tucks_while_scrolling_down(self):
+        # 手机端悬浮目录按钮向下滚动时收起，避免压住图示与正文
+        root = Path(__file__).resolve().parents[1] / "scripts" / "services" / "static"
+        css = (root / "reading.css").read_text(encoding="utf-8")
+        js = (root / "reading.js").read_text(encoding="utf-8")
+        self.assertIn(".rd-toc-fab.is-tucked", css)
+        self.assertIn("visibility: hidden", css.split(".rd-toc-fab.is-tucked", 1)[1].split("}", 1)[0])
+        self.assertIn("classList.toggle('is-tucked'", js)
+
     def test_repo_series_have_sources_disclaimer_and_interactive_blocks(self):
         cfg = load_config()
         names = {s["id"]: s for s in cfg["series"]}
@@ -144,11 +153,13 @@ class ReadingConfigTest(unittest.TestCase):
         self.assertEqual([a["id"] for a in names["duan"]["articles"]], ["duan-1-life", "duan-2-benfen", "duan-3-business"])
         self.assertEqual([a["id"] for a in names["livermore"]["articles"]],
                          ["livermore-1-life", "livermore-2-pivotal", "livermore-3-money"])
+        self.assertEqual([a["id"] for a in names["ruihe"]["articles"]],
+                         ["ruihe-1-life", "ruihe-2-method", "ruihe-3-defense"])
         self.assertIn("value", [c["id"] for c in cfg["categories"]])  # 价值投资：巴菲特、芒格、段永平
         self.assertIn("classics", [c["id"] for c in cfg["categories"]])  # 海外交易经典：利弗莫尔
         expected_cat = {"buffett": "value", "munger": "value", "duan": "value", "livermore": "classics"}
         for sid in ("asking", "zhiye", "chaogu-yangjia", "gaipian", "zhang", "buffett", "zhao", "xiaoeyu", "tuixue",
-                    "munger", "duan", "livermore"):
+                    "munger", "duan", "livermore", "ruihe"):
             for art in names[sid]["articles"]:
                 text = art["source_path"].read_text(encoding="utf-8")
                 with self.subTest(article=art["id"]):

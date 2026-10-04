@@ -32,13 +32,23 @@ SERIES = {  # 系列 id → 有序文章
     "munger": ["munger-1-life", "munger-2-worldly", "munger-3-misjudgment", "munger-4-invert"],
     "duan": ["duan-1-life", "duan-2-benfen", "duan-3-business"],
     "livermore": ["livermore-1-life", "livermore-2-pivotal", "livermore-3-money"],
+    "ruihe": ["ruihe-1-life", "ruihe-2-method", "ruihe-3-defense"],
 }
 SHOT_AS = {"asking-1-life": "asking-article", "zhiye-1-life": "zhiye-article",
            "yangjia-3-dashi": "yangjia-split-article", "yangjia-7-thread": "yangjia-new-article",
            "gaipian-2-heli": "gaipian-article", "zhang-1-life": "zhang-article", "buffett-3-value": "buffett-article",
            "zhao-2-style": "zhao-article", "xiaoeyu-2-style": "xiaoeyu-article", "tuixue-3-xiaoming": "tuixue-article",
            "munger-3-misjudgment": "munger-article", "duan-2-benfen": "duan-article",
-           "livermore-2-pivotal": "livermore-article"}
+           "livermore-2-pivotal": "livermore-article", "ruihe-2-method": "ruihe-article"}
+FAB_CLEAR = """() => {
+  const fab = document.getElementById('rdTocFab');
+  if (!fab || getComputedStyle(fab).visibility === 'hidden') return true;
+  const a = fab.getBoundingClientRect();
+  return [...document.querySelectorAll('pre.mermaid svg')].every(svg => {
+    const b = svg.getBoundingClientRect();
+    return a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom;
+  });
+}"""
 MERMAID_OK = """() => {
   const pres = [...document.querySelectorAll('pre.mermaid')];
   return pres.length > 0 && pres.every(p => p.querySelector('svg'));
@@ -90,10 +100,12 @@ def check_series(page, base: str, name: str, problems: list) -> None:
             if aid in SHOT_AS:
                 tag = SHOT_AS[aid]
                 page.screenshot(path=str(SHOTS / f"{tag}-top-{name}.png"))
-                page.locator("pre.mermaid svg").first.scroll_into_view_if_needed()
-                page.evaluate("window.scrollBy(0,-120)")
-                page.wait_for_timeout(250)
+                # 从顶部一次滚到图示上方 120px（模拟向下阅读），手机端悬浮目录按钮应收起、不压住图示
+                page.evaluate("() => { const el = document.querySelector('pre.mermaid svg'); window.scrollTo(0, el.getBoundingClientRect().top + scrollY - 120); }")
+                page.wait_for_timeout(450)
                 page.screenshot(path=str(SHOTS / f"{tag}-mermaid-{name}.png"))
+                if name == "iphone13":
+                    check(page.evaluate(FAB_CLEAR), f"{name}: {aid} 悬浮目录按钮压住了 mermaid 图示", problems)
                 page.locator("details").first.scroll_into_view_if_needed()
                 page.locator("details > summary").first.click()
                 page.evaluate("window.scrollBy(0,-160)")
@@ -173,6 +185,14 @@ def run(base: str) -> int:
             page.keyboard.press("Escape")
             # 目录
             if name == "iphone13":
+                # 悬浮目录按钮：向下滚动收起，向上滚动再出现
+                page.evaluate("window.scrollBy(0, 600)")
+                page.wait_for_timeout(450)
+                check(not page.locator("#rdTocFab").is_visible(), f"{name}: 向下滚动后悬浮目录按钮未收起", problems)
+                page.evaluate("window.scrollBy(0, -240)")
+                page.wait_for_timeout(450)
+                check(page.locator("#rdTocFab").is_visible(), f"{name}: 向上滚动后悬浮目录按钮未出现", problems)
+                page.screenshot(path=str(SHOTS / f"toc-fab-shown-{name}.png"))
                 page.locator("#rdTocFab").click()
                 page.wait_for_timeout(350)
                 check(page.locator("#rdToc").is_visible(), f"{name}: 目录抽屉未打开", problems)

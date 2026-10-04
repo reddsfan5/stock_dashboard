@@ -175,6 +175,20 @@
     if (closeBtn) closeBtn.addEventListener('click', function () { openToc(false); });
     if (toc) toc.addEventListener('click', function (e) { if (e.target.closest('a[data-toc]')) openToc(false); });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') openToc(false); });
+    // 手机端：向下滚动时收起悬浮目录按钮，向上滚动或接近顶部时再出现，避免长期压住图示与正文
+    if (fab && toc) {
+      var fabMq = window.matchMedia('(max-width: 860px)'), fabLastY = window.scrollY, fabTick = false;
+      var tuckFab = function () {
+        fabTick = false;
+        var y = window.scrollY, dy = y - fabLastY;
+        if (!fabMq.matches || toc.classList.contains('is-open') || y < 160) { fab.classList.remove('is-tucked'); fabLastY = y; return; }
+        if (Math.abs(dy) < 8) return;
+        fab.classList.toggle('is-tucked', dy > 0);
+        fabLastY = y;
+      };
+      window.addEventListener('scroll', function () { if (!fabTick) { fabTick = true; requestAnimationFrame(tuckFab); } }, { passive: true });
+      fab.addEventListener('focus', function () { fab.classList.remove('is-tucked'); });
+    }
 
     // 清单勾选保存在本机
     article.querySelectorAll('.rd-task input[type=checkbox]').forEach(function (box, i) {

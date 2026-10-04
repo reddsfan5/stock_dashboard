@@ -97,6 +97,8 @@ flowchart TD
 | 关键词 | 模式内 | 大局观、节奏感 | 确定性、心态 |
 | 详见 | [赵老哥 ②](/reading/zhao-2-style.html) | 本篇 | [退学炒股 ②](/reading/tuixue-2-mode.html#1-不拘形式只要确定性) |
 
+同样强调“做个股要结合大盘”、反对“只跟随不预测”的，还有[瑞鹤仙](/reading/ruihe-2-method.html#4-做个股要结合大盘)。
+
 ## 7. 自测与行动
 
 <details>

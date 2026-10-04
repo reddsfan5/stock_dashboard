@@ -39,7 +39,7 @@ categories:                      # 顺序即书库首页的分区顺序；没有
     icon: "⇄"
     description: 买点、卖点与持仓决策背后的推理链
   # 扩展规划（新增人物时按此归类；分类没有文章时书库显示"待收录"，所以不提前建空分类）：
-  #   前辈心法 masters：炒股养家 / Asking / 职业炒手 / 钙片 / 章盟主 / 赵老哥 / 小鳄鱼 / 退学炒股
+  #   前辈心法 masters：炒股养家 / Asking / 职业炒手 / 钙片 / 章盟主 / 赵老哥 / 小鳄鱼 / 退学炒股 / 瑞鹤仙
   #   价值投资 value：巴菲特 / 芒格 / 段永平
   #   海外交易经典 classics：利弗莫尔（只引本人 1940 年著作；勒菲弗《回忆录》是半虚构作品，引用须注明）
 
@@ -118,6 +118,14 @@ series:                          # 可选：把多篇文章组织成有序系列
     author: 退学炒股（"退神"） · 淘股吧实盘选手
     description: "从配资爆仓、退学职业炒股到公开实盘 14 个月 150 倍：逐日写下的《我和小明》是一份罕见的交易心理日记。三篇分别讲实盘经历、确定性与仓位的交易模式、与心魔相处的心理学。"
     tags: [实盘, 确定性, 分仓, 心态]
+
+  - id: ruihe
+    name: 瑞鹤仙系列
+    category: masters
+    icon: "瑞"
+    author: 瑞鹤仙（淘股吧 ID yxkrrhx） · 职业短线交易者
+    description: "从 26.8 万到“数千万”的职业股民：只用他淘股吧 16 篇主帖（含 2012 年 word 文档与两份交割单长帖）和新浪财经报道，梳理足迹、复盘预判与“只需预测1天”、仓位工具与心态。流传身世和语录查不到原帖的标为待考。"
+    tags: [复盘, 预判, 交割单, 仓位]
 
   - id: buffett
     name: 巴菲特系列
@@ -703,6 +711,42 @@ articles:
     order: 113
     summary: "危险信号不争辩、永不摊平亏损、只在盈利时金字塔加仓、棉花上的百万美元失误、一半利润锁进保险箱、一年只出手四五次。"
     tags: [资金管理, 止损, 心态]
+    glossary_auto: true
+    added: 2026-10-04
+  - id: ruihe-1-life
+    title: "瑞鹤仙 ①：人物与足迹——26.8 万、闭关两年半与 16 篇主帖"
+    short_title: 人物与足迹
+    category: masters
+    series: ruihe
+    author: 瑞鹤仙（淘股吧原帖） · 主题整理
+    source: content/reading/ruihe-1-life/article.md
+    order: 121
+    summary: "本人原帖能确认什么、16 篇主帖一览、从 26.8 万到“数千万”的自述，流传身世与《选股原则》辨伪，以及 2017 年“期货亏光”传闻的真相。"
+    tags: [人物, 原帖, 辨伪]
+    glossary_auto: true
+    added: 2026-10-04
+  - id: ruihe-2-method
+    title: "瑞鹤仙 ②：复盘预判与交割单——“只需预测1天”、T+1 推演两天与失败单"
+    short_title: 复盘预判·交割单
+    category: masters
+    series: ruihe
+    author: 瑞鹤仙（淘股吧原帖） · 主题整理
+    source: content/reading/ruihe-2-method/article.md
+    order: 122
+    summary: "价值股的主升浪、失败交割单与 YY、反对“不预测只跟随”、做个股结合大盘、T+1 下推演两天、预期链与龙头，以及不能照搬的大资金做盘。"
+    tags: [复盘, 预判, 主升浪, 交割单]
+    glossary_auto: true
+    added: 2026-10-04
+  - id: ruihe-3-defense
+    title: "瑞鹤仙 ③：仓位、工具与心态——“控制仓位，默念100遍”"
+    short_title: 仓位·工具·心态
+    category: masters
+    series: ruihe
+    author: 瑞鹤仙（淘股吧原帖） · 主题整理
+    source: content/reading/ruihe-3-defense/article.md
+    order: 123
+    summary: "低吸重仓高抛轻仓与逆回购、超短不等于打板、L2 与自定义面板、平淡的心与孤独、期指杠杆的教训，以及他为什么还要写心得。"
+    tags: [仓位, 工具, 心态, 杠杆]
     glossary_auto: true
     added: 2026-10-04
 

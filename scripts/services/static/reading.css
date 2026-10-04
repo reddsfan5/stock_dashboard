@@ -281,7 +281,9 @@
   .rd-toc-list > li > a { padding: 9px 10px; font-size: 14px; }
   .rd-toc-list ol a { padding: 7px 10px; font-size: 13px; }
   .rd-scrim:not([hidden]) { display: block; position: fixed; inset: 0; background: rgba(15, 23, 42, .4); z-index: 1510; }
-  .rd-toc-fab { display: inline-flex; align-items: center; gap: 4px; position: fixed; right: 14px; bottom: calc(88px + env(safe-area-inset-bottom)); z-index: 1240; height: 42px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--app-border); background: var(--app-surface); color: var(--app-text); font-weight: 700; font-size: 13px; box-shadow: 0 8px 22px rgba(15, 23, 42, .18); }
+  .rd-toc-fab { display: inline-flex; align-items: center; gap: 3px; position: fixed; right: 10px; bottom: calc(88px + env(safe-area-inset-bottom)); z-index: 1240; height: 36px; padding: 0 11px; border-radius: 999px; border: 1px solid var(--app-border); background: var(--app-surface); color: var(--app-text); font-weight: 700; font-size: 12.5px; box-shadow: 0 6px 16px rgba(15, 23, 42, .16); transition: transform .2s ease, opacity .2s ease, visibility 0s linear 0s; }
+  /* 向下阅读时收起（滑出屏幕右侧），向上滚动或回到顶部时再出现，避免挡住图示和正文 */
+  .rd-toc-fab.is-tucked { transform: translateX(calc(100% + 16px)); opacity: 0; visibility: hidden; pointer-events: none; transition: transform .2s ease, opacity .2s ease, visibility 0s linear .2s; }
   .rd-resume { bottom: calc(92px + env(safe-area-inset-bottom)); }
   .rd-article { line-height: 1.85; }
   .rd-article h2 { font-size: 1.3em; margin-top: 2em; }
@@ -296,7 +298,7 @@
   .rd-hero--library h1 { font-size: 24px; }
   .rd-info-panel { width: min(340px, calc(100vw - 32px)); }
 }
-@media (prefers-reduced-motion: reduce) { .rd-card, .rd-toc, .rd-progress span { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .rd-card, .rd-toc, .rd-progress span, .rd-toc-fab, .rd-toc-fab.is-tucked { transition: none; } }
 @media print {
   .rd-toc, .rd-toc-fab, .rd-progress, .rd-tools, #app-shell, .wb-sidebar, .wb-topbar, .wb-bottom { display: none !important; }
   body.app-workbench { padding: 0 !important; }
