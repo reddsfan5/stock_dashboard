@@ -89,6 +89,8 @@ flowchart TD
 
 巴菲特紧接着写道："Charlie understood this early; I was a slow learner."（芒格很早就懂了，我学得慢。）
 
+芒格本人的经历、演讲与思维方法见 [芒格系列](/reading/munger-1-life.html)，2023 年信里 1965 年那段对话的完整原文见 [芒格 ① 1965 年的那句话](/reading/munger-1-life.html#4-1965-年的那句话好生意胜过便宜货)。
+
 ## 6. 交棒
 
 - 2025 年 5 月的股东大会上，巴菲特宣布年底卸任 CEO。

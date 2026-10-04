@@ -26,6 +26,10 @@ categories:                      # 顺序即书库首页的分区顺序；没有
     name: 价值投资
     icon: "◎"
     description: 以企业价值为锚的长期投资：护城河、安全边际、能力圈与资本配置
+  - id: classics
+    name: 海外交易经典
+    icon: "◈"
+    description: 海外投机与交易经典：原著精读，区分本人著作与他人演绎
   - id: techniques
     name: 技巧
     icon: "✦"
@@ -36,8 +40,8 @@ categories:                      # 顺序即书库首页的分区顺序；没有
     description: 买点、卖点与持仓决策背后的推理链
   # 扩展规划（新增人物时按此归类；分类没有文章时书库显示"待收录"，所以不提前建空分类）：
   #   前辈心法 masters：炒股养家 / Asking / 职业炒手 / 钙片 / 章盟主 / 赵老哥 / 小鳄鱼 / 退学炒股
-  #   价值投资 value：巴菲特；后续：芒格、段永平
-  #   海外交易经典（计划，id 建议 classics）：利弗莫尔等海外投机/交易经典，收录时再新增此分类
+  #   价值投资 value：巴菲特 / 芒格 / 段永平
+  #   海外交易经典 classics：利弗莫尔（只引本人 1940 年著作；勒菲弗《回忆录》是半虚构作品，引用须注明）
 
 # 提示框类型：正文用 "::: <type> 可选标题" … ":::" 包裹。
 # 以 💡 / ⚠️ 开头的段落或引用会自动套用 emoji_map 对应类型，无需改原文。
@@ -122,6 +126,30 @@ series:                          # 可选：把多篇文章组织成有序系列
     author: 沃伦·巴菲特 · 伯克希尔·哈撒韦
     description: 以伯克希尔致股东信和《格雷厄姆-多德村的超级投资者》为一手来源：从烟蒂到好生意、护城河、安全边际与市场先生、能力圈与资本配置，以及带出处的中英对照语录卡。
     tags: [护城河, 安全边际, 能力圈, 长期持有]
+
+  - id: munger
+    name: 芒格系列
+    category: value
+    icon: "芒"
+    author: 查理·芒格 · 伯克希尔副董事长
+    description: 只用芒格本人的演讲与问答：1994 年 USC“普世智慧”、1995 / 2005 两版“人类误判心理学”、2007 年 USC 毕业演讲和 2023 年 Daily Journal 问答。英文原文附本文译文，流传语录逐条辨伪。
+    tags: [普世智慧, 误判心理学, 反过来想, 理性]
+
+  - id: duan
+    name: 段永平系列
+    category: value
+    icon: "段"
+    author: 段永平 · 步步高创始人、投资人
+    description: 以段永平雪球（大道无形我有型）与网易博客原帖为一手来源：从小霸王、步步高、网易到苹果；本分、平常心与不为清单；买股票就是买公司、商业模式与企业文化。汇编本里查不到原帖的话标为待考。
+    tags: [本分, 平常心, 不为清单, 商业模式]
+
+  - id: livermore
+    name: 利弗莫尔系列
+    category: classics
+    icon: "利"
+    author: 杰西·利弗莫尔 · 美国投机客（1877–1940）
+    description: 只引利弗莫尔本人 1940 年的《股票大作手操盘术》（How to Trade in Stocks），并分清勒菲弗 1923 年半虚构的《股票大作手回忆录》：人物与两本书、关键价位与领头羊、资金管理与危险信号。
+    tags: [关键点, 领头羊, 资金管理, 原著辨析]
 
 articles:
   - id: yangjia-1-overview
@@ -545,6 +573,136 @@ articles:
     order: 83
     summary: "小明是谁、三种最想操作的时刻、踏空为何比亏钱难受、连胜后的大亏、常见偏执、观众与借钱，以及知行合一。"
     tags: [心态, 心理, 语录]
+    glossary_auto: true
+    added: 2026-10-04
+
+  - id: munger-1-life
+    title: "芒格 ①：人物与历程——律师、合伙人与“伯克希尔的建筑师”"
+    short_title: 人物与历程
+    category: value
+    series: munger
+    author: 芒格（演讲与问答原文） · 主题整理
+    source: content/reading/munger-1-life/article.md
+    order: 91
+    summary: "律师出身的投资人：合伙基金 19.8% 与 1973–74 年两年大回撤、1965 年“合理价格买好生意”、巴菲特口中的“建筑师”，以及他总结的伯克希尔体系。"
+    tags: [人物, 经历, 伯克希尔]
+    glossary_auto: true
+    added: 2026-10-04
+
+  - id: munger-2-worldly
+    title: "芒格 ②：普世智慧——1994 年 USC 演讲里的格栅与少下注"
+    short_title: 普世智慧·少下注
+    category: value
+    series: munger
+    author: 芒格（演讲与问答原文） · 主题整理
+    source: content/reading/munger-2-worldly/article.md
+    order: 92
+    summary: "思维模型格栅、八九十个模型、拿锤子的人、赛马彩池与“很少下注”、能力圈与市场先生、“我不是卖给鱼的”。"
+    tags: [思维模型, 下注, 能力圈]
+    glossary_auto: true
+    added: 2026-10-04
+
+  - id: munger-3-misjudgment
+    title: "芒格 ③：人类误判心理学——1995 哈佛演讲与 2005 修订版"
+    short_title: 误判心理学
+    category: value
+    series: munger
+    author: 芒格（演讲与问答原文） · 主题整理
+    source: content/reading/munger-3-misjudgment/article.md
+    order: 93
+    summary: "24 条与 25 条两个版本对照、排第一的激励、与交易最相关的五种倾向、Lollapalooza 与公开叫价拍卖，以及检查表和反面证据。"
+    tags: [心理, 偏差, 检查表]
+    glossary_auto: true
+    added: 2026-10-04
+
+  - id: munger-4-invert
+    title: "芒格 ④：反过来想——2007 USC 毕业演讲、理性与语录辨伪"
+    short_title: 反过来想·辨伪
+    category: value
+    series: munger
+    author: 芒格（演讲与问答原文） · 主题整理
+    source: content/reading/munger-4-invert/article.md
+    order: 94
+    summary: "想帮印度先问什么在伤害印度、先求配得上、学习机器、铁律、2023 年谈理性与杠杆，以及几句查不到出处的“芒格名言”。"
+    tags: [逆向思维, 理性, 语录辨伪]
+    glossary_auto: true
+    added: 2026-10-04
+
+  - id: duan-1-life
+    title: "段永平 ①：人物与足迹——小霸王、步步高、网易与 fastisslow"
+    short_title: 人物与足迹
+    category: value
+    series: duan
+    author: 段永平（雪球与博客原帖） · 主题整理
+    source: content/reading/duan-1-life/article.md
+    order: 101
+    summary: "本人说法里的小霸王时间线、步步高与不做代工、网易“几个月二十几倍”与“碰上了”、2006 年 620,100 美元的巴菲特午餐，以及读原帖的方法。"
+    tags: [人物, 经历, 待考]
+    glossary_auto: true
+    added: 2026-10-04
+
+  - id: duan-2-benfen
+    title: "段永平 ②：本分、平常心与不为清单"
+    short_title: 本分·平常心·不为
+    category: value
+    series: duan
+    author: 段永平（雪球与博客原帖） · 主题整理
+    source: content/reading/duan-2-benfen/article.md
+    order: 102
+    summary: "本分是“做对的事情+把事情做对”、平常心是回到本源、不为清单怎样来、投资里的不懂不碰与不用 margin、浙大三句话、“最小的代价”。"
+    tags: [本分, 平常心, 不为清单]
+    glossary_auto: true
+    added: 2026-10-04
+
+  - id: duan-3-business
+    title: "段永平 ③：看生意——买股票就是买公司、商业模式与企业文化"
+    short_title: 看生意
+    category: value
+    series: duan
+    author: 段永平（雪球与博客原帖） · 主题整理
+    source: content/reading/duan-3-business/article.md
+    order: 103
+    summary: "买股票就是买公司、毛估估与现金流折现、商业模式和企业文化两道过滤器、苹果案例与机会成本、卖出与成本无关、投资还是投机。"
+    tags: [商业模式, 估值, 苹果]
+    glossary_auto: true
+    added: 2026-10-04
+
+  - id: livermore-1-life
+    title: "利弗莫尔 ①：人物与两本书——少年投机客、破产与《股票大作手回忆录》的真假"
+    short_title: 人物与两本书
+    category: classics
+    series: livermore
+    author: 利弗莫尔（1940 年原著） · 主题整理
+    source: content/reading/livermore-1-life/article.md
+    order: 111
+    summary: "对赌行出身的“少年豪赌客”、几次暴富几次破产；勒菲弗半虚构的《回忆录》与本人 1940 年著作的区别，以及哪些“名言”其实是小说台词。"
+    tags: [人物, 经历, 原著辨析]
+    glossary_auto: true
+    added: 2026-10-04
+
+  - id: livermore-2-pivotal
+    title: "利弗莫尔 ②：关键价位与领头羊——《股票大作手操盘术》(1940) 的买点"
+    short_title: 关键价位·领头羊
+    category: classics
+    series: livermore
+    author: 利弗莫尔（1940 年原著） · 主题整理
+    source: content/reading/livermore-2-pivotal/article.md
+    order: 112
+    summary: "等股票表现正确、正常回调后创新高才买、关键点与三个点的确认、只做领头羊、板块 Key Price 与六栏记录表，以及“反转/持续关键点”的出处问题。"
+    tags: [关键点, 追涨, 龙头]
+    glossary_auto: true
+    added: 2026-10-04
+
+  - id: livermore-3-money
+    title: "利弗莫尔 ③：资金管理、危险信号与人性"
+    short_title: 资金管理·危险信号
+    category: classics
+    series: livermore
+    author: 利弗莫尔（1940 年原著） · 主题整理
+    source: content/reading/livermore-3-money/article.md
+    order: 113
+    summary: "危险信号不争辩、永不摊平亏损、只在盈利时金字塔加仓、棉花上的百万美元失误、一半利润锁进保险箱、一年只出手四五次。"
+    tags: [资金管理, 止损, 心态]
     glossary_auto: true
     added: 2026-10-04
 

@@ -29,11 +29,16 @@ SERIES = {  # 系列 id → 有序文章
     "zhao": ["zhao-1-life", "zhao-2-style"],
     "xiaoeyu": ["xiaoeyu-1-life", "xiaoeyu-2-style"],
     "tuixue": ["tuixue-1-life", "tuixue-2-mode", "tuixue-3-xiaoming"],
+    "munger": ["munger-1-life", "munger-2-worldly", "munger-3-misjudgment", "munger-4-invert"],
+    "duan": ["duan-1-life", "duan-2-benfen", "duan-3-business"],
+    "livermore": ["livermore-1-life", "livermore-2-pivotal", "livermore-3-money"],
 }
 SHOT_AS = {"asking-1-life": "asking-article", "zhiye-1-life": "zhiye-article",
            "yangjia-3-dashi": "yangjia-split-article", "yangjia-7-thread": "yangjia-new-article",
            "gaipian-2-heli": "gaipian-article", "zhang-1-life": "zhang-article", "buffett-3-value": "buffett-article",
-           "zhao-2-style": "zhao-article", "xiaoeyu-2-style": "xiaoeyu-article", "tuixue-3-xiaoming": "tuixue-article"}
+           "zhao-2-style": "zhao-article", "xiaoeyu-2-style": "xiaoeyu-article", "tuixue-3-xiaoming": "tuixue-article",
+           "munger-3-misjudgment": "munger-article", "duan-2-benfen": "duan-article",
+           "livermore-2-pivotal": "livermore-article"}
 MERMAID_OK = """() => {
   const pres = [...document.querySelectorAll('pre.mermaid')];
   return pres.length > 0 && pres.every(p => p.querySelector('svg'));

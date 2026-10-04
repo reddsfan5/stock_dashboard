@@ -35,7 +35,7 @@ class ReadingConfigTest(unittest.TestCase):
 
     def test_repo_config_is_valid_and_first_article_is_masters(self):
         cfg = load_config()
-        self.assertEqual([c["name"] for c in cfg["categories"]][:4], ["前辈心法", "价值投资", "技巧", "买卖逻辑"])
+        self.assertEqual([c["name"] for c in cfg["categories"]][:5], ["前辈心法", "价值投资", "海外交易经典", "技巧", "买卖逻辑"])
         first = cfg["articles"][0]
         self.assertEqual(first["id"], "yangjia-1-overview")
         self.assertEqual(first["category"], "masters")
@@ -139,9 +139,16 @@ class ReadingConfigTest(unittest.TestCase):
         self.assertEqual([a["id"] for a in names["xiaoeyu"]["articles"]], ["xiaoeyu-1-life", "xiaoeyu-2-style"])
         self.assertEqual([a["id"] for a in names["tuixue"]["articles"]],
                          ["tuixue-1-life", "tuixue-2-mode", "tuixue-3-xiaoming"])
-        self.assertIn("value", [c["id"] for c in cfg["categories"]])  # 价值投资：巴菲特，后续芒格、段永平
-        expected_cat = {"buffett": "value"}
-        for sid in ("asking", "zhiye", "chaogu-yangjia", "gaipian", "zhang", "buffett", "zhao", "xiaoeyu", "tuixue"):
+        self.assertEqual([a["id"] for a in names["munger"]["articles"]],
+                         ["munger-1-life", "munger-2-worldly", "munger-3-misjudgment", "munger-4-invert"])
+        self.assertEqual([a["id"] for a in names["duan"]["articles"]], ["duan-1-life", "duan-2-benfen", "duan-3-business"])
+        self.assertEqual([a["id"] for a in names["livermore"]["articles"]],
+                         ["livermore-1-life", "livermore-2-pivotal", "livermore-3-money"])
+        self.assertIn("value", [c["id"] for c in cfg["categories"]])  # 价值投资：巴菲特、芒格、段永平
+        self.assertIn("classics", [c["id"] for c in cfg["categories"]])  # 海外交易经典：利弗莫尔
+        expected_cat = {"buffett": "value", "munger": "value", "duan": "value", "livermore": "classics"}
+        for sid in ("asking", "zhiye", "chaogu-yangjia", "gaipian", "zhang", "buffett", "zhao", "xiaoeyu", "tuixue",
+                    "munger", "duan", "livermore"):
             for art in names[sid]["articles"]:
                 text = art["source_path"].read_text(encoding="utf-8")
                 with self.subTest(article=art["id"]):
